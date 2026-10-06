@@ -467,7 +467,7 @@ CB08,Case1,combo,must,PLAN,chain,set_param > set_param > recompute_linked > vali
 CB09,Case1,combo,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
 CB10,Case1,combo,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
 CB11,Case1,combo,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
-CB12,Case1,combo,must,PLAN,chain,build_matrix > run_batch > batch_summary
+CB12,Case1,combo,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
 CB13,any,combo,must,QUESTION,options,run all | edit the sweep | cancel
 CB15,any,combo,must,PLAN,chain,clear_overrides > run_com > summarize
 CB17,Case1; Case2; Case3; Case4,combo,must,PLAN,chain,set_param > validate_config > run_com > summarize
@@ -562,7 +562,7 @@ SX07,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_co
 SX08,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
 SX09,Case1; Case2; Case3; Case4,sweep,stretch,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
 SX10,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,run all | edit the sweep | cancel
-SX12,Case1; Case2; Case3; Case4,sweep,stretch,QUESTION,options,run 0 and 1e-5 only | cancel
+SX12,Case1; Case2; Case3; Case4,sweep,stretch,QUESTION,options,run all points anyway | run only the points that pass | cancel
 SX13,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
 SX14,Case1,sweep,must,QUESTION,options,sweep tx | sweep rx | sweep both together
 SX15,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
