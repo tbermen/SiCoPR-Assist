@@ -48,8 +48,8 @@ from sicopr_assist import engine, xlsx_io  # noqa: E402
 LINKED_BY_F_B = ('f_z', 'f_p1', 'f_p2', 'f_HP_PZ', 'f_v', 'f_f', 'f_n')
 SOURCES = {}                                # path -> SHA-256 when first used (G2.6)
 # Rows recorded under disputes in the build state (Rule 9): a miss on one is excused and named.
-DISPUTED = {'IV04': 'loader_effect is the effect of the lower-case spelling as typed, not of its own value_after',
-            'IV13': 'loader_effect is the effect of the text yes as typed, not of its own value_after 1'}
+# IV04 and IV13 were disputed in Phase 2 and corrected in the table on 2026-10-06.
+DISPUTED = {}
 
 
 def sha(path):
