@@ -52,6 +52,8 @@ CHANGE_KINDS = ('set', 'add', 'linked', 'revert')
 
 NONE_OF_THESE = 'none of these'
 CANCEL = 'cancel'
+# Decision 7: the one question for a sweep with points that a rule asks about (maintainer, 6 October)
+SWEEP_ASK_OPTIONS = ('run all points anyway', 'run only the points that pass', CANCEL)
 EXAMPLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'sicopr_config_example.json')
 CONFIG_EXT = ('.xlsx', '.xls', '.csv', '.json')
 
@@ -65,6 +67,17 @@ NOT_IN_V1 = {
     'tutor': 'The tutor is not in this version of SiCoPR-Assist. What can I change? lists the parameters of the '
              'config, and a phrase such as Re-run with DER_0 = 1e-4 changes one of them.',
     'feedback': 'Feedback export is not in this version of SiCoPR-Assist.',
+}
+
+# The same, as one announced line when the rest of the phrase is planned (Decision 16, rows CB17 and C2).
+NOT_IN_V1_PART = {
+    'dashboard': 'the dashboard is not in this version of SiCoPR-Assist (version 2 adds it); the run summary holds the '
+                 'results, and each run writes a CSV summary in its results folder',
+    'fetch': 'downloading channels is not in this version of SiCoPR-Assist (version 2 adds it); the run uses the '
+             'channel files in the project folder',
+    'tutor': 'the tutor is not in this version of SiCoPR-Assist (version 2 adds it); What can I change? lists the '
+             'parameters',
+    'feedback': 'feedback export is not in this version of SiCoPR-Assist (version 2 adds it)',
 }
 
 
@@ -406,9 +419,43 @@ def _plan(text, ctx, mods):
         return _stop('SiCoPR-Assist reports results and does not diagnose them. It can show the summary of the last '
                      'run (Show me the summary again), statistics of a result over the last set of runs, and how a '
                      'parameter relates to a result.', **base)
-    for feat in ('dashboard', 'fetch', 'tutor', 'feedback'):
-        if feat in acts:
-            return _stop(NOT_IN_V1[feat], **base)
+    # a version 2 feature alone is a STOP; asked for with a version 1 action, the version 1 part is planned and
+    # the rest is announced as not in this version (Decision 16)
+    deferred = [f for f in ('dashboard', 'fetch', 'tutor', 'feedback') if f in acts]
+    if deferred:
+        if not _has_v1_action(req):
+            return _stop(NOT_IN_V1[deferred[0]], **base)
+        req = dict(req, actions=[a for a in acts if a not in deferred])
+        out, answers = _plan_v1(text, req, ctx, mods, base)
+        if out['type'] != 'STOP':
+            out['announce'] = list(out['announce']) + [NOT_IN_V1_PART[f] for f in deferred]
+        return out, answers
+    out, answers = _plan_v1(text, req, ctx, mods, base)
+    if out['type'] == 'PLAN' and any(s['op'] in ('run_com', 'run_batch') for s in out['steps']) and _after_dashboard(ctx):
+        out['announce'] = list(out['announce']) + [NOT_IN_V1_PART['dashboard']]
+    return out, answers
+
+
+def _has_v1_action(req):
+    """Whether a phrase that names a version 2 feature also asks for something version 1 does: a change, a
+    sweep, a package, or a run."""
+    return bool(req['sets'] or req['sweeps'] or req['packages'] or req['files']
+                or any(a in req['actions'] for a in ('rerun', 'run')) or 'again' in req['flags'])
+
+
+def _after_dashboard(ctx):
+    """Whether the last command asked for the dashboard (row C2: a re-run after D1 would refresh it in version 2)."""
+    rec = ctx.history[-1] if ctx.history else None
+    if not rec:
+        return False
+    if any(s.get('op') == 'render_dashboard' for s in (rec.get('plan') or {}).get('steps') or []):
+        return True
+    return 'dashboard' in parse.read(rec.get('phrase') or '')['actions']
+
+
+def _plan_v1(text, req, ctx, mods, base):
+    wc = ctx.wc
+    acts = req['actions']
     low = text.lower()
     if re.search(r'\bwhat can i (say|type)\b|\bexample commands\b', low):
         return _stop(NOT_IN_V1['tutor'], **base)
@@ -686,6 +733,15 @@ def _prepare(item, tgt, wc, ctx):
         return '[%s %s]' % tuple(el)
     if row and row['shape'].strip() == 'list of case numbers' and re.fullmatch(r'\d+', value.strip()):
         return '[ %s ]' % value.strip()
+    if cur is not None and _pair(cur) is not None and 'TX RX' in (row or {}).get('shape', '') \
+            and (unit or validate._plain_number(value) is not None):
+        try:                                    # one number for a [TX RX] pair goes to both sides (row RS28)
+            conv, _ = validate.check_value(wc, tgt['jp'], typed)
+        except ValueError:
+            conv = None
+        if isinstance(conv, (int, float)) and not isinstance(conv, bool):
+            el = show(conv) if unit else value.strip()          # the number as typed, unless a unit was converted
+            return '[%s %s]' % (el, el)
     if row is None and not unit and validate._plain_number(value) is not None:
         return validate._plain_number(value)           # a label only a link uses (T_t): a number, so links can follow
     return typed
@@ -850,13 +906,18 @@ def _item_question(info, req, ctx, wc, mods, base):
         sel = info[1]
         s = info[2]
         opts = ['%s (TX)' % sel[0], '%s (RX)' % sel[-1], 'both']
+        changes = []
+        if s.get('value') is not None:          # the change asked for, read with the first option (section 5)
+            trial, _, _ = _resolve(_replace_words(req['phrase'], s['name'], '%s %s' % (sel[0], s['name'])), ctx,
+                                   dict(mods))
+            changes = [dict(c, applied=False) for c in trial.get('changes') or []]
         return _ask('TX and RX use different package blocks (%s for TX, %s for RX): which one should %s change?'
                     % (sel[0], sel[-1], s['name']), opts,
-                    {opts[0]: {'replace': [s['name'], '%s in %s' % (s['name'], sel[0])]},
-                     opts[1]: {'replace': [s['name'], '%s in %s' % (s['name'], sel[-1])]},
+                    {opts[0]: {'replace': [s['name'], '%s %s' % (sel[0], s['name'])]},
+                     opts[1]: {'replace': [s['name'], '%s %s' % (sel[-1], s['name'])]},
                      'both': {'stop': 'Change %s in each block: Re-run with %s = %s in %s and %s = %s in %s.'
                               % (s['name'], s['name'], s.get('value'), sel[0], s['name'], s.get('value'), sel[-1])}},
-                    **base)
+                    changes=changes, **base)
     return _stop('That cannot be resolved.', **base)
 
 
@@ -1302,7 +1363,8 @@ def _sweep(req, ctx, mods, base_fields):
     last = ctx.last_run_id()
     last_fp = next((fp for rid, fp in prior if rid == last), None)
     sel = _selections_for([(d['jp'], None) for d in dims] + fixed, ctx)
-    points, asks, new_fps = [], [], []
+    points, asks, new_fps, ran_anyway = [], [], [], []
+    label = lambda p: ', '.join(show(v) for v in p['values'].values())                  # noqa: E731
     for combo in combos:
         values = {d['jp']: sp for d, (sp, _) in zip(dims, combo)}
         writes = dict(fixed)
@@ -1316,6 +1378,8 @@ def _sweep(req, ctx, mods, base_fields):
             continue
         if res['status'] == 'ask':
             asks.append((pt, res))
+        elif any(f['status'] == 'announce' and f['text'].endswith('; run as asked') for f in res['findings']):
+            ran_anyway.append(label(pt))
         fields, err = config_model.loaded_fields(res['config'])
         if err:
             pt['skipped'] = 'validate_config fails: %s' % err
@@ -1335,25 +1399,45 @@ def _sweep(req, ctx, mods, base_fields):
     n_reused = sum(1 for p in points if p['reused_from'])
     skipped = [p for p in points if p['skipped']]
     fields = dict(points=points, new_runs=n_new, reused_runs=n_reused, **base)
-    label = lambda p: ', '.join(show(v) for v in p['values'].values())                  # noqa: E731
-    if asks and not mods.get('only'):
+    # Decision 7: points a rule asks about make one question for the whole batch. A point a rule stops is
+    # skipped above and never run, whatever the answer.
+    if asks and mods.get('only') is None:
         bad = [label(p) for p, _ in asks]
-        good = [p for p in points if not p['skipped'] and label(p) not in bad]
-        r = asks[0][1]
-        o = 'run %s only' % _and([label(p) for p in good]) if good else None
-        opts = ([o] if o else []) + [CANCEL]
-        return _ask('%s: %s' % (_sentence(r['text']).rstrip('.'), 'the sweep asks for %s' % _and(bad)), opts,
-                    {o: {'only': [label(p) for p in good]}} if o else {}, **fields)
-    if mods.get('only'):
+        good = [label(p) for p in points if not p['skipped'] and label(p) not in bad]
+        why = []
+        for _, r in asks:
+            t = _sentence(r['text']).rstrip('.')
+            if t not in why:
+                why.append(t)
+        allow = list(dict.fromkeys(f['rule'] or f['code'] for _, r in asks for f in r['findings']
+                                   if f['status'] == 'ask'))
+        text = '%s. A rule asks about %s of the %d points of this sweep (%s)%s. Run all points anyway, run only the ' \
+               'points that pass%s, or cancel?' % (
+                   '. '.join(why[:3]) + ('. and %d more' % (len(why) - 3) if len(why) > 3 else ''), len(bad),
+                   len(points), _and(bad),
+                   '; %s %s skipped because validate_config fails' % (_and([label(p) for p in skipped]),
+                                                                    'is' if len(skipped) == 1 else 'are')
+                   if skipped else '', ' (%s)' % _and(good) if good else ' (none does)')
+        return _ask(text, SWEEP_ASK_OPTIONS,
+                    {SWEEP_ASK_OPTIONS[0]: {'allow': allow}, SWEEP_ASK_OPTIONS[1]: {'only': good}, CANCEL: None},
+                    **fields)
+    left_out = []
+    if mods.get('only') is not None:
         keep = set(mods['only'])
+        left_out = [label(p) for p in points if label(p) not in keep and not p['skipped']]
         points = [p for p in points if label(p) in keep]
+        if not points:
+            return _stop('No point of the sweep passes every rule, so nothing runs.',
+                         **dict(fields, points=[], new_runs=0, reused_runs=0))
         n_new = sum(1 for p in points if p['new'])
         n_reused = sum(1 for p in points if p['reused_from'])
+        skipped = []
         fields.update(points=points, new_runs=n_new, reused_runs=n_reused)
     if not n_new and len(skipped) == len(points):
         return _stop('No value in the sweep passes validate_config: %s.' % '; '.join(
             '%s: %s' % (label(p), p['skipped']) for p in skipped), **fields)
-    if not n_new and not skipped and last_fp is not None and all(p['reused_from'] == last for p in points):
+    if not n_new and not skipped and last_fp is not None and all(p['reused_from'] == last for p in points) \
+            and mods.get('only') is None:
         why = 'the value given changes no engine input' if len(points) == 1 else \
             'none of the %d values changes an engine input' % len(points)
         return _stop('%s: every result would equal the last run, so nothing runs.' % _sentence(why).rstrip('.'), **fields)
@@ -1375,8 +1459,16 @@ def _sweep(req, ctx, mods, base_fields):
     steps.append(_step('batch_summary'))
     if diff:
         steps.append(_step('diff_results', against='the last run'))
-    announce = ['%s = %s' % (d['name'], ', '.join(show(sp) for sp, _ in d['points'])) for d in dims]
+    announce = ['%s = %s' % (d['name'], ', '.join(dict.fromkeys(show(p['values'][d['jp']]) for p in points)))
+                for d in dims]
     announce.append(summary)
+    for jp, v in fixed:                         # a value set at every point (CB12: every z_p select case)
+        n = validate.name_of(jp)
+        line = '%s = %s at every point' % (n, show(v))
+        k = len(str(v).strip('[] ').split()) if _is_case_list(n) else 1
+        if k > 1:
+            line += ': each run gives %d results, %d in all' % (k, k * len([p for p in points if not p['skipped']]))
+        announce.append(line)
     for p in points:
         if p['reused_from']:
             announce.append('%s is reused from %s' % (label(p), p['reused_from']))
@@ -1384,6 +1476,10 @@ def _sweep(req, ctx, mods, base_fields):
             announce.append('%s is skipped: %s' % (label(p), p['skipped']))
     if not n_new:
         announce.append('every value was already run, so no new run is needed')
+    if left_out:
+        announce.append('left out as you chose, because a rule asks about them: %s' % _and(left_out))
+    if ran_anyway:
+        announce.append('run anyway as you chose, although a rule asks about them: %s' % _and(ran_anyway))
     announce += notes + _context_lines(ctx, [], wc)
     return outcome('PLAN', steps=steps, announce=announce, **fields), {}
 
