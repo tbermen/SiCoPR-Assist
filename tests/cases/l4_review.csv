@@ -163,7 +163,7 @@ IV16,Case1; Case2; Case3; Case4,invalid,must,STOP,review,STOP: whether the reaso
 IV20,Case1; Case2; Case3; Case4,invalid,must,QUESTION,review,no option list
 IV21,any,invalid,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 CP01,Case1; Case2; Case3; Case4,config,must,PLAN,review,no step chain in the detail
-CP02,Case1; Case2; Case3; Case4,config,must,PLAN,review,a one-step chain that goes on in prose: import_config writes a config JSON that loads to exactly the
+CP02,Case1; Case2; Case3; Case4,config,must,PLAN,review,a one-step chain that goes on in prose: import_config writes a working config whose run CSV loads to
 CP03,Case1; Case2; Case3; Case4,config,must,PLAN,review,no step chain in the detail
 CP04,Case1; Case2; Case3; Case4,config,must,PLAN,review,no step chain in the detail
 CP05,Case1; Case2; Case3; Case4,config,must,PLAN,review,no step chain in the detail

@@ -431,7 +431,7 @@ def l3_lost_results(s, row, ctx, o):
     wc = imp(ctx.data('config.xlsx'))
     wc = wc[0] if isinstance(wc, tuple) else wc
     jf, jerr = s.fields(wc)
-    got = 'JSON import: %s' % ('%d fields' % len(jf) if jf else jerr)
+    got = 'run CSV import: %s' % ('%d fields' % len(jf) if jf else jerr)
     return got == json_part, 'expected %r, got %r' % (json_part, got)
 
 
