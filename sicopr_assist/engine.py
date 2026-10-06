@@ -93,9 +93,23 @@ def reads_keyword(name, scope=None):
     return any(kw.strip().lower() == k and (scope is None or sc == scope) for kw, sc in loader_keywords())
 
 
+def keyword_names(scope):
+    """The keywords the loader reads in one scope ('main' or 'package block'), spelled as the loader spells
+    them."""
+    return sorted(kw for kw, sc in loader_keywords() if sc == scope)
+
+
+def required_keywords():
+    """Main-area keywords the loader reads with no default: a config without one of them does not load."""
+    return sorted(kw for (kw, sc), rec in loader_keywords().items() if sc == 'main' and rec['default'] is None)
+
+
 def shipped_workbooks():
-    """The workbooks SiCoPR ships, for checks that need one and not one of the four starting workbooks."""
-    return sorted(glob.glob(os.path.join(folder(), 'benchmark', '*', 'configs', '*.xlsx')))
+    """The workbooks SiCoPR ships (benchmark and examples), for checks that need one and not one of the four
+    starting workbooks."""
+    out = glob.glob(os.path.join(folder(), 'benchmark', '*', 'configs', '*.xlsx'))
+    out += glob.glob(os.path.join(folder(), 'examples', '**', '*.xlsx'), recursive=True)
+    return sorted(p for p in out if not os.path.basename(p).startswith('~$'))
 
 
 def bootstrap_op():

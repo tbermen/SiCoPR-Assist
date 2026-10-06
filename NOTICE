@@ -42,8 +42,9 @@ The SHA-256 of each is listed in tests/cases/sicopr_starting_configs.csv.
 --------------------------------
 
 The spreadsheet reader and writer (sicopr_assist/xlsx_io.py) start from
-gui/config_io.py in SiCoPR (https://github.com/tbermen/SiCoPR), by the same
-author and under the same licence.
+gui/config_io.py in SiCoPR (https://github.com/tbermen/SiCoPR), at commit
+55c3f717bf8e17daffe65ecf20215a4fbcdb0833 (SiCoPR 1.1.1), by the same author and
+under the same licence.
 
   Copyright 2026 Todd Bermensolo
   SPDX-License-Identifier: BSD-3-Clause
