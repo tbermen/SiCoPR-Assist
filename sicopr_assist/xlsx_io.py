@@ -170,6 +170,29 @@ def keyword_descriptions(path):
     return {k: v['info'] for k, v in read_workbook(path).schema.items()}
 
 
+def selection_lists(path):
+    """{column heading: [the values below it]} from the workbook's selections sheet, the lists a workbook
+    offers for some keywords (the 802.3dj sheets list eight port orders under 'ports'); {} when it has
+    none. Validation offers these as options (rule NC03)."""
+    readable, tmp, _ = _readable_copy(path)
+    try:
+        wb = openpyxl.load_workbook(readable, data_only=True)
+    finally:
+        if tmp:
+            shutil.rmtree(tmp, ignore_errors=True)
+    sheets = [s for s in wb.sheetnames if s.lower().startswith('selections')]
+    if not sheets:
+        return {}
+    rows = [list(r) for r in wb[sheets[0]].iter_rows(values_only=True)]
+    out = {}
+    for c, head in enumerate(rows[0] if rows else []):
+        if head is None or not str(head).strip():
+            continue
+        vals = [r[c] for r in rows[1:] if c < len(r) and r[c] is not None and str(r[c]).strip()]
+        out[str(head).strip()] = [v.strip() if isinstance(v, str) else v for v in vals]
+    return out
+
+
 def _cell(grid, r, c):
     if 0 <= r < len(grid) and 0 <= c < len(grid[r]):
         return grid[r][c]

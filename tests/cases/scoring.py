@@ -33,6 +33,7 @@ SCORE_COLUMNS = ['id', 'config', 'group', 'priority', 'applies', 'L1', 'L2', 'L3
                  'paraphrases_asked', 'paraphrases_wrong', 'note']
 OUTCOME_KEYS = ('type', 'steps', 'changes', 'announce', 'pattern', 'unplaced')
 SWEEP_TEXT_LIMIT = 1500                     # the generator cut sweep effects at 1500 characters
+REMARK = ' (accepted by the loader)'        # may end a loader_effect; a remark, not part of the effect
 L3_DEFAULT_LABELS = ('Case1',) + fixtures.VARIANTS
 
 
@@ -241,6 +242,8 @@ class Scorer:
 
     def standard_l3(self, row, ctx, o, expected, normalise=lambda s: s):
         exp = expected.strip()
+        if exp.endswith(REMARK):                      # a remark, not part of the effect (C5, IV01, IV02 and others)
+            exp = exp[:-len(REMARK)]
         exp = '' if exp == 'no loaded field changes' else exp
         exp = exp.replace('same as source config', 'same as the last run')
         if exp.startswith('the loader stops: '):
