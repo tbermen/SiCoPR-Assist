@@ -34,7 +34,7 @@ import os
 import re
 
 from sicopr_assist import config_model, engine, parse, validate, xlsx_io
-from sicopr_assist.project import read_settings
+from sicopr_assist.project import history_record, read_settings, setting_text
 
 # The step vocabulary, frozen in Phase 1 from the expected_detail chains of the use-case table
 # (tests/cases/l4.py extracts it again and tests/test_l4_normaliser.py checks that the two agree).
@@ -79,6 +79,62 @@ NOT_IN_V1_PART = {
              'parameters',
     'feedback': 'feedback export is not in this version of SiCoPR-Assist (version 2 adds it)',
 }
+
+# Decision 10: feedback leaves the machine only as an email the user writes. The address is kept here, once.
+FEEDBACK_ADDRESS = 'sicopr_assist.showman405@simplelogin.com'
+FEEDBACK_SUBJECT = 'SiCoPR-Assist feedback'
+
+
+def feedback_contact():
+    """Where feedback goes (Decision 10, version 1: the address and the subject, and nothing else)."""
+    return {'address': FEEDBACK_ADDRESS, 'subject': FEEDBACK_SUBJECT}
+
+
+def _send_feedback_text():
+    c = feedback_contact()
+    return 'Send feedback by email to %s with the subject %s. SiCoPR-Assist sends nothing itself.' % (
+        c['address'], c['subject'])
+
+
+def settings_lines(settings):
+    """One line per setting in force, with where its value came from (Decision 4; rows SE01, SE02, SE06), then the
+    warnings. settings is what project.read_settings returns."""
+    files = settings.get('files') or {}
+
+    def where(src):
+        if src == 'default':
+            return 'default'
+        return '%s file %s' % ('project' if src == files.get('project') else 'user', src)
+    out = []
+    for k, v in settings['values'].items():
+        over = ''.join('; overrides %s from the %s' % (setting_text(o['value']), where(o['source']))
+                       for o in settings.get('overridden', {}).get(k, []))
+        out.append('%s = %s (%s%s)' % (k, setting_text(v), where(settings['sources'][k]), over))
+    return out + list(settings['warnings'])
+
+
+def history_lines(project):
+    """What the last run was (row S2): its command, its inputs, its overrides and its result folders. Falls back to
+    the last command when no command has run anything yet. [] when the history is empty or cannot be read."""
+    try:
+        hist = project.read_history()
+    except (OSError, ValueError):
+        return []
+    rec = next((r for r in reversed(hist) if r.get('run_ids')), None) or (hist[-1] if hist else None)
+    if rec is None:
+        return []
+    lines = ['last command (%s, %s): %s' % (rec.get('seq'), rec.get('time'), rec.get('phrase'))]
+    if rec.get('source') and rec['source'].get('path'):
+        lines.append('config: %s' % rec['source']['path'])
+    for c in rec.get('channels') or []:
+        lines.append('%s: %s' % (c.get('role') or 'channel', c['path']))
+    for o in rec.get('overrides') or []:
+        lines.append('override: %s: %s -> %s' % (validate.name_of(o['json_path']), show(o['before']), show(o['after'])))
+    for rid in rec.get('run_ids') or []:
+        lines.append('results: %s' % project.relative(project.run_dir(rid)))
+    if not rec.get('run_ids'):
+        lines.append('outcome: %s' % rec.get('outcome'))
+    return lines
 
 
 def outcome(kind, **fields):
@@ -316,12 +372,40 @@ def handle(phrase, project):
             out, answers, resume = got
     except engine.EngineMissing as e:
         out, answers, resume = outcome('STOP', reason=str(e), pattern='no engine'), {}, None
+    warn = [w for w in ctx.settings['warnings'] if w not in out['announce']]
+    if warn:                                     # a settings problem is shown first and never stops anything
+        out['announce'] = warn + list(out['announce'])
+    seq = _record(project, phrase, out, pending, answered=got is not None)
     if out['type'] == 'QUESTION' and resume is not None:
         stored = dict(out, resume=dict(resume, answers=answers))
-        project.write_pending(resume['phrase'], stored)
+        project.write_pending(resume['phrase'], stored, seq)
     elif pending:
         project.clear_pending()
     return out
+
+
+def _record(project, phrase, out, pending, answered):
+    """Append the history line of Decision 9: the phrase, how it was read, the options offered, the option chosen
+    when it answers a question, and the resolved outcome (replay uses it). Returns its seq, or None when the
+    history cannot be written (then the outcome says so)."""
+    chosen = None
+    m = re.match(r'answer: ([^;]*)', out.get('pattern') or '')
+    if answered and m:
+        chosen = m.group(1).strip()
+    status = {'PLAN': 'ok', 'QUESTION': 'question'}.get(out['type'], 'stopped')
+    if out['type'] == 'STOP' and (chosen == CANCEL or out.get('reason', '').startswith('Cancelled')):
+        status = 'cancelled'
+    rec = history_record(
+        phrase=phrase, pattern=out.get('pattern'), unplaced=list(out.get('unplaced') or []),
+        options=list((out.get('question') or {}).get('options') or []), chosen=chosen,
+        answers=(pending or {}).get('seq') if answered else None,
+        rephrase_of=(pending or {}).get('seq') if pending and not answered else None,
+        outcome=out['type'], status=status, reason=out.get('reason'), plan=out)
+    try:
+        return project.append_history(rec)['seq']
+    except (OSError, ValueError) as e:
+        out['announce'] = list(out['announce']) + ['the history could not be written: %s' % e]
+        return None
 
 
 def _resolve(phrase, ctx, mods):
@@ -421,10 +505,14 @@ def _plan(text, ctx, mods):
                      'parameter relates to a result.', **base)
     # a version 2 feature alone is a STOP; asked for with a version 1 action, the version 1 part is planned and
     # the rest is announced as not in this version (Decision 16)
+    low = text.lower()
+    if re.search(r'\b(send|e-?mail|mail)\b', low) and ('feedback' in acts or re.search(r'\bdevelopers?\b', low)):
+        return _stop(_send_feedback_text(), **base)           # Decision 10, version 1: address and subject only
     deferred = [f for f in ('dashboard', 'fetch', 'tutor', 'feedback') if f in acts]
     if deferred:
         if not _has_v1_action(req):
-            return _stop(NOT_IN_V1[deferred[0]], **base)
+            return _stop(NOT_IN_V1[deferred[0]] + (' ' + _send_feedback_text() if deferred[0] == 'feedback' else ''),
+                         **base)
         req = dict(req, actions=[a for a in acts if a not in deferred])
         out, answers = _plan_v1(text, req, ctx, mods, base)
         if out['type'] != 'STOP':
@@ -1446,11 +1534,17 @@ def _sweep(req, ctx, mods, base_fields):
                                                'run' if n_new == 1 else 'runs', n_reused) + \
               (', %d skipped because validate_config fails' % len(skipped) if skipped else '')
     if n_new > limit and not mods.get('confirm_limit'):
-        o_run, o_edit = 'run all', 'edit the sweep (range, count or step size)'
-        return _ask('%s. That is more new runs than max_new_runs (%d), so the batch waits for you: run all, edit the '
-                    'sweep, or cancel.' % (_sentence(summary).rstrip('.'), limit), [o_run, o_edit, CANCEL],
-                    {o_run: {'confirm_limit': True}, o_edit: {'stop': 'Say the edit, for example: Use 16 steps instead.'},
-                     CANCEL: None}, announce=notes, **fields)
+        # a range can be edited; a list of values or every legal value cannot (row SE05)
+        o_run = 'run all' if n_new > 1 else 'run'
+        o_edit = 'edit the sweep (range, count or step size)' if any(d.get('how') in ('count', 'step') for d in dims) \
+            else None
+        opts = [o_run] + ([o_edit] if o_edit else []) + [CANCEL]
+        answers = {o_run: {'confirm_limit': True}, CANCEL: None}
+        if o_edit:
+            answers[o_edit] = {'stop': 'Say the edit, for example: Use 16 steps instead.'}
+        return _ask('%s. That is more new runs than max_new_runs (%d), so the batch waits for you: %s.'
+                    % (_sentence(summary).rstrip('.'), limit, _and([o.split(' (')[0] for o in opts]).replace(' and ', ' or ')),
+                    opts, answers, announce=notes, **fields)
     diff = any(a in req['actions'] for a in ('summary', 'compare'))
     steps = []
     if n_new:
@@ -1654,6 +1748,19 @@ def _replay(req, ctx, base, thru_only=False):
         return _no_history(ctx, base)
     steps = [_step(s['op'], **(s.get('args') or {})) for s in ((rec.get('plan') or {}).get('steps') or [])
              if s.get('op') in STEPS] or [_step('validate_config'), _step('run_com'), _step('summarize')]
+    gone = [path for path, sha, _ in ctx.channels() if sha is None]
+    if gone:                                     # row S1 fallback: an input of the last run is missing
+        import difflib
+        have = ctx.channel_files()
+        near = sorted(have, key=lambda p: -difflib.SequenceMatcher(None, os.path.basename(gone[0]).lower(),
+                                                                    os.path.basename(p).lower()).ratio())
+        near = near[:ctx.setting('max_options')]
+        cfg = (rec.get('source') or {}).get('path') or 'the config'
+        return _ask('%s, a channel file of the last run (%s), is not in the project folder any more, so the run cannot be '
+                    'repeated as it was.%s' % (gone[0], rec.get('phrase'), ' The channel files here, closest first: %s.'
+                                               % ', '.join(near) if near else ''),
+                    near + [CANCEL], {p: {'stop': 'Run COM on %s with %s.' % (p, cfg)} for p in near} | {CANCEL: None},
+                    **base)
     announce = ['replays the last command: %s' % rec.get('phrase')]
     for path, sha, role in ctx.channels():
         old = next((c.get('sha256') for c in rec.get('channels') or [] if c['path'] == path), None)
@@ -1695,9 +1802,13 @@ def _show(req, text, ctx, base):
             return _no_history(ctx, base)
         return outcome('PLAN', steps=[_step('show_config')], announce=['the working config of the last run'], **base), {}
     if re.search(r'^(show|list) (me )?(the )?settings\b|^show limits\b|^what are my limits\b', low) and not req['sets']:
-        s = ctx.settings
-        lines = ['%s = %s (%s)' % (k, v, s['sources'][k]) for k, v in s['values'].items()] + s['warnings']
-        return outcome('PLAN', steps=[_step('show_settings')], announce=lines, **base), {}
+        return outcome('PLAN', steps=[_step('show_settings')], announce=settings_lines(ctx.settings), **base), {}
+    if re.search(r'\bwhat did i run\b|\bshow (me )?my last command\b|\bwhat was the last run\b|^show (me )?(the )?history\b',
+                 low):
+        lines = history_lines(ctx.project)
+        if not lines:
+            return _no_history(ctx, base)
+        return outcome('PLAN', steps=[_step('show_history', last=1)], announce=lines, **base), {}
     if (re.search(r'\bwhat is\b.*\bset to\b|^show\b|\bcurrent\b', low) and len(req['sets']) == 1
             and req['sets'][0].get('value') is None and wc is not None and not req['sweeps']):
         n = req['sets'][0]['name']

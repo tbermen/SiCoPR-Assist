@@ -46,7 +46,9 @@ def main():
                              text=True, env=env)
         check('--json prints the outcome as JSON', got.returncode == 0 and json.loads(got.stdout)['type'] == 'STOP',
               got.stdout[:200])
-        check('nothing is written to the project folder by a STOP', os.listdir(d) == [], os.listdir(d))
+        check('a STOP writes nothing to the project folder but the history line (Decision 9, section 5)',
+              os.listdir(d) == ['.sicopr'] and os.listdir(os.path.join(d, '.sicopr')) == ['history.jsonl'],
+              os.listdir(d))
         exe = shutil.which('sicopr-assist')
         if not exe:                                    # pip may put the script in a folder that is not on PATH
             exe = shutil.which('sicopr-assist', path=sysconfig.get_path('scripts'))

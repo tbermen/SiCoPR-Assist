@@ -105,12 +105,16 @@ def setting_defaults():
 def read_settings(project=None):
     """The settings in force: built-in defaults, then the user file, then the project file, later wins.
     A bad name, a bad value or an unreadable file warns and keeps the value in force; a file with no heading
-    is accepted, and a setting is accepted under either heading. Returns {'values', 'sources', 'warnings'}."""
+    is accepted, and a setting is accepted under either heading. Returns {'values', 'sources', 'overridden',
+    'warnings', 'files'}: sources[name] is 'default' or the file that set the value; overridden[name] lists the
+    values of earlier files that a later file replaced, as {'value', 'source'}; files names the user and project
+    files looked at."""
     import configparser
     import re
     defaults = setting_defaults()
     vals = {k: v for k, (v, _) in defaults.items()}
     src = {k: 'default' for k in vals}
+    over = {}
     warn = []
     paths = [user_settings_path()] + ([project.settings_path] if project is not None else [])
     for p in paths:
@@ -148,9 +152,19 @@ def read_settings(project=None):
                     if v is None or v < 0 or (isinstance(d, float) and v > 1) or (k in ('max_options', 'trouble_window') and v < 1):
                         warn.append('%s: %s = %s is not a usable value, so %s stays in force' % (p, k, raw, vals[k]))
                         continue
+                if src[k] not in ('default', p):
+                    over.setdefault(k, []).append({'value': vals[k], 'source': src[k]})
                 vals[k] = v
                 src[k] = p
-    return {'values': vals, 'sources': src, 'warnings': warn}
+    return {'values': vals, 'sources': src, 'overridden': over, 'warnings': warn,
+            'files': {'user': paths[0], 'project': paths[1] if len(paths) > 1 else None}}
+
+
+def setting_text(value):
+    """A setting's value as the settings file writes it: on or off for a switch."""
+    if isinstance(value, bool):
+        return 'on' if value else 'off'
+    return str(value)
 
 
 def run_id(n):
