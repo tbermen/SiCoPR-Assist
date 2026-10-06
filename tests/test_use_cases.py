@@ -31,7 +31,9 @@ import fixtures  # noqa: E402
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--gate', choices=['G1.3'], help='check a gate condition as well')
+    ap.add_argument('--gate', choices=['G1.3', 'G4'], help='check a gate condition as well')
+    ap.add_argument('--review', help='with --gate G4: write the rows of the Phase 4 groups that L4 cannot check by '
+                                     'machine, with the outcome given, to this CSV')
     ap.add_argument('--out', help='where to write score_use_cases.csv')
     ap.add_argument('--only', help='comma-separated row ids, for a quick look')
     ap.add_argument('--no-paraphrases', action='store_true')
@@ -79,6 +81,8 @@ def main(argv=None):
           len(results) == expected_pairs and not harness_errors, '; '.join(harness_errors[:5]))
     check('every applicable pair has an L1 score', all(r['L1'] in ('PASS', 'FAIL') for r in applicable))
 
+    if args.gate == 'G4':
+        gate_g4(rows, results, full, args.review)
     if args.gate == 'G1.3':
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
@@ -87,6 +91,83 @@ def main(argv=None):
         check('G1.3: no PLAN or QUESTION row passes L1 (%d pairs)' % len(other), all(r['L1'] == 'FAIL' for r in other),
               [r['id'] for r in other if r['L1'] != 'FAIL'][:10])
     finish()
+
+
+PHASE4_GROUPS = ('param', 'enum', 'resolve', 'phrasing', 'invalid', 'combo', 'change', 'structure', 'schema', 'scope',
+                 'config', 'sweep')
+
+
+def open_disputes():
+    """{row id: why} for the disputes in the build state that are not resolved. The build state lives outside the
+    repository (in SICOPR_ASSIST_INPUTS); without it no row is excused."""
+    import json
+    path = os.path.join(os.environ.get('SICOPR_ASSIST_INPUTS') or '', 'build_state.json')
+    if not os.path.isfile(path):
+        return {}
+    with open(path, encoding='utf-8') as f:
+        state = json.load(f)
+    return {d['row']: d.get('why', '') for d in state.get('disputes', []) if d.get('status') != 'resolved'}
+
+
+def gate_g4(rows, results, full, review_path):
+    """Gates G4.1 to G4.5 (prompt section 8, Phase 4). A disputed row is excused and named."""
+    import csv
+    import scoring
+    by_key = {(r['id'], label): r for r in rows for label in scoring.labels_of(r)}
+    disputed = open_disputes()
+    if disputed:
+        print('excused by dispute: %s' % ', '.join(sorted(disputed)))
+    mine = [r for r in results if r['applies'] == 'yes' and r['group'] in PHASE4_GROUPS]
+    must = [r for r in mine if r['priority'] == 'must' and r['id'] not in disputed]
+
+    def listed(bad):
+        return ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad]
+    bad = [r for r in must if r['L1'] != 'PASS']
+    check('G4.1: every must row of the Phase 4 groups passes L1 (%d pairs)' % len(must), not bad, listed(bad)[:40])
+    bad = [r for r in must if r['L2'] == 'FAIL' or r['L3'] == 'FAIL']
+    check('G4.2: the same rows pass L2 and L3 where they apply (L3 %s)' % ('on every pair' if full else
+                                                                          'on Case1 and the variants only'),
+          not bad, listed(bad)[:40])
+    if not full:
+        print('NOTE: G4.2 needs L3 on every pair: run with SICOPR_ASSIST_FULL=1')
+    frozen = {}
+    for r in mine:
+        if r['L4'] in ('PASS', 'FAIL') and r['id'] not in disputed:
+            frozen.setdefault(r['id'] + '|' + by_key[(r['id'], r['config'])]['starting_config'], []).append(r)
+    passed = [k for k, v in frozen.items() if all(x['L4'] == 'PASS' for x in v)]
+    missed = sorted(k for k in frozen if k not in passed)
+    share = len(passed) / float(len(frozen) or 1)
+    print('G4.3: L4 on %d of %d frozen rows of the Phase 4 groups, disputed rows left out (%.1f %%); %d pairs of %d'
+          % (len(passed), len(frozen), 100 * share, sum(1 for v in frozen.values() for x in v if x['L4'] == 'PASS'),
+             sum(len(v) for v in frozen.values())))
+    for k in missed:
+        x = next(x for x in frozen[k] if x['L4'] == 'FAIL')
+        print('  L4 miss %s (%s): %s' % (k.split('|')[0], ', '.join(y['config'] for y in frozen[k] if y['L4'] == 'FAIL'),
+                                         x['note'][-220:]))
+    check('G4.3: L4 passes on at least 95 percent of the frozen rows of the Phase 4 groups', share >= 0.95,
+          '%.1f %%' % (100 * share))
+    wrong = [r for r in results if r['applies'] == 'yes' and str(r['paraphrases_wrong']) not in ('', '0')
+             and r['id'] not in disputed]
+    check('G4.4: no paraphrase in the whole table produces a wrong PLAN', not wrong,
+          ['%s %s: %s wrong' % (r['id'], r['config'], r['paraphrases_wrong']) for r in wrong][:40])
+    sweeps = [r for r in must if r['group'] == 'sweep' and scoring.stated_counts(by_key[(r['id'], r['config'])])]
+    bad = [(r, scoring.counts_match(by_key[(r['id'], r['config'])], r)) for r in sweeps]
+    bad = [(r, n) for r, (ok, n) in bad if not ok]
+    check('G4.5: points, new runs and reused runs as stated, on %d must sweep pairs that state them' % len(sweeps),
+          not bad, ['%s %s: %s' % (r['id'], r['config'], n) for r, n in bad][:40])
+    if review_path:
+        with open(review_path, 'w', newline='', encoding='utf-8') as f:
+            w = csv.writer(f, lineterminator='\n')
+            w.writerow(['id', 'config', 'group', 'priority', 'expected_type', 'expected_detail', 'outcome_type',
+                        'outcome_detail', 'question_text'])
+            for r in mine:
+                if r['L4'] != 'review':
+                    continue
+                row = by_key[(r['id'], r['config'])]
+                o = r.get('_outcome') or {}
+                w.writerow([r['id'], r['config'], r['group'], r['priority'], row['expected_type'],
+                            row['expected_detail'], o.get('type'), o.get('detail'), o.get('text')])
+        print('review list written to %s' % review_path)
 
 
 _types = {}

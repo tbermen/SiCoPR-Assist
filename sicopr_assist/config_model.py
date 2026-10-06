@@ -382,14 +382,31 @@ def write_run_csv(wc, path):
     return path
 
 
+_LOADED = {}                    # run CSV text -> (fields, error); a plan loads the same config many times
+_LOADED_MAX = 512
+
+
 def loaded_fields(wc):
     """(fields, None) as the engine loads wc written as the run CSV, else (None, '<ErrorType>: <message>').
-    The CSV is written to a temporary folder, which is removed."""
+    The CSV is written to a temporary folder, which is removed. Results are kept by the CSV text (the loader
+    reads nothing else), so the fields returned are shared and must not be changed by the caller."""
+    text = run_csv_text(wc)
+    st = os.stat(engine.engine_path())
+    key = (st.st_mtime_ns, st.st_size, text)
+    if key in _LOADED:
+        return _LOADED[key]
     tmp = tempfile.mkdtemp(prefix='sicopr_assist_csv_')
     try:
-        return engine.load_fields(write_run_csv(wc, os.path.join(tmp, 'run.csv')))
+        path = os.path.join(tmp, 'run.csv')
+        with open(path, 'w', encoding='utf-8', newline='') as f:
+            f.write(text)
+        got = engine.load_fields(path)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+    if len(_LOADED) >= _LOADED_MAX:
+        _LOADED.pop(next(iter(_LOADED)))
+    _LOADED[key] = got
+    return got
 
 
 def field_equal(a, b):

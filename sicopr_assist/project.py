@@ -79,6 +79,80 @@ def user_settings_path():
     return os.path.join(user_home(), STATE_DIR, SETTINGS_FILE)
 
 
+SETTINGS_EXAMPLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'sicopr_assist_settings_example.ini')
+_ON_OFF = {'on': True, 'yes': True, 'true': True, '1': True, 'off': False, 'no': False, 'false': False, '0': False}
+
+
+def setting_defaults():
+    """{name: (default, heading)} read from the settings example shipped in data/ (Decision 4): the names, the
+    defaults and the headings live in that one file."""
+    import configparser
+    cp = configparser.ConfigParser()
+    with open(SETTINGS_EXAMPLE, encoding='utf-8') as f:
+        cp.read_string(f.read())
+    out = {}
+    for sec in cp.sections():
+        for k, raw in cp.items(sec):
+            if raw.strip().lower() in ('on', 'off'):
+                out[k] = (_ON_OFF[raw.strip().lower()], sec)
+            elif '.' in raw:
+                out[k] = (float(raw), sec)
+            else:
+                out[k] = (int(raw), sec)
+    return out
+
+
+def read_settings(project=None):
+    """The settings in force: built-in defaults, then the user file, then the project file, later wins.
+    A bad name, a bad value or an unreadable file warns and keeps the value in force; a file with no heading
+    is accepted, and a setting is accepted under either heading. Returns {'values', 'sources', 'warnings'}."""
+    import configparser
+    import re
+    defaults = setting_defaults()
+    vals = {k: v for k, (v, _) in defaults.items()}
+    src = {k: 'default' for k in vals}
+    warn = []
+    paths = [user_settings_path()] + ([project.settings_path] if project is not None else [])
+    for p in paths:
+        if not os.path.exists(p):
+            continue
+        try:
+            with open(p, encoding='utf-8') as f:
+                text = f.read()
+            if not re.search(r'^\s*\[', text, re.M):
+                text = '[limits]\n' + text
+            cp = configparser.ConfigParser(inline_comment_prefixes=('#', ';'))
+            cp.read_string(text, source=p)
+        except (OSError, UnicodeDecodeError, configparser.Error) as e:
+            warn.append('%s could not be read (%s), so its settings are ignored' % (p, str(e).splitlines()[0]))
+            continue
+        for sec in cp.sections():
+            for k, raw in cp.items(sec):
+                if k not in defaults:
+                    import difflib
+                    near = difflib.get_close_matches(k, list(defaults), 1, 0.5)
+                    warn.append('%s: %s is not a setting and was ignored%s' % (p, k, '; did you mean %s' % near[0] if near else ''))
+                    continue
+                d = defaults[k][0]
+                raw = raw.strip()
+                if isinstance(d, bool):
+                    if raw.lower() not in _ON_OFF:
+                        warn.append('%s: %s = %s is not on or off, so %s stays in force' % (p, k, raw, 'on' if vals[k] else 'off'))
+                        continue
+                    v = _ON_OFF[raw.lower()]
+                else:
+                    try:
+                        v = type(d)(raw)
+                    except ValueError:
+                        v = None
+                    if v is None or v < 0 or (isinstance(d, float) and v > 1) or (k in ('max_options', 'trouble_window') and v < 1):
+                        warn.append('%s: %s = %s is not a usable value, so %s stays in force' % (p, k, raw, vals[k]))
+                        continue
+                vals[k] = v
+                src[k] = p
+    return {'values': vals, 'sources': src, 'warnings': warn}
+
+
 def run_id(n):
     return 'run_%04d' % n
 

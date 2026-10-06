@@ -101,7 +101,7 @@ def same(product_value, expected_text):
 
 
 def strip_linked(text):
-    return re.sub(r' \(linked to [^)]*\)$', '', text.strip())
+    return re.sub(r' \(linked to (?:[^()]|\([^()]*\))*\)$', '', text.strip())
 
 
 def parse_linked(text, wc):
@@ -121,10 +121,17 @@ def parse_linked(text, wc):
 
 
 def option_naming(outcome, target):
+    """The option that names target: the option that is the name itself first (N_b, not N_bx), else one that
+    holds it. None when the row names no target."""
     t = target.strip().lower()
-    for opt in (outcome.get('question') or {}).get('options') or []:
-        txt = l4.option_text(opt)
-        if txt == t or t in txt:
+    if not t:
+        return None
+    opts = (outcome.get('question') or {}).get('options') or []
+    for opt in opts:
+        if l4.option_text(opt) == t:
+            return opt
+    for opt in opts:
+        if t in l4.option_text(opt):
             return opt
     return None
 
@@ -157,20 +164,28 @@ def level2(row, o, prior_wc):
         return ok, '' if ok else 'expected a %s grid of points over %s, got %d points' % (va, ', '.join(paths), len(pts))
     want = split_points(va)
     jp = paths[0]
-    if pts or len(want) > 1:
+    if pts or (len(want) > 1 and len(paths) == 1):
         got = [(pt.get('values') or {}).get(jp) for pt in pts]
         ok = len(got) == len(want) and all(same(g, w) for g, w in zip(got, want))
         return ok, '' if ok else 'points at %s: expected %s, got %s' % (jp, want, got)
-    ch = [c for c in o.get('changes') or [] if c.get('json_path') == jp and c.get('kind') != 'linked']
-    if not ch:
-        return False, 'no change at %s' % jp
-    c = ch[0]
-    if not same(c.get('after'), va):
-        return False, '%s after: expected %s, got %r' % (jp, va, c.get('after'))
-    vb = strip_linked(row['value_before'])
-    if vb and not same(c.get('before'), vb):
-        return False, '%s before: expected %s, got %r' % (jp, vb, c.get('before'))
-    want_l = parse_linked(row['linked_changes'], prior_wc) if row['linked_changes'].strip() else []
+    # one change per path: a row that names several parameters (CB01) lists one value each, in the same order
+    befores = split_points(strip_linked(row['value_before'])) if len(paths) > 1 else [strip_linked(row['value_before'])]
+    for k, path in enumerate(paths):
+        ch = [c for c in o.get('changes') or [] if c.get('json_path') == path and c.get('kind') != 'linked']
+        if not ch:
+            return False, 'no change at %s' % path
+        c = ch[0]
+        w = want[k] if len(paths) > 1 else va
+        if not same(c.get('after'), w):
+            return False, '%s after: expected %s, got %r' % (path, w, c.get('after'))
+        vb = strip_linked(befores[k]) if k < len(befores) else ''
+        if vb and not same(c.get('before'), vb):
+            return False, '%s before: expected %s, got %r' % (path, vb, c.get('before'))
+    # linked changes are compared where the row states them; an empty cell in a hand-written row does not say
+    # that none move (RS01 changes f_b, and its own loader_effect shows the linked CTLE corners moving)
+    if not row['linked_changes'].strip():
+        return True, ''
+    want_l = parse_linked(row['linked_changes'], prior_wc)
     got_l = {c['json_path'].rsplit('/', 1)[-1]: c.get('after') for c in o.get('changes') or [] if c.get('kind') == 'linked'}
     if sorted(n for n, _ in want_l) != sorted(got_l):
         return False, 'linked: expected %s, got %s' % (sorted(n for n, _ in want_l), sorted(got_l))
@@ -224,8 +239,10 @@ class Scorer:
         """[(point index or None, working config or an error text)]"""
         out = []
         pts = o.get('points') or []
-        sets = ([{prior_states.key_of(jp): v for jp, v in (pt.get('values') or {}).items() if jp.startswith('/')}
-                 for pt in pts] if pts else
+        # a point's "writes" are the cells it sets in the working config (a [TX RX] pair written to both sides);
+        # its "values" are the swept values as the table lists them. A point without writes sets its values.
+        sets = ([{prior_states.key_of(jp): v for jp, v in (pt.get('writes') or pt.get('values') or {}).items()
+                  if jp.startswith('/')} for pt in pts] if pts else
                 [{prior_states.key_of(c['json_path']): c.get('after') for c in o.get('changes') or []}])
         for i, values in enumerate(sets):
             try:
@@ -246,11 +263,13 @@ class Scorer:
             exp = exp[:-len(REMARK)]
         exp = '' if exp == 'no loaded field changes' else exp
         exp = exp.replace('same as source config', 'same as the last run')
+        # in a sweep, an item's "no loaded field changes" is the same effect as "same as the last run"
+        exp = re.sub(r': no loaded field changes(?= \|\||$)', ': same as the last run', exp)
         if exp.startswith('the loader stops: '):
             exp = 'loader error: ' + exp[len('the loader stops: '):]
         base = ctx.prior_wc
         cands = self.candidates(o, base)
-        if ' || ' in exp or len(cands) > 1:
+        if ' || ' in exp or len(cands) > 1 or o.get('points'):          # a sweep: one item per point
             items = exp.split(' || ')
             labels = [it.split(': ', 1)[0] for it in items]
             parts = []
@@ -259,7 +278,12 @@ class Scorer:
                 label = labels[i] if i is not None and i < len(labels) else str(i)
                 parts.append('%s: %s' % (label, eff or 'same as the last run'))
             got = ' || '.join(parts)
-            ok = normalise(got)[:SWEEP_TEXT_LIMIT] == normalise(exp)[:SWEEP_TEXT_LIMIT]
+            # item by item; the generator cut the text at SWEEP_TEXT_LIMIT characters, so a cut last item is
+            # compared as a prefix (the cut was made before "no loaded field changes" was read as above)
+            ei, gi = normalise(exp).split(' || '), normalise(got).split(' || ')
+            cut = len(expected) >= SWEEP_TEXT_LIMIT
+            ok = (len(gi) >= len(ei) if cut else len(gi) == len(ei)) and all(a == b for a, b in zip(ei[:-1], gi)) \
+                and (gi[len(ei) - 1].startswith(ei[-1]) if cut else gi[-1] == ei[-1])
         else:
             wc = cands[0][1]
             got = wc if isinstance(wc, str) else self.effect(base, wc)
@@ -314,6 +338,12 @@ class Scorer:
                     notes.append('L4 expected %s, got %s' % (exp, l4.outcome_steps(o) if kind == 'chain' else l4.outcome_options(o)))
             else:
                 res['L4'] = 'review'
+            res['_outcome'] = {'type': o['type'], 'points': len(o.get('points') or []), 'new_runs': o.get('new_runs'),
+                               'reused_runs': o.get('reused_runs'),
+                               'detail': (' > '.join(l4.outcome_steps(o)) if o['type'] == 'PLAN' else
+                                          ' | '.join((o.get('question') or {}).get('options') or [])
+                                          if o['type'] == 'QUESTION' else o.get('reason', '')),
+                               'text': (o.get('question') or {}).get('text', '') if o['type'] == 'QUESTION' else ''}
         finally:
             self.fx.remove_project(ctx.root)
         if paraphrases and row['paraphrases'].strip():
@@ -507,7 +537,7 @@ def pairs(rows):
 def write_scores(results, path):
     order = sorted(results, key=lambda x: x['group'] in DEFERRED)        # the deferred groups in their own section
     with open(path, 'w', newline='', encoding='utf-8') as f:
-        w = csv.DictWriter(f, fieldnames=SCORE_COLUMNS, lineterminator='\n')
+        w = csv.DictWriter(f, fieldnames=SCORE_COLUMNS, lineterminator='\n', extrasaction='ignore')
         w.writeheader()
         w.writerows(order)
 
@@ -534,3 +564,33 @@ def summarise(results):
                          % (g, v['n'], v['L1'][0], v['L1'][1], v['L2'][0], v['L2'][1], v['L3'][0], v['L3'][1],
                             v['L4'][0], v['L4'][1]))
     return lines
+
+
+# ----------------------------------------------------------------------------- sweep counts (gate G4.5)
+_COUNTS = re.compile(r'announce (\d+) (?:values?|combinations): (\d+) new runs?(?:, (\d+) reused)?')
+_ASKED = re.compile(r'(\d+) points, (\d+) new runs(?:, (\d+) reused)?')
+
+
+def stated_counts(row):
+    """(points, new runs, reused runs) that a row's expected_detail states, or None when it states none.
+    "no new run" states only the new-run count."""
+    d = row['expected_detail']
+    m = _COUNTS.search(d) or _ASKED.search(d)
+    if m:
+        return int(m.group(1)), int(m.group(2)), int(m.group(3) or 0)
+    if re.search(r'\bno new run\b', d):
+        return None, 0, None
+    return None
+
+
+def counts_match(row, res):
+    """(passed, note) for gate G4.5 on one scored pair: points, new runs and reused runs as the row states them."""
+    want = stated_counts(row)
+    got = res.get('_outcome') or {}
+    if want is None:
+        return True, ''
+    pts, new, reused = want
+    ok = got.get('new_runs') == new and (pts is None or got.get('points') == pts) and \
+        (reused is None or got.get('reused_runs') == reused)
+    return ok, '' if ok else 'stated %s points, %s new, %s reused; got %s, %s, %s' % (
+        pts, new, reused, got.get('points'), got.get('new_runs'), got.get('reused_runs'))
