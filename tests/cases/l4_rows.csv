@@ -55,7 +55,7 @@ PA034,Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summar
 PA035,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
 PA036,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
 PA037,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
-PA038,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA038,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also set erl = 0 | keep tdr on | cancel
 PA039,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
 PA040,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
 PA041,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
