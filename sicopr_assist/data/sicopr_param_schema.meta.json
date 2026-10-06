@@ -1,0 +1,1943 @@
+{
+ "built": "2026-10-03",
+ "cited_release": "4p17p0",
+ "citation_rule": "\"matlab Lnnnn\" anywhere in sicopr_param_schema.csv or sicopr_param_rules.csv is a line of the cited release; \"port Lnnnn\" is a line of sicopr.py at the commit below",
+ "releases": [
+  {
+   "release": "4p15p0",
+   "file": "matlab/com_ieee8023_4p15p0.m",
+   "lines": 11884,
+   "keywords": 252,
+   "in_repository_at_commit": true
+  },
+  {
+   "release": "4p15p0_adaptive_local_search",
+   "file": "matlab/com_ieee8023_4p15p0_adaptive_local_search.m",
+   "lines": 12199,
+   "keywords": 253,
+   "in_repository_at_commit": true
+  },
+  {
+   "release": "4p16p0",
+   "file": "matlab/com_ieee8023_4p16p0.m",
+   "lines": 12233,
+   "keywords": 254,
+   "in_repository_at_commit": true
+  },
+  {
+   "release": "4p17p0",
+   "file": "matlab/com_ieee8023_4p17p0.m",
+   "lines": 12765,
+   "keywords": 256,
+   "in_repository_at_commit": false
+  }
+ ],
+ "engine_refs_method": "attribute accesses of the loaded field plus string constants that name it (getattr, hasattr), in sicopr.py outside read_ParamConfigFile and its package-block reader",
+ "sicopr": {
+  "commit": "f1420602901d9ac3a279faf51205ef5391a9aba4",
+  "sha256": "b4bbc6110f6e5c3eb0a6be42f7c2dc267e1aa064b54d11f23f6fdd04173d2cae",
+  "lines": 21605,
+  "supported_matlab_versions": [
+   "4p15p0",
+   "4p16p0",
+   "4p17p0"
+  ],
+  "default_matlab_version": "4p17p0"
+ },
+ "pending_keywords": [],
+ "loader_snapshot": {
+  "C_p|package block": {
+   "default": "0.0",
+   "scale": 1e-09,
+   "lines": [
+    17433
+   ]
+  },
+  "R_d|package block": {
+   "default": "np.array([50.0, 50.0])",
+   "scale": null,
+   "lines": [
+    17434
+   ]
+  },
+  "A_v|package block": {
+   "default": "0.5",
+   "scale": null,
+   "lines": [
+    17435
+   ]
+  },
+  "A_fe|package block": {
+   "default": "0.5",
+   "scale": null,
+   "lines": [
+    17436
+   ]
+  },
+  "A_ne|package block": {
+   "default": "0.5",
+   "scale": null,
+   "lines": [
+    17437
+   ]
+  },
+  "z_p (TX)|package block": {
+   "default": "_read_ParamConfigFile__parse_matlab_matrix('[ 8 24 30 45 ; 1 1 1 1 ; 1 1 1 1 ; 0.5 0.5 0.5 0.5 ]')",
+   "scale": null,
+   "lines": [
+    17439
+   ]
+  },
+  "z_p (NEXT)|package block": {
+   "default": "np.zeros_like(z_p_tx)",
+   "scale": null,
+   "lines": [
+    17463
+   ]
+  },
+  "z_p (FEXT)|package block": {
+   "default": "np.zeros_like(z_p_tx)",
+   "scale": null,
+   "lines": [
+    17464
+   ]
+  },
+  "z_p (RX)|package block": {
+   "default": "np.zeros_like(z_p_tx)",
+   "scale": null,
+   "lines": [
+    17465
+   ]
+  },
+  "package_tl_gamma0_a1_a2|package block": {
+   "default": "np.array([0.0, 0.001734, 0.0001455])",
+   "scale": null,
+   "lines": [
+    17467
+   ]
+  },
+  "package_tl_tau|package block": {
+   "default": "0.006141",
+   "scale": null,
+   "lines": [
+    17469
+   ]
+  },
+  "package_Z_c|package block": {
+   "default": "_read_ParamConfigFile__parse_matlab_matrix('[92 92 ; 70 70; 80 80; 100 100]')",
+   "scale": null,
+   "lines": [
+    17471
+   ]
+  },
+  "SAVE_KEYWORD_FILE|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17508,
+    18062
+   ]
+  },
+  "PKG_NAME|main": {
+   "default": "''",
+   "scale": null,
+   "lines": [
+    17527
+   ]
+  },
+  "kappa1|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17547
+   ]
+  },
+  "kappa2|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17548
+   ]
+  },
+  "Dynamic TXFFE|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17550
+   ]
+  },
+  "FloatingDFE_Development|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17551
+   ]
+  },
+  "f_b|main": {
+   "default": null,
+   "scale": 1000000000.0,
+   "lines": [
+    17554
+   ]
+  },
+  "f_2|main": {
+   "default": "param.fb / 1000000000.0",
+   "scale": 1000000000.0,
+   "lines": [
+    17555
+   ]
+  },
+  "f_2_ILD|main": {
+   "default": "param.f2 / 1000000000.0",
+   "scale": 1000000000.0,
+   "lines": [
+    17556
+   ]
+  },
+  "f_min|main": {
+   "default": null,
+   "scale": 1000000000.0,
+   "lines": [
+    17557
+   ]
+  },
+  "f_1|main": {
+   "default": "param.max_start_freq / 1000000000.0",
+   "scale": 1000000000.0,
+   "lines": [
+    17558
+   ]
+  },
+  "Delta_f|main": {
+   "default": null,
+   "scale": 1000000000.0,
+   "lines": [
+    17559
+   ]
+  },
+  "c(0)|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17560
+   ]
+  },
+  "N_b|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17587
+   ]
+  },
+  "N_v|main": {
+   "default": "param.ndfe",
+   "scale": null,
+   "lines": [
+    17588
+   ]
+  },
+  "D_p|main": {
+   "default": "4",
+   "scale": null,
+   "lines": [
+    17589
+   ]
+  },
+  "N_p|main": {
+   "default": "400",
+   "scale": null,
+   "lines": [
+    17590
+   ]
+  },
+  "N_bx|main": {
+   "default": "param.ndfe",
+   "scale": null,
+   "lines": [
+    17591
+   ]
+  },
+  "N_bg|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17594
+   ]
+  },
+  "N_bf|main": {
+   "default": "6",
+   "scale": null,
+   "lines": [
+    17595
+   ]
+  },
+  "N_bmax|main": {
+   "default": "param.ndfe",
+   "scale": null,
+   "lines": [
+    17596
+   ]
+  },
+  "N_f|main": {
+   "default": "param.ndfe",
+   "scale": null,
+   "lines": [
+    17597,
+    17598
+   ]
+  },
+  "bmaxg|main": {
+   "default": "0.2",
+   "scale": null,
+   "lines": [
+    17601
+   ]
+  },
+  "B_float_RSS_MAX|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17603
+   ]
+  },
+  "N_tail_start|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17604
+   ]
+  },
+  "N_b_step|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17606
+   ]
+  },
+  "ffe_pre_tap_len|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17607
+   ]
+  },
+  "ffe_post_tap_len|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17609
+   ]
+  },
+  "ffe_tap_step_size|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17611
+   ]
+  },
+  "ffe_main_cursor_min|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17613
+   ]
+  },
+  "ffe_pre_tap1_max|main": {
+   "default": "0.7",
+   "scale": null,
+   "lines": [
+    17614
+   ]
+  },
+  "ffe_post_tap1_max|main": {
+   "default": "0.7",
+   "scale": null,
+   "lines": [
+    17615
+   ]
+  },
+  "ffe_tapn_max|main": {
+   "default": "0.7",
+   "scale": null,
+   "lines": [
+    17616
+   ]
+  },
+  "ffe_backoff|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17617
+   ]
+  },
+  "num_ui_RXFF_noise|main": {
+   "default": "2048",
+   "scale": null,
+   "lines": [
+    17621
+   ]
+  },
+  "flim|main": {
+   "default": "1000000000000.0",
+   "scale": null,
+   "lines": [
+    17622
+   ]
+  },
+  "g_DC_HP|main": {
+   "default": "[]",
+   "scale": null,
+   "lines": [
+    17627,
+    17671
+   ]
+  },
+  "f_HP_PZ|main": {
+   "default": "[]",
+   "scale": 1000000000.0,
+   "lines": [
+    17628,
+    17672
+   ]
+  },
+  "f_HP_Z|main": {
+   "default": "[]",
+   "scale": 1000000000.0,
+   "lines": [
+    17629
+   ]
+  },
+  "f_HP_P|main": {
+   "default": "[]",
+   "scale": 1000000000.0,
+   "lines": [
+    17630
+   ]
+  },
+  "EH_min|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17632
+   ]
+  },
+  "EH_max|main": {
+   "default": "np.inf",
+   "scale": null,
+   "lines": [
+    17633
+   ]
+  },
+  "EH_min_test|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17634
+   ]
+  },
+  "Min_VEO_Test|main": {
+   "default": "param.Min_VEO_Test",
+   "scale": null,
+   "lines": [
+    17635
+   ]
+  },
+  "CTLE_type|main": {
+   "default": "'CL93'",
+   "scale": null,
+   "lines": [
+    17637
+   ]
+  },
+  "g_DC|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17643,
+    17666
+   ]
+  },
+  "f_p1|main": {
+   "default": "param.fb / 4",
+   "scale": 1000000000.0,
+   "lines": [
+    17661,
+    17667
+   ]
+  },
+  "f_p2|main": {
+   "default": "param.fb",
+   "scale": 1000000000.0,
+   "lines": [
+    17662,
+    17668
+   ]
+  },
+  "f_z|main": {
+   "default": "param.fb / 4",
+   "scale": 1000000000.0,
+   "lines": [
+    17663,
+    17669
+   ]
+  },
+  "GDC_MIN|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17677
+   ]
+  },
+  "crusor_gain|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17678
+   ]
+  },
+  "A_v|main": {
+   "default": "0.5",
+   "scale": null,
+   "lines": [
+    17681
+   ]
+  },
+  "A_fe|main": {
+   "default": "0.5",
+   "scale": null,
+   "lines": [
+    17682
+   ]
+  },
+  "A_ne|main": {
+   "default": "0.5",
+   "scale": null,
+   "lines": [
+    17683
+   ]
+  },
+  "A_ft|main": {
+   "default": "param.a_fext",
+   "scale": null,
+   "lines": [
+    17684
+   ]
+  },
+  "A_nt|main": {
+   "default": "param.a_next",
+   "scale": null,
+   "lines": [
+    17685
+   ]
+  },
+  "L|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17686
+   ]
+  },
+  "DER_0|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17687
+   ]
+  },
+  "DER_CDR|main": {
+   "default": "0.01",
+   "scale": null,
+   "lines": [
+    17688
+   ]
+  },
+  "N_qb|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17689
+   ]
+  },
+  "P_qc|main": {
+   "default": "2 * param.specBER",
+   "scale": null,
+   "lines": [
+    17690
+   ]
+  },
+  "COM Version|main": {
+   "default": "COM_MATLAB_VERSION",
+   "scale": null,
+   "lines": [
+    17703
+   ]
+  },
+  "Clip Method|main": {
+   "default": "'Slow' if _v416 else 'Fast'",
+   "scale": null,
+   "lines": [
+    17716
+   ]
+  },
+  "P_peak|main": {
+   "default": "param.specBER",
+   "scale": null,
+   "lines": [
+    17718
+   ]
+  },
+  "COM Pass threshold|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17719
+   ]
+  },
+  "add_rx_noise|main": {
+   "default": "param.pass_threshold",
+   "scale": null,
+   "lines": [
+    17720
+   ]
+  },
+  "ERL Pass threshold|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17721
+   ]
+  },
+  "VEC Pass threshold|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17722
+   ]
+  },
+  "sigma_RJ|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17724
+   ]
+  },
+  "A_DD|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17725
+   ]
+  },
+  "eta_0|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17726
+   ]
+  },
+  "trunc|main": {
+   "default": "128",
+   "scale": null,
+   "lines": [
+    17728
+   ]
+  },
+  "N_tc|main": {
+   "default": "param.trunc",
+   "scale": null,
+   "lines": [
+    17729
+   ]
+  },
+  "Q_budget_adj|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17730
+   ]
+  },
+  "SNR_TX|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17731
+   ]
+  },
+  "S_tn_w_AM|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17732
+   ]
+  },
+  "R_LM|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17733
+   ]
+  },
+  "M|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17739
+   ]
+  },
+  "sample_adjustment|main": {
+   "default": "[0, 0]",
+   "scale": null,
+   "lines": [
+    17740
+   ]
+  },
+  "ts_anchor|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17741
+   ]
+  },
+  "b_max(1)|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17744
+   ]
+  },
+  "G_Qual|main": {
+   "default": "[]",
+   "scale": null,
+   "lines": [
+    17766
+   ]
+  },
+  "G2_Qual|main": {
+   "default": "[]",
+   "scale": null,
+   "lines": [
+    17768
+   ]
+  },
+  "C_p|main": {
+   "default": "0",
+   "scale": 1e-09,
+   "lines": [
+    17777
+   ]
+  },
+  "C_d|main": {
+   "default": "0",
+   "scale": 1e-09,
+   "lines": [
+    17778
+   ]
+  },
+  "L_s|main": {
+   "default": "0",
+   "scale": 1e-09,
+   "lines": [
+    17779
+   ]
+  },
+  "C_b|main": {
+   "default": "0",
+   "scale": 1e-09,
+   "lines": [
+    17780
+   ]
+  },
+  "R_0|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17785
+   ]
+  },
+  "C_v|main": {
+   "default": "0",
+   "scale": 1e-09,
+   "lines": [
+    17786
+   ]
+  },
+  "R_d|main": {
+   "default": "[50, 50]",
+   "scale": null,
+   "lines": [
+    17787
+   ]
+  },
+  "Z_t|main": {
+   "default": "param.Z0",
+   "scale": null,
+   "lines": [
+    17788
+   ]
+  },
+  "TR_TDR|main": {
+   "default": "0.008",
+   "scale": null,
+   "lines": [
+    17789
+   ]
+  },
+  "z_p (TX)|main": {
+   "default": "_default_zp_str",
+   "scale": null,
+   "lines": [
+    17802
+   ]
+  },
+  "C_0|main": {
+   "default": "0",
+   "scale": 1e-09,
+   "lines": [
+    17820
+   ]
+  },
+  "C_1|main": {
+   "default": "0",
+   "scale": 1e-09,
+   "lines": [
+    17821
+   ]
+  },
+  "z_p (NEXT)|main": {
+   "default": "_default_zp_str",
+   "scale": null,
+   "lines": [
+    17829
+   ]
+  },
+  "z_p (FEXT)|main": {
+   "default": "_default_zp_str",
+   "scale": null,
+   "lines": [
+    17830
+   ]
+  },
+  "z_p (RX)|main": {
+   "default": "_default_zp_str",
+   "scale": null,
+   "lines": [
+    17831
+   ]
+  },
+  "package_tl_gamma0_a1_a2|main": {
+   "default": "np.array([0.0, 0.001734, 0.0001455])",
+   "scale": null,
+   "lines": [
+    17834
+   ]
+  },
+  "package_tl_tau|main": {
+   "default": "0.006141",
+   "scale": null,
+   "lines": [
+    17836
+   ]
+  },
+  "package_Z_c|main": {
+   "default": "_default_Zc_str",
+   "scale": null,
+   "lines": [
+    17839
+   ]
+  },
+  "PKG_Tx_FFE_preset|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17853
+   ]
+  },
+  "board_tl_gamma0_a1_a2|main": {
+   "default": "np.array([0.0, 0.0004114, 0.0002547])",
+   "scale": null,
+   "lines": [
+    17856
+   ]
+  },
+  "board_tl_tau|main": {
+   "default": "0.006191",
+   "scale": null,
+   "lines": [
+    17858
+   ]
+  },
+  "board_Z_c|main": {
+   "default": "109.8",
+   "scale": null,
+   "lines": [
+    17859
+   ]
+  },
+  "z_bp (TX)|main": {
+   "default": "151",
+   "scale": null,
+   "lines": [
+    17860
+   ]
+  },
+  "z_bp (NEXT)|main": {
+   "default": "72",
+   "scale": null,
+   "lines": [
+    17861
+   ]
+  },
+  "z_bp (FEXT)|main": {
+   "default": "72",
+   "scale": null,
+   "lines": [
+    17862
+   ]
+  },
+  "z_bp (RX)|main": {
+   "default": "151",
+   "scale": null,
+   "lines": [
+    17863
+   ]
+  },
+  "Port Order|main": {
+   "default": "[1, 3, 2, 4]",
+   "scale": null,
+   "lines": [
+    17866
+   ]
+  },
+  "delta_IL|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17867
+   ]
+  },
+  "f_v|main": {
+   "default": "4",
+   "scale": null,
+   "lines": [
+    17868
+   ]
+  },
+  "f_f|main": {
+   "default": "4",
+   "scale": null,
+   "lines": [
+    17869
+   ]
+  },
+  "f_n|main": {
+   "default": "4",
+   "scale": null,
+   "lines": [
+    17870
+   ]
+  },
+  "f_r|main": {
+   "default": "4",
+   "scale": null,
+   "lines": [
+    17871
+   ]
+  },
+  "TDR_f_BT_3db|main": {
+   "default": "0.473",
+   "scale": null,
+   "lines": [
+    17872
+   ]
+  },
+  "BTorder|main": {
+   "default": "4",
+   "scale": null,
+   "lines": [
+    17873
+   ]
+  },
+  "RC_Start|main": {
+   "default": "param.fb / 2",
+   "scale": null,
+   "lines": [
+    17874
+   ]
+  },
+  "RC_end|main": {
+   "default": "param.fb * param.f_r",
+   "scale": null,
+   "lines": [
+    17875
+   ]
+  },
+  "beta_x|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17876
+   ]
+  },
+  "rho_x|main": {
+   "default": "0.618",
+   "scale": null,
+   "lines": [
+    17877
+   ]
+  },
+  "fixture delay time|main": {
+   "default": "-1",
+   "scale": null,
+   "lines": [
+    17878
+   ]
+  },
+  "Grr_limit|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17879
+   ]
+  },
+  "Grr|main": {
+   "default": "param.Grr_limit",
+   "scale": null,
+   "lines": [
+    17880
+   ]
+  },
+  "Gx|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17881
+   ]
+  },
+  "Non-zero Local Search Method|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17889
+   ]
+  },
+  "Overwrite Minimum Radius|main": {
+   "default": "None",
+   "scale": null,
+   "lines": [
+    17893
+   ]
+  },
+  "Local Search|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17894
+   ]
+  },
+  "Tukey_Window|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17895
+   ]
+  },
+  "zero_pad_tukey_window_in_fb|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17896
+   ]
+  },
+  "Noise_Crest_Factor|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17897
+   ]
+  },
+  "AC_CM_RMS|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17898
+   ]
+  },
+  "ACCM_MAX_Freq|main": {
+   "default": "param.fb",
+   "scale": null,
+   "lines": [
+    17899
+   ]
+  },
+  "T_O|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17900
+   ]
+  },
+  "T_h|main": {
+   "default": "param.T_O",
+   "scale": null,
+   "lines": [
+    17901
+   ]
+  },
+  "samples_for_C2M|main": {
+   "default": "100",
+   "scale": null,
+   "lines": [
+    17902
+   ]
+  },
+  "Histogram_Window_Weight|main": {
+   "default": "'rectangle'",
+   "scale": null,
+   "lines": [
+    17904
+   ]
+  },
+  "sigma_r|main": {
+   "default": "0.02",
+   "scale": null,
+   "lines": [
+    17905
+   ]
+  },
+  "Qr|main": {
+   "default": "param.sigma_r",
+   "scale": null,
+   "lines": [
+    17906
+   ]
+  },
+  "QL|main": {
+   "default": "_ql_default",
+   "scale": null,
+   "lines": [
+    17908
+   ]
+  },
+  "skew_ps|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17911
+   ]
+  },
+  "imb_Z_fctr|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17912
+   ]
+  },
+  "imb_C_fctr|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17913
+   ]
+  },
+  "flip|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17915
+   ]
+  },
+  "f_hp|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17916
+   ]
+  },
+  "Q|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17917
+   ]
+  },
+  "Txpskew|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17930
+   ]
+  },
+  "Txnskew|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17931
+   ]
+  },
+  "Rxpskew|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17932
+   ]
+  },
+  "Rxnskew|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17933
+   ]
+  },
+  "TIMESTAMP|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17940
+   ]
+  },
+  "WRITE_CSV_TRANSPOSED|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17941
+   ]
+  },
+  "DO_NOT_COMPUTE_COM|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17942
+   ]
+  },
+  "NO_COM|main": {
+   "default": "OP.DO_NOT_COMPUTE_COM",
+   "scale": null,
+   "lines": [
+    17943
+   ]
+  },
+  "Include PCB|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17944
+   ]
+  },
+  "exit if deployed|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17945
+   ]
+  },
+  "INCLUDE_CTLE|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17946
+   ]
+  },
+  "EXE_MODE|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17947
+   ]
+  },
+  "INCLUDE_TX_RX_FILTER|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17948
+   ]
+  },
+  "Force PDF bin size|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17949
+   ]
+  },
+  "PDF bin size|main": {
+   "default": "1e-05",
+   "scale": null,
+   "lines": [
+    17950
+   ]
+  },
+  "DIAGNOSTICS|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17951
+   ]
+  },
+  "DISPLAY_WINDOW|main": {
+   "default": "True",
+   "scale": null,
+   "lines": [
+    17952
+   ]
+  },
+  "CSV_REPORT|main": {
+   "default": "True",
+   "scale": null,
+   "lines": [
+    17953
+   ]
+  },
+  "SAVE_TD|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17954
+   ]
+  },
+  "SAVE_FIGURES|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17955
+   ]
+  },
+  "SAVE_FIGURE_to_CSV|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17956
+   ]
+  },
+  "Display frequency domain|main": {
+   "default": "OP.GET_FD",
+   "scale": null,
+   "lines": [
+    17957
+   ]
+  },
+  "INC_PACKAGE|main": {
+   "default": "True",
+   "scale": null,
+   "lines": [
+    17958
+   ]
+  },
+  "EW|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17961
+   ]
+  },
+  "IDEAL_TX_TERM|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17962
+   ]
+  },
+  "IDEAL_RX_TERM|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17965
+   ]
+  },
+  "TDMODE|main": {
+   "default": "OP.TDMODE",
+   "scale": null,
+   "lines": [
+    17968
+   ]
+  },
+  "FT_COOP|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17969
+   ]
+  },
+  "RESULT_DIR|main": {
+   "default": null,
+   "scale": null,
+   "lines": [
+    17973
+   ]
+  },
+  "BREAD_CRUMBS|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17980
+   ]
+  },
+  "BREAD_CRUMBS_FIELDS|main": {
+   "default": "''",
+   "scale": null,
+   "lines": [
+    17981
+   ]
+  },
+  "COM_CONTRIBUTION|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17982
+   ]
+  },
+  "Enforce Causality|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17983
+   ]
+  },
+  "Enforce Causality REL_TOL|main": {
+   "default": "0.01",
+   "scale": null,
+   "lines": [
+    17984
+   ]
+  },
+  "Enforce Causality DIFF_TOL|main": {
+   "default": "0.001",
+   "scale": null,
+   "lines": [
+    17985
+   ]
+  },
+  "Enforce Causality pulse start tolerance|main": {
+   "default": "0.01",
+   "scale": null,
+   "lines": [
+    17986
+   ]
+  },
+  "z_p select|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17987
+   ]
+  },
+  "RX_CALIBRATION|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17988
+   ]
+  },
+  "PSDRXCAL|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17989
+   ]
+  },
+  "RIT_REF_PTR|main": {
+   "default": "'clause_179'",
+   "scale": null,
+   "lines": [
+    17990
+   ]
+  },
+  "Sigma BBN step|main": {
+   "default": "0.005",
+   "scale": null,
+   "lines": [
+    17991
+   ]
+  },
+  "BBN Q factor|main": {
+   "default": "5",
+   "scale": null,
+   "lines": [
+    17992
+   ]
+  },
+  "Force BBN Q factor|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17993
+   ]
+  },
+  "T_r|main": {
+   "default": "0.008",
+   "scale": null,
+   "lines": [
+    17994
+   ]
+  },
+  "ERL_FOM|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17995
+   ]
+  },
+  "T_r_meas_point|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17996
+   ]
+  },
+  "T_r_filter_type|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17997
+   ]
+  },
+  "FORCE_TR|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    17998
+   ]
+  },
+  "TDR|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    18002
+   ]
+  },
+  "TDR_duration|main": {
+   "default": "5",
+   "scale": null,
+   "lines": [
+    18003
+   ]
+  },
+  "N|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18004
+   ]
+  },
+  "WC_PORTZ|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    18005
+   ]
+  },
+  "T_k|main": {
+   "default": "0.6",
+   "scale": 1e-09,
+   "lines": [
+    18006
+   ]
+  },
+  "ERL_ONLY|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18007
+   ]
+  },
+  "ERL|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    18008
+   ]
+  },
+  "Report_Modal_ERL|main": {
+   "default": "'0'",
+   "scale": null,
+   "lines": [
+    18010
+   ]
+  },
+  "SHOW_BRD|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18011
+   ]
+  },
+  "TDR_W_TXPKG|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18014
+   ]
+  },
+  "Bessel_Thomson|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    18015
+   ]
+  },
+  "TDR_Butterworth|main": {
+   "default": "True",
+   "scale": null,
+   "lines": [
+    18016
+   ]
+  },
+  "Butterworth|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    18017
+   ]
+  },
+  "Raised_Cosine|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18018
+   ]
+  },
+  "inc_reflect_board|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18019
+   ]
+  },
+  "AUTO_TFX|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18020
+   ]
+  },
+  "LIMIT_JITTER_CONTRIB_TO_DFE_SPAN|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    18021
+   ]
+  },
+  "Impulse response truncation threshold|main": {
+   "default": "0.001",
+   "scale": null,
+   "lines": [
+    18023
+   ]
+  },
+  "S-parameter magnitude extrapolation policy|main": {
+   "default": "'linear_trend_to_DC'",
+   "scale": null,
+   "lines": [
+    18025
+   ]
+  },
+  "S-parameter phase extrapolation policy|main": {
+   "default": "'extrap_cubic_to_dc_linear_to_inf'",
+   "scale": null,
+   "lines": [
+    18027
+   ]
+  },
+  "ZERO_PAD|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18029
+   ]
+  },
+  "PMD_type|main": {
+   "default": "'C2C'",
+   "scale": null,
+   "lines": [
+    18030
+   ]
+  },
+  "PHY|main": {
+   "default": "OP.PMD_type",
+   "scale": null,
+   "lines": [
+    18031
+   ]
+  },
+  "TDECQ|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18039
+   ]
+  },
+  "RUNTAG|main": {
+   "default": "''",
+   "scale": null,
+   "lines": [
+    18043
+   ]
+  },
+  "CDR|main": {
+   "default": "'MM'",
+   "scale": null,
+   "lines": [
+    18049
+   ]
+  },
+  "Optimize_loop_speed_up|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18050
+   ]
+  },
+  "Use simple error propagation model|main": {
+   "default": "False",
+   "scale": null,
+   "lines": [
+    18051
+   ]
+  },
+  "Max burst length calculated|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18052
+   ]
+  },
+  "Error propagation COM margin|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18053
+   ]
+  },
+  "USE_ETA0_PSD|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18054
+   ]
+  },
+  "SAVE_CONFIG2MAT|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18055
+   ]
+  },
+  "PLOT_CM|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18056
+   ]
+  },
+  "CM_MASK_REPORT|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18057
+   ]
+  },
+  "fraction_of_F_range_start_extrap_from|main": {
+   "default": "0.75",
+   "scale": null,
+   "lines": [
+    18058
+   ]
+  },
+  "COMPUTE_RILN|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18060
+   ]
+  },
+  "COMPUTE_TDILN|main": {
+   "default": "OP.COMPUTE_RILN",
+   "scale": null,
+   "lines": [
+    18061
+   ]
+  },
+  "SNR_TXwC0|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18063
+   ]
+  },
+  "MLSD|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18064
+   ]
+  },
+  "MLSE|main": {
+   "default": "OP.MLSD",
+   "scale": null,
+   "lines": [
+    18065
+   ]
+  },
+  "RXFFE FLOAT CTL|main": {
+   "default": "'FOM'",
+   "scale": null,
+   "lines": [
+    18072
+   ]
+  },
+  "RXFFE TAP CONSTRAINT|main": {
+   "default": "'Unity Cursor'",
+   "scale": null,
+   "lines": [
+    18073
+   ]
+  },
+  "TIME_AXIS|main": {
+   "default": "'UI'",
+   "scale": null,
+   "lines": [
+    18076
+   ]
+  },
+  "Do_XT_Noise|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    18077
+   ]
+  },
+  "FFE_SNR|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    18078
+   ]
+  },
+  "Do_Colored_Noise|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    18079
+   ]
+  },
+  "Do_White_Noise|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18080
+   ]
+  },
+  "FFE_OPT_METHOD|main": {
+   "default": "'MMSE'",
+   "scale": null,
+   "lines": [
+    18081
+   ]
+  },
+  "TS_SRCH_MODE|main": {
+   "default": "'full-sweep'",
+   "scale": null,
+   "lines": [
+    18082
+   ]
+  },
+  "ACBW|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18102
+   ]
+  },
+  "SNDR_REF|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    18121
+   ]
+  },
+  "preset_txffe|main": {
+   "default": "[]",
+   "scale": null,
+   "lines": [
+    18122
+   ]
+  },
+  "c(-4)|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17579
+   ]
+  },
+  "c(-3)|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17580
+   ]
+  },
+  "c(-2)|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17581
+   ]
+  },
+  "c(-1)|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17582
+   ]
+  },
+  "c(1)|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17583
+   ]
+  },
+  "c(2)|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17584
+   ]
+  },
+  "c(3)|main": {
+   "default": "0",
+   "scale": null,
+   "lines": [
+    17585
+   ]
+  },
+  "b_min(1)|main": {
+   "default": "-param.bmax[0]",
+   "scale": null,
+   "lines": [
+    17748
+   ]
+  },
+  "b_max(2..N_b)|main": {
+   "default": "0.2",
+   "scale": null,
+   "lines": [
+    17752
+   ]
+  },
+  "b_min(2..N_b)|main": {
+   "default": "-float(bmax2_arr[0])",
+   "scale": null,
+   "lines": [
+    17758
+   ]
+  },
+  "T_dev|main": {
+   "default": "1",
+   "scale": null,
+   "lines": [
+    17937
+   ]
+  }
+ },
+ "rows": 269,
+ "updated": "2026-10-06: remapped to SiCoPR branch port-fixes-1.1.1 (1.1.1); T_dev and ACBW now read under 4p17p0; 4p17p0 the default"
+}

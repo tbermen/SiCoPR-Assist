@@ -1,0 +1,5 @@
+# text is stored with LF line endings
+* text=auto eol=lf
+
+*.xlsx binary
+*.ps1 text eol=lf

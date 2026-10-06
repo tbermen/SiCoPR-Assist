@@ -1,0 +1,634 @@
+id,starting_config,group,priority,expected_type,kind,expected
+R1,any,run,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+R2,any,run,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+R3,any,run,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+R6,any,run,must,QUESTION,options,data\config.xlsx | the example setup
+R8,any,run,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+D1,any,report,must,PLAN,chain,export_mat > render_dashboard > open_report
+D2,any,report,must,QUESTION,options,run the example setup then build the dashboard | point to an existing results file
+D4,any,report,stretch,PLAN,chain,summarize
+C2,Case1,change,must,PLAN,chain,set_param > validate_config > run_com > summarize > export_mat > render_dashboard > open_report
+C3,Case1,change,must,QUESTION,options,z_p select | none of these
+C4,Case1; Case2; Case3; Case4,change,must,QUESTION,options,bmaxg | n_tail_start | c(0) | ffe_pre_tap_len | ffe_post_tap_len | n_bx | n_b | b_max(1) | none of these
+C5,Case1,change,must,QUESTION,options,z_p (tx) | z_p (next) | z_p (fext) | z_p (rx) | z_p select | board_tl_gamma0_a1_a2 | tdr_w_txpkg | package_tl_gamma0_a1_a2 | none of these
+F1,any,fetch,must,PLAN,chain,import_config > infer_interface > fetch_index > select_zip > download > extract > inventory > validate_inputs > build_matrix > run_batch > batch_summary
+F2,any,fetch,must,QUESTION,options,kr | cr | c2c | c2m
+S2,any,session,stretch,PLAN,chain,show_history
+S3,any,session,must,QUESTION,options,the example setup | provide files
+X3,any,scope,stretch,PLAN,chain,import_config > validate_inputs > run_com > summarize
+PA001,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA002,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA003,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA004,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA005,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA006,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA007,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA008,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA009,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA010,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA011,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA012,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA013,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA014,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA015,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA016,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA017,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA018,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA019,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA020,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA021,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA022,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA023,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA024,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA025,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA026,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA027,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA029,Case1,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA029,Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA030,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA031,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA032,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA033,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA034,Case1,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA034,Case3,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA034,Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA035,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA036,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA037,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA038,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA039,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA040,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA041,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA042,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA043,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA044,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA045,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA046,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA047,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA048,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA049,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA050,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA051,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA052,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA053,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA054,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA055,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA056,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA057,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA058,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA059,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA060,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA061,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA062,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA063,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA064,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA065,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA066,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA067,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA068,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA069,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA070,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA071,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA072,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA072,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA073,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA074,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA075,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA075,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA076,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA077,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA078,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA079,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA079,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA081,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA081,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA082,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA083,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA083,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA084,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA085,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA086,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA088,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA089,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA090,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA091,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA092,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA093,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA094,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA095,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA096,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA097,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA098,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA099,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA100,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA101,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA102,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA103,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA104,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA105,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA106,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA107,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA108,Case1; Case2; Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA109,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA109,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA110,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA110,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA111,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA111,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA112,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA112,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA113,Case1; Case2,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA113,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA114,Case1; Case2,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA114,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA115,Case1; Case2,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA115,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA116,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA116,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA117,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA117,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA118,Case1; Case2,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA118,Case3; Case4,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA119,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA119,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA120,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA120,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA121,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA121,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA122,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA122,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA123,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA123,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA124,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA124,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA125,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA125,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA126,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA126,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA127,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA127,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA128,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA128,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA129,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA129,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA130,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA130,Case3; Case4,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA131,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA131,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA132,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_hir_classb and run | save the edit and run with the current package | cancel
+PA132,Case3; Case4,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA133,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA134,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA135,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA136,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA137,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA138,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA139,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA140,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA141,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA142,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA143,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA144,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_module and run | save the edit and run with the current package | cancel
+PA145,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA146,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA147,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA148,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA149,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA150,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA151,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA152,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA153,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA154,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA155,Case1; Case2; Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA156,Case1; Case2,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA156,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_null and run | save the edit and run with the current package | cancel
+PA157,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA157,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA158,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA158,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA159,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA159,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA160,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA160,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA161,Case1; Case2,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA161,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA162,Case1; Case2,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA162,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA163,Case1; Case2,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA163,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA164,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA164,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA165,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA165,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA166,Case1; Case2,param,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PA166,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA167,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA167,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+PA168,Case1; Case2,param,must,PLAN,chain,set_param > validate_config > run_com > summarize
+PA168,Case3; Case4,param,must,QUESTION,options,also switch tx and rx to pkg_lowr_classa and run | save the edit and run with the current package | cancel
+EN01,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN02,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN02,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN03,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN03,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN04,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN04,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN05,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN05,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN06,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN07,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN07,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN08,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN08,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN09,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN09,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN10,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN10,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN11,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN11,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN12,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN12,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN13,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN13,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN14,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN14,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN15,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN15,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN16,Case1; Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN16,Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN17,Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN17,Case3,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN17,Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN18,Case1,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN18,Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN18,Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN19,Case1,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN19,Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN19,Case3,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN20,Case1,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN20,Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN20,Case3,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN20,Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN21,Case1,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN21,Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN21,Case3,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN21,Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN22,Case1,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN22,Case2,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN22,Case3,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN22,Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN24,Case1; Case2; Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN25,Case1; Case2; Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN26,Case1; Case2; Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN27,Case1; Case2; Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN28,Case1; Case2; Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN29,Case1; Case2; Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN31,Case1; Case2; Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN32,Case1; Case2; Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+EN33,Case1; Case2; Case3; Case4,enum,must,PLAN,chain,set_param > validate_config > run_com > summarize
+SW001,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV001,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW002,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV002,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW003,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW004,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW005,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV005,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW006,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW007,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV007,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW008,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW009,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV009,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW010,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW011,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW012,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW014,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW015,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW016,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW016,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV016,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SV016,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW017,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV017,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW018,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW019,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW020,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,sweep all of them | cancel
+SV020,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW021,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,sweep all of them | cancel
+SV021,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW022,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW023,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW025,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV025,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW026,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW027,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW029,Case1,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW029,Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV029,Case1,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SV029,Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW030,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW031,Case1; Case2,sweep,must,QUESTION,options,sweep all of them | cancel
+SW031,Case3; Case4,sweep,must,QUESTION,options,sweep all of them | cancel
+SV031,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SV031,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW032,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV032,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW033,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW034,Case1,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW034,Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW034,Case3,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW034,Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV034,Case1,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SV034,Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SV034,Case3,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SV034,Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW035,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW036,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW037,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,sweep the legal values | cancel
+SV037,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW038,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV038,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW039,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW040,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW041,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW042,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV042,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW043,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW044,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW045,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV045,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW046,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV046,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW047,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW048,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW049,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW050,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW051,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW052,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW053,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW054,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,one run with c(-1) searched over [-0.1:0.02:0] | a batch of runs with c(-1) held at each value
+SW055,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV055,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW056,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW057,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,one run with c(-2) searched over [-0.1:0.02:0] | a batch of runs with c(-2) held at each value
+SW058,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW059,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW060,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW061,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,one run with c(-3) searched over [-0.1:0.02:0] | a batch of runs with c(-3) held at each value
+SW062,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW063,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW064,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW065,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,one run with c(-4) searched over [-0.1:0.02:0] | a batch of runs with c(-4) held at each value
+SW066,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV066,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW067,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW068,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW069,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,one run with c(1) searched over [-0.1:0.02:0] | a batch of runs with c(1) held at each value
+SW070,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW071,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW072,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW072,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW073,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW074,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW075,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW075,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW076,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW077,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV077,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW078,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW079,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW079,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW081,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW081,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW082,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW083,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW083,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW084,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW085,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW086,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW088,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW089,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW090,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW091,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,one run with g_dc searched over [-0.1:0.02:0] | a batch of runs with g_dc held at each value
+SW092,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW093,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW094,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV094,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW095,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW096,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW097,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,sweep all of them | cancel
+SV097,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW098,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW099,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW100,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SV100,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW101,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW102,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW103,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,sweep all of them | cancel
+SV103,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SW104,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,one run with g_dc_hp searched over [-0.1:0.02:0] | a batch of runs with g_dc_hp held at each value
+SW105,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW106,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW107,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW108,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW109,Case1; Case2,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW109,Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW110,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW110,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW111,Case1; Case2,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW111,Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW112,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW112,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW113,Case1; Case2,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW113,Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW114,Case1; Case2,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW114,Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW115,Case1; Case2,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW115,Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW116,Case1; Case2,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW116,Case3; Case4,sweep,must,QUESTION,options,name the element | sweep all of them together
+SW117,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW117,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW118,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW118,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW119,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW119,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW120,Case1; Case2,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SW120,Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+CB01,Case1,combo,must,PLAN,chain,set_param > set_param > recompute_linked > validate_config > run_com > summarize
+CB02,Case1,combo,must,PLAN,chain,set_param > set_param > validate_config > run_com > summarize
+CB03,Case1,combo,must,PLAN,chain,set_param > set_param > set_param > validate_config > run_com > summarize
+CB04,Case1,combo,must,PLAN,chain,set_param > set_param > validate_config > run_com > summarize
+CB05,Case1,combo,must,PLAN,chain,set_param > set_param > validate_config > run_com > summarize
+CB06,any,combo,must,QUESTION,options,z_p select | none of these
+CB07,any,combo,stretch,QUESTION,options,53.125 | 26.5625 | run both
+CB08,Case1,combo,must,PLAN,chain,set_param > set_param > recompute_linked > validate_config > run_com > summarize
+CB09,Case1,combo,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+CB10,Case1,combo,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+CB11,Case1,combo,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+CB12,Case1,combo,must,PLAN,chain,build_matrix > run_batch > batch_summary
+CB13,any,combo,must,QUESTION,options,run all | edit the sweep | cancel
+CB15,any,combo,must,PLAN,chain,clear_overrides > run_com > summarize
+CB17,Case1; Case2; Case3; Case4,combo,must,PLAN,chain,set_param > validate_config > run_com > summarize > export_mat > render_dashboard > open_report
+CB18,Case1,combo,stretch,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+CB19,Case1,combo,must,PLAN,chain,import_config > set_param > validate_config > validate_inputs > run_com > summarize
+RS01,Case1; Case2; Case3; Case4,resolve,must,QUESTION,options,f_b | f_v | f_f | f_n | none of these
+RS02,Case1; Case2; Case3; Case4,resolve,must,QUESTION,options,erl pass threshold | com pass threshold | none of these
+RS03,Case1; Case2; Case3; Case4,resolve,must,QUESTION,options,z_p select | z_p (tx) | z_p (next) | z_p (fext) | z_p (rx)
+RS04,Case1; Case2; Case3; Case4,resolve,must,QUESTION,options,f_p1 | f_p2
+RS05,Case1; Case2,resolve,stretch,QUESTION,options,z_t | r_d | none of these
+RS06,Case1,resolve,must,QUESTION,options,f_b | none of these
+RS07,Case1; Case2; Case3; Case4,resolve,must,QUESTION,options,c(1) | c(-1)
+RS08,Case1; Case2; Case3; Case4,resolve,must,PLAN,chain,set_param > validate_config > run_com > summarize
+RS09,Case1,resolve,must,QUESTION,options,z_p (tx) | z_p (next) | z_p (fext) | z_p (rx) | z_p select | board_tl_gamma0_a1_a2 | tdr_w_txpkg | package_tl_gamma0_a1_a2 | none of these
+RS10,Case1; Case2; Case3; Case4,resolve,stretch,QUESTION,options,l | r_lm | none of these
+RS11,Case1,resolve,must,PLAN,chain,set_param > validate_config > run_com > summarize
+RS12,Case1; Case2; Case3; Case4,resolve,stretch,QUESTION,options,n_bg | n_f | bmaxg | c(0) | ffe_pre_tap_len | ffe_post_tap_len | n_bf | n_tail_start | none of these
+RS13,Case1; Case2,resolve,stretch,QUESTION,options,result_dir | save_figures | none of these
+RS14,Case1; Case2; Case3; Case4,resolve,must,PLAN,chain,set_param > validate_config > run_com > summarize
+RS15,Case1; Case2; Case3; Case4,resolve,must,PLAN,chain,set_param > validate_config > run_com > summarize
+RS16,Case1; Case2; Case3; Case4,resolve,must,PLAN,chain,set_param > validate_config > run_com > summarize
+RS17,Case1; Case2; Case3; Case4,resolve,must,PLAN,chain,set_param > validate_config > run_com > summarize
+RS18,Case1; Case2; Case3; Case4,resolve,stretch,PLAN,chain,set_param > validate_config > run_com > summarize
+RS19,Case1; Case2,resolve,stretch,PLAN,chain,set_param > validate_config > run_com > summarize
+RS20,Case1; Case2,resolve,must,PLAN,chain,set_param > validate_config > run_com > summarize
+RS21,Case1; Case2; Case3; Case4,resolve,must,QUESTION,options,tx row | rx row | both rows
+RS22,Case1,resolve,stretch,QUESTION,options,z_p (tx) | z_p (next) | z_p (fext) | z_p (rx) | z_p select | board_tl_gamma0_a1_a2 | z_bp (tx) | z_bp (next) | none of these
+RS23,Case1; Case2; Case3; Case4,resolve,must,PLAN,chain,set_param > validate_config > run_com > summarize
+RS24,Case1; Case2; Case3; Case4,resolve,must,PLAN,chain,set_param > validate_config > run_com > summarize
+RS25,Case1; Case2; Case3; Case4,resolve,stretch,PLAN,chain,set_param > validate_config > run_com > summarize
+RS26,Case1; Case2; Case3; Case4,resolve,must,PLAN,chain,add_param > validate_config > run_com > summarize
+RS28,Case1; Case2,resolve,must,QUESTION,options,pkg_lowr_classa | pkg_module | both
+RS29,Case1; Case2,resolve,must,QUESTION,options,pkg_hir_classb | none of these
+RS31,any,resolve,stretch,PLAN,chain,list_parameters
+RS32,Case1; Case2; Case3; Case4,resolve,stretch,PLAN,chain,show_param
+IV01,Case1,invalid,must,QUESTION,options,1 | 2 | 3 | 4
+IV02,Case1,invalid,must,QUESTION,options,1 | 2 | 3 | 4
+IV03,Case1; Case2,invalid,must,QUESTION,options,pkg_lowr_classa | pkg_hir_classb | pkg_module | pkg_null
+IV04,Case1; Case2,invalid,must,PLAN,chain,set_param > validate_config > run_com > summarize
+IV05,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,also set mlse = 0 | cancel
+IV08,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,full-sweep | middle
+IV09,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,slow | fast
+IV13,Case1; Case2,invalid,stretch,PLAN,chain,set_param > validate_config > run_com > summarize
+IV14,Case1; Case2; Case3; Case4,invalid,stretch,QUESTION,options,0 | 1
+IV15,Case1,invalid,must,QUESTION,options,apply the same matrix to all four | cancel
+IV17,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,2 | 4 | 6 | 8 | 16 | keep 3
+IV18,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,c2c | c2m
+IV19,Case1; Case2; Case3; Case4,invalid,stretch,QUESTION,options,also set erl = 0 | keep tdr on | cancel
+CP06,Case1; Case2; Case3; Case4,config,must,PLAN,chain,export_xlsx
+CP12,any,config,must,PLAN,chain,show_overrides
+CP13,any,config,stretch,PLAN,chain,show_config
+CP15,any,config,stretch,QUESTION,options,f_b | none of these
+PH01,any,phrasing,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+PH03,Case1; Case2; Case3; Case4,phrasing,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PH04,Case1; Case2; Case3; Case4,phrasing,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PH05,Case1; Case2; Case3; Case4,phrasing,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PH06,Case1; Case2; Case3; Case4,phrasing,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PH07,Case1; Case2; Case3; Case4,phrasing,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PH08,Case1; Case2; Case3; Case4,phrasing,must,QUESTION,options,run the change that was understood | cancel
+PH09,Case1; Case2; Case3; Case4,phrasing,must,PLAN,chain,set_param > set_param > recompute_linked > validate_config > run_com > summarize
+PH10,Case1; Case2; Case3; Case4,phrasing,must,QUESTION,options,f_b | none of these
+PH11,Case1; Case2; Case3; Case4,phrasing,must,QUESTION,options,pmd_type | none of these
+PH12,Case1; Case2; Case3; Case4,phrasing,must,QUESTION,options,f_b | f_v | f_f | f_n | none of these
+PH13,Case1; Case2; Case3; Case4,phrasing,must,QUESTION,options,run thru-only | cancel
+PH15,Case1; Case2,phrasing,must,QUESTION,options,pkg_hir_classb | none of these
+PH16,Case1; Case2; Case3; Case4,phrasing,stretch,QUESTION,options,f_b | f_v | f_f | f_n | none of these
+PH17,Case1; Case2; Case3; Case4,phrasing,stretch,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+PH18,Case1; Case2; Case3; Case4,phrasing,stretch,PLAN,chain,set_param > validate_config > run_com > summarize
+PH19,Case1; Case2; Case3; Case4,phrasing,stretch,PLAN,chain,set_param > validate_config > run_com > summarize
+PH20,Case1; Case2; Case3; Case4,phrasing,stretch,PLAN,chain,set_param > validate_config > run_com > summarize
+PH21,any,phrasing,stretch,QUESTION,options,repeat the last run in history with mlse = 0 | cancel
+PH22,Case1; Case2; Case3; Case4,phrasing,must,QUESTION,options,run the change that was understood | cancel
+ST01,V01,structure,must,PLAN,chain,add_param > validate_config > run_com > summarize
+ST02,V01,structure,must,PLAN,chain,set_param > validate_config > run_com > summarize
+ST03,V01,structure,must,PLAN,chain,compare_config
+ST04,V02,structure,must,PLAN,chain,set_param > validate_config > run_com > summarize
+ST05,V03,structure,must,QUESTION,options,treat it as p_peak | leave it | cancel
+ST06,V04,structure,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+ST07,V05,structure,must,QUESTION,options,scale them with f_b | change f_b only | cancel
+ST08,V06,structure,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+ST10,V07,structure,must,PLAN,chain,set_param > validate_config > run_com > summarize
+ST11,V07,structure,must,QUESTION,options,pkga | pkgb | pkg_module | pkg_null
+ST12,V08,structure,must,QUESTION,options,pkg_lowr_classa | pkg_module | both
+ST13,V09,structure,must,PLAN,chain,set_param > validate_config > run_com > summarize
+SX01,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX02,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX03,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX04,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,give a count of 2 or more | give a step size | cancel
+SX05,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,give a step | give a number of points | cancel
+SX06,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX07,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX08,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX09,Case1; Case2; Case3; Case4,sweep,stretch,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX10,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,run all | edit the sweep | cancel
+SX12,Case1; Case2; Case3; Case4,sweep,stretch,QUESTION,options,run 0 and 1e-5 only | cancel
+SX13,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX14,Case1,sweep,must,QUESTION,options,sweep tx | sweep rx | sweep both together
+SX15,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX16,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX17,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SX18,Case1,sweep,must,PLAN,chain,batch_summary > diff_results
+SX19,Case1,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SX20,Case1; Case2,sweep,stretch,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SX22,Case1,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SX23,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX25,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,change the end to -0.01 | keep it as typed | cancel
+SX26,Case1,sweep,stretch,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+SX27,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX28,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,give a count of 2 or more | give a step size | cancel
+SX29,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX30,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX32,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,one run at 1e-5 | give a smaller step size | give a count | cancel
+SX33,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX34,Case1; Case2; Case3; Case4,sweep,must,QUESTION,options,run all | edit the sweep | cancel
+SX35,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SX36,Case1; Case2; Case3; Case4,sweep,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+TU01,any,tutor,must,PLAN,chain,import_config > validate_inputs > run_com > summarize > show_tutor
+TU02,any,tutor,must,QUESTION,options,f_b | f_v | f_f | f_n | none of these
+TU03,any,tutor,must,PLAN,chain,show_tutor
+TU05,any,tutor,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+TU06,any,tutor,stretch,PLAN,chain,set_setting
+TU09,any,tutor,must,PLAN,chain,import_config > validate_inputs > run_com > summarize > show_tutor
+TU10,any,tutor,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+TU11,any,tutor,must,PLAN,chain,import_config > validate_inputs > run_com > summarize > show_tutor
+TU12,any,tutor,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+TU13,any,tutor,must,PLAN,chain,import_config > validate_inputs > run_com > summarize > show_tutor
+TU14,any,tutor,must,QUESTION,options,run the change that was understood | cancel
+TU15,any,tutor,must,QUESTION,options,run the change that was understood | cancel
+TU16,any,tutor,must,QUESTION,options,run the change that was understood | cancel
+TU17,any,tutor,must,QUESTION,options,run the change that was understood | cancel
+TU18,any,tutor,must,QUESTION,options,run the change that was understood | cancel
+TU19,any,tutor,must,QUESTION,options,run the change that was understood | cancel
+SE01,any,settings,must,PLAN,chain,show_settings
+SE02,any,settings,must,PLAN,chain,show_settings
+SE03,Case1; Case2; Case3; Case4,settings,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
+SE04,Case1; Case2; Case3; Case4,settings,must,QUESTION,options,run all | edit the sweep | cancel
+SE05,Case1; Case2; Case3; Case4,settings,must,QUESTION,options,run | cancel
+SE06,any,settings,must,PLAN,chain,show_settings
+SE07,any,settings,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+SE08,any,settings,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+SE09,any,settings,stretch,PLAN,chain,set_setting
+SE10,any,settings,stretch,QUESTION,options,max_new_runs | max_download_mb | cancel
+SE11,any,settings,stretch,PLAN,chain,set_setting
+SE12,Case1,settings,must,PLAN,chain,batch_summary > diff_results
+FB01,Case1,feedback,must,PLAN,chain,set_param > validate_config > run_com > summarize
+FB02,Case1; Case2; Case3; Case4,feedback,must,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
+FB04,any,feedback,must,PLAN,chain,export_feedback
+SM01,Case1; Case2; Case3; Case4,summary,must,PLAN,chain,result_stats
+SM02,Case1; Case2; Case3; Case4,summary,must,PLAN,chain,result_vs_param
+SM05,Case1; Case2; Case3; Case4,summary,must,QUESTION,options,sweep der_0 | cancel
+SM12,any,summary,must,QUESTION,options,run the example setup | point to a results folder
+SM13,any,summary,stretch,PLAN,chain,result_stats
+SM14,Case1; Case2; Case3; Case4,summary,must,PLAN,chain,result_stats
+SC01,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,set_param > validate_config > run_com > summarize
+SC03,Case1; Case2; Case3; Case4,schema,must,QUESTION,options,run it anyway | cancel
+SC04,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,set_param > validate_config > run_com > summarize
+SC05,Case1; Case2; Case3; Case4,schema,must,QUESTION,options,0 | 1 | 2
+SC06,any,schema,must,QUESTION,options,give a value | cancel
+SC07,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,set_param > validate_config > run_com > summarize
+SC08,Case1; Case2; Case3; Case4,schema,must,QUESTION,options,take it as 1.7 ghz and write 1.7e9 | keep 1.7 as typed | cancel
+SC09,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,set_param > validate_config > run_com > summarize
+SC11,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,add_param > validate_config > run_com > summarize
+SC13,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,add_param > validate_config > run_com > summarize
+SC14,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,add_param > validate_config > run_com > summarize

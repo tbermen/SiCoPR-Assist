@@ -1,0 +1,92 @@
+prior_state,rows,ids,kind,seed,engine_results
+none,2,"R1, X3",files only,"the files named, and nothing else",no
+none; data\config.xlsx and data\thru.s4p exist,1,R2,files only,"the files named, and nothing else",no
+none; project folder holds exactly one config and one THRU file,3,"PH01, PH02, R3",files only,"the files named, and nothing else",no
+none; project folder holds two configs,1,R4,files only,"the files named, and nothing else",no
+none; no 448G preset exists,1,R5,files only,"the files named, and nothing else",no
+"none; data\config.xlsx exists, data\config.xls does not",1,R6,files only,"the files named, and nothing else",no
+none; data\bad.s4p is truncated,1,R7,files only,"the files named, and nothing else",no
+none; THRU file max frequency is well below what the baud rate needs,1,R8,files only,"the files named, and nothing else",no
+R1 complete,4,"C3, C4, D1, D4",run complete,"a history record of the run, its working config, and a seeded result file",seeded
+no prior run in this project,2,"D2, SM12",settings or history,history.jsonl holding exactly the commands described (or none),no
+R1 complete; Rscript not on PATH,1,D3,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
+R1 then D1 complete,3,"C1, C2",run complete,"a history record of the run, its working config, and a seeded result file",seeded
+R1 complete; z_p (TX) defines 4 package cases,1,C5,run complete,"a history record of the run, its working config, and a seeded result file",seeded
+R2 complete; inventory holds three THRU files,1,C6,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
+C2 complete,1,C7,run complete,"a history record of the run, its working config, and a seeded result file",seeded
+R2 complete; data\thru.s4p modified on disk since that run,1,C8,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
+none; data\config.xls exists; interface type KR already confirmed for this project; network up,1,F1,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but interface type not yet confirmed,1,F2,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but no network,1,F3,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but the selected zip is already cached,1,F4,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but the newest entry is marked superseded or do not use,1,F5,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but FEXT and NEXT files cannot be paired to THRU files with confidence,1,F6,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but one Touchstone file in the zip is invalid,1,F7,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but the zip contains no Touchstone files,1,F8,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but the download is interrupted,1,F9,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but the zip holds THRU files only,1,F10,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+new terminal; history file from an earlier session exists,1,S1,settings or history,history.jsonl holding exactly the commands described (or none),no
+history exists,1,S2,settings or history,history.jsonl holding exactly the commands described (or none),no
+project folder with no history,2,"FB07, S3",files only,"history.jsonl holding exactly the commands described (or none); the files named, and nothing else",no
+last run has COM below the pass threshold,1,X1,run complete,"a history record of the run, its working config, and a seeded result file",seeded
+any,7,"FB03, TU03, TU04, TU06, TU07, TU08, X2",files only,"the files named, and nothing else",no
+run complete with the starting config and data\thru.s4p,715,"CB01, CB02, CB03, CB04, CB05, CB06, CB07, CB08, CB09, CB10, CB11, CB12 and 575 more",run complete,"a history record of the run, its working config, and a seeded result file",seeded
+run complete with one active override: DER_0 = 1e-4,2,"CB14, SX19",run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
+"run complete with two active overrides: DER_0 = 1e-4, SNR_TX = 32.5",2,"CB15, CB16",run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
+"run complete with data\config.xlsx, data\thru.s4p and crosstalk files",1,CB18,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
+none; both files exist,4,"CB19, CP02, CP03, CP16",files only,"the files named, and nothing else",no
+run complete with PKG_NAME = PKG_LowR_CLASSA PKG_Module,1,RS28,run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
+none; data\config.xls is a legacy Excel 97-2003 file,1,IV21,files only,"the files named, and nothing else",no
+run complete with one active override,2,"CP06, CP13",run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
+run complete with c(2) added (RS26),1,CP07,run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
+run complete; data\config.xlsx edited and saved in Excel since then,1,CP10,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
+run complete; data\config.xlsx is open in Excel (lock file present),1,CP11,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
+run complete with two active overrides,1,CP12,run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
+none; data\config.json was written by an earlier session,1,CP14,files only,"the files named, and nothing else",no
+none; data\config.json was edited by hand and has f_bb in place of f_b,1,CP15,files only,"the files named, and nothing else",no
+none; data\config.xlsx is the Case1 sheet,1,ST03,files only,"the files named, and nothing else",no
+none; the config and data\thru.s4p exist,4,"ST05, ST14, ST15, ST16",files only,"the files named, and nothing else",no
+run complete with C_b = [0.2e-4 0.3e-4],1,SX14,run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
+runs complete for Clip Method = Slow and for Clip Method = Fast,1,SX18,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+run complete; data\thru.s4p was replaced on disk since then,1,SX22,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
+run complete with one active override: N_qb = 0,1,SX26,run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
+the question of SX34 is open,2,"SX35, SX36",settings or history,the earlier use case replayed up to its open or cancelled question,no
+new project folder: no history yet; both files exist,2,"TU01, TU02",files only,"history.jsonl holding exactly the commands described (or none); the files named, and nothing else",no
+history holds 20 successful commands,1,TU05,settings or history,history.jsonl holding exactly the commands described (or none),no
+no settings file; history holds 4 successful commands,1,TU09,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
+no settings file; history holds 5 successful commands,1,TU10,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
+no settings file; history holds 3 successful commands and 6 that were cancelled or failed,1,TU11,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
+new project folder: no history yet; the user settings file sets tutor_until_commands = 0,1,TU12,files only,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none); the files named, and nothing else",no
+the project settings file sets tutor_until_commands = 20; history holds 10 successful commands,1,TU13,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
+history holds 20 successful commands; 2 of the last 4 commands were misses,1,TU14,settings or history,history.jsonl holding exactly the commands described (or none),no
+history holds 20 successful commands; 1 of the last 4 commands was a miss,1,TU15,settings or history,history.jsonl holding exactly the commands described (or none),no
+"history holds 20 successful commands; the last four commands were sweep questions that were answered (the run limit, which element, a range for a number, a step size)",1,TU16,settings or history,history.jsonl holding exactly the commands described (or none),no
+history holds 20 successful commands; the tutor and the feedback line were shown 6 commands ago; 2 of the 4 commands since then were misses,1,TU17,settings or history,history.jsonl holding exactly the commands described (or none),no
+history holds 20 successful commands; 2 of the last 4 commands were misses; the user settings file sets feedback_notice = off,1,TU18,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
+history holds 20 successful commands; the last 4 commands were misses; the user settings file sets trouble_misses = 0,1,TU19,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
+no settings file anywhere,4,"SE01, SE09, SE10, SE11",settings or history,"the settings file lines named, in the user file or the project file as stated",no
+the user settings file sets max_new_runs = 100 and tutor_until_commands = 0; the project settings file sets max_new_runs = 10,1,SE02,settings or history,"the settings file lines named, in the user file or the project file as stated",no
+run complete with the starting config and data\thru.s4p; the project settings file sets max_new_runs = 50,1,SE03,run complete,"the settings file lines named, in the user file or the project file as stated; a history record of the run, its working config, and a seeded result file",seeded
+run complete with the starting config and data\thru.s4p; the project settings file sets max_new_runs = 5,1,SE04,run complete,"the settings file lines named, in the user file or the project file as stated; a history record of the run, its working config, and a seeded result file",seeded
+run complete with the starting config and data\thru.s4p; the project settings file sets max_new_runs = 0,1,SE05,run complete,"the settings file lines named, in the user file or the project file as stated; a history record of the run, its working config, and a seeded result file",seeded
+the project settings file holds max_runs = 50,1,SE06,settings or history,"the settings file lines named, in the user file or the project file as stated",no
+the project settings file holds max_new_runs = many,1,SE07,settings or history,"the settings file lines named, in the user file or the project file as stated",no
+the project settings file cannot be parsed,1,SE08,settings or history,"the settings file lines named, in the user file or the project file as stated",no
+runs complete for Clip Method = Slow and for Clip Method = Fast; max_new_runs was then changed from 30 to 5,1,SE12,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+the question of C3 is open,1,FB01,settings or history,the earlier use case replayed up to its open or cancelled question,no
+the question of PH12 was cancelled,1,FB02,settings or history,the earlier use case replayed up to its open or cancelled question,no
+history holds 40 commands,2,"FB04, FB06",settings or history,history.jsonl holding exactly the commands described (or none),no
+"history holds Run COM on D:\acme\falcon_rev2\thru.s4p with D:\acme\cfg_falcon.xlsx, then Re-run with package PKG_AcmeBGA, then Re-run with zp select 2",1,FB05,settings or history,history.jsonl holding exactly the commands described (or none),no
+"history written by an earlier SiCoPR-Assist version; its last command was Re-run with zp select 2, answered z_p select",1,FB08,settings or history,history.jsonl holding exactly the commands described (or none),no
+"the project settings file sets mask_names = off; history holds Run COM on D:\acme\falcon_rev2\thru.s4p with D:\acme\cfg_falcon.xlsx, then Re-run with package PKG_AcmeBGA, then Re-run with C_d = [0.4e-4 0.9e-4]",1,FB15,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
+"the project settings file sets mask_numbers = on; history holds Run COM on D:\acme\falcon_rev2\thru.s4p with D:\acme\cfg_falcon.xlsx, then Re-run with package PKG_AcmeBGA, then Re-run with C_d = [0.4e-4 0.9e-4]",1,FB16,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
+the project settings file holds mask_names = maybe; history holds 40 commands,1,FB17,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
+the C_b sweep of SX02 is complete: 9 results,7,"SM01, SM02, SM05, SM06, SM07, SM14, SM15",batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+the Clip Method sweep of SX17 is complete: 2 results,1,SM03,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+the C_b sweep of SX27 is complete: 2 results,1,SM04,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+"the grid of SX15 is complete: C_b at 3 values by DER_0 at 2 values, 6 results",1,SM08,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+run complete with z_p select = [ 1 2 3 4 ]: 4 results,1,SM09,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+run complete with the starting config and data\thru.s4p: 1 result,1,SM10,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+"the N_b sweep of SX23 is complete: 2 results, 1 point skipped",1,SM11,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+F1 complete: every channel run thru-only and with crosstalk,1,SM13,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+none; both files exist; the config has no f_z row,1,SC06,files only,"the files named, and nothing else",no

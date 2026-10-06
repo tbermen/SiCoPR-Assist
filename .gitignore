@@ -1,0 +1,14 @@
+# project state the tool writes in the folder it runs from
+.sicopr/
+
+# run output
+results/
+*.s4p
+*.mat
+
+# caches and build output
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/

@@ -1,0 +1,210 @@
+id,starting_config,group,priority,expected_type,kind,expected
+R4,any,run,must,QUESTION,review,"options described, not named: each config found, plus the example setup"
+R5,any,run,must,QUESTION,review,"options described, not named: the available presets"
+R7,any,run,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+D3,any,report,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+C1,Case1; Case2,change,must,QUESTION,review,"options described, not named: the four package blocks defined in the config, closest match"
+C1,Case3; Case4,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+C6,Case1,change,stretch,QUESTION,review,"options described, not named: the two THRU files not used last time"
+C7,any,change,stretch,PLAN,review,chain items with no step name: working config rebuilt from the import with the remaining overrides | replay dependents
+C8,Case1,change,must,PLAN,review,no step chain in the detail
+F3,any,fetch,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+F4,any,fetch,must,PLAN,review,no step chain in the detail
+F5,any,fetch,must,PLAN,review,no step chain in the detail
+F6,any,fetch,must,QUESTION,review,no option list
+F7,any,fetch,must,PLAN,review,no step chain in the detail
+F8,any,fetch,stretch,QUESTION,review,"options described, not named: the next candidate zips for that interface"
+F9,any,fetch,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+F10,any,fetch,must,PLAN,review,no step chain in the detail
+S1,any,session,must,PLAN,review,no step chain in the detail
+X1,any,scope,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+X2,any,scope,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PA016,Case3; Case4,param,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PA024,Case3; Case4,param,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PA028,Case1,param,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PA028,Case2; Case3; Case4,param,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PA031,Case3; Case4,param,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PA034,Case2,param,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PA080,Case1; Case2; Case3; Case4,param,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PA087,Case1; Case2; Case3; Case4,param,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+EN01,Case1; Case2,enum,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+EN06,Case3; Case4,enum,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+EN17,Case1,enum,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+EN18,Case3,enum,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+EN19,Case4,enum,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+EN23,Case1; Case2; Case3; Case4,enum,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+EN30,Case1; Case2; Case3; Case4,enum,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+EN34,Case1; Case2; Case3; Case4,enum,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV003,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV004,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV006,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV008,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV010,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV011,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV012,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SW013,Case1; Case2; Case3; Case4,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV013,Case1; Case2; Case3; Case4,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV014,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV015,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV018,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV019,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV022,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV023,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SW024,Case1; Case2,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SW024,Case3; Case4,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV024,Case1; Case2,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV024,Case3; Case4,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV026,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV027,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SW028,Case1,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SW028,Case2; Case3; Case4,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV028,Case1,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV028,Case2; Case3; Case4,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV030,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV033,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV035,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV036,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV039,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV040,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV041,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV043,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV044,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV047,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV048,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV049,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV050,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV051,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV052,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV053,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV054,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV056,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV057,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV058,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV059,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV060,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV061,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV062,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV063,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV064,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV065,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV067,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV068,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV069,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV070,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV071,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV072,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV072,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV073,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV074,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV075,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV075,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV076,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV078,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV079,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV079,Case3; Case4,sweep,must,QUESTION,review,no option list
+SW080,Case1; Case2; Case3; Case4,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV080,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV081,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV081,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV082,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV083,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV083,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV084,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV085,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV086,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SW087,Case1; Case2; Case3; Case4,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SV087,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV088,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV089,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV090,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV091,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV092,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV093,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV095,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV096,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV098,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV099,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV101,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV102,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV104,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV105,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV106,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV107,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV108,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV109,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV109,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV110,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV111,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV111,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV112,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV113,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV113,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV114,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV114,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV115,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV115,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV116,Case1; Case2,sweep,must,QUESTION,review,no option list
+SV116,Case3; Case4,sweep,must,QUESTION,review,no option list
+SV117,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV118,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV119,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SV120,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+CB14,Case1,combo,must,PLAN,review,no step chain in the detail
+CB16,Case1,combo,stretch,PLAN,review,chain items with no step name: working config rebuilt from the import with DER_0 = 1e-4 only
+CB20,Case1,combo,stretch,PLAN,review,no step chain in the detail
+RS27,any,resolve,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+RS30,Case1; Case2,resolve,stretch,QUESTION,review,"options described, not named: for PkgB as in C1"
+IV06,Case1; Case2; Case3; Case4,invalid,must,QUESTION,review,"options described, not named: the eight orders on the selections_and_tables sheet"
+IV07,Case1; Case2; Case3; Case4,invalid,must,QUESTION,review,"options described, not named: the eight orders on the selections_and_tables sheet"
+IV10,Case1; Case2; Case3; Case4,invalid,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+IV11,Case1; Case2; Case3; Case4,invalid,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+IV12,Case1; Case2; Case3; Case4,invalid,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+IV16,Case1; Case2; Case3; Case4,invalid,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+IV20,Case1; Case2; Case3; Case4,invalid,must,QUESTION,review,no option list
+IV21,any,invalid,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+CP01,Case1; Case2; Case3; Case4,config,must,PLAN,review,no step chain in the detail
+CP02,Case1; Case2; Case3; Case4,config,must,PLAN,review,a one-step chain that goes on in prose: import_config writes a config JSON that loads to exactly the
+CP03,Case1; Case2; Case3; Case4,config,must,PLAN,review,no step chain in the detail
+CP04,Case1; Case2; Case3; Case4,config,must,PLAN,review,no step chain in the detail
+CP05,Case1; Case2; Case3; Case4,config,must,PLAN,review,no step chain in the detail
+CP07,Case1,config,stretch,PLAN,review,no step chain in the detail
+CP08,Case1; Case2,config,must,PLAN,review,no step chain in the detail
+CP09,Case1; Case2; Case3; Case4,config,must,PLAN,review,no step chain in the detail
+CP10,any,config,must,PLAN,review,no step chain in the detail
+CP11,any,config,stretch,PLAN,review,no step chain in the detail
+CP14,any,config,must,PLAN,review,no step chain in the detail
+CP16,any,config,stretch,PLAN,review,"a one-step chain that goes on in prose: import_config from .csv to the same JSON form, then run"
+PH02,any,phrasing,must,PLAN,review,no step chain in the detail
+PH14,Case1; Case2; Case3; Case4,phrasing,must,QUESTION,review,"options described, not named: the four package blocks and the four z_p select cases, with "
+ST09,V06,structure,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+ST14,V10,structure,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+ST15,V11,structure,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+ST16,V12,structure,must,PLAN,review,no step chain in the detail
+SX11,Case1; Case2; Case3; Case4,sweep,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SX21,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,no option list
+SX24,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,"a list of numbers inside one option: run 1, 2 and 3 only, cancel"
+SX31,Case1; Case2; Case3; Case4,sweep,must,QUESTION,review,"a list of numbers inside one option: run 1, 5, 8 and 12, give another count, give a step size, ca"
+TU04,any,tutor,must,PLAN,review,no step chain in the detail
+TU07,V07,tutor,must,PLAN,review,no step chain in the detail
+TU08,any,tutor,stretch,QUESTION,review,no option list
+FB03,any,feedback,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+FB05,any,feedback,must,PLAN,review,no step chain in the detail
+FB06,any,feedback,must,PLAN,review,no step chain in the detail
+FB07,any,feedback,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+FB08,any,feedback,must,PLAN,review,no step chain in the detail
+FB15,any,feedback,must,PLAN,review,no step chain in the detail
+FB16,any,feedback,must,PLAN,review,no step chain in the detail
+FB17,any,feedback,must,PLAN,review,no step chain in the detail
+SM03,Case1; Case2; Case3; Case4,summary,must,PLAN,review,no step chain in the detail
+SM04,Case1; Case2; Case3; Case4,summary,must,PLAN,review,no step chain in the detail
+SM06,Case1; Case2; Case3; Case4,summary,must,QUESTION,review,"options described, not named: are result names that contain one of the words (none here) a"
+SM07,Case1; Case2; Case3; Case4,summary,must,PLAN,review,no step chain in the detail
+SM08,Case1; Case2; Case3; Case4,summary,must,PLAN,review,no step chain in the detail
+SM09,Case1,summary,must,PLAN,review,no step chain in the detail
+SM10,Case1; Case2; Case3; Case4,summary,must,PLAN,review,no step chain in the detail
+SM11,Case1; Case2; Case3; Case4,summary,must,PLAN,review,no step chain in the detail
+SM15,Case1; Case2; Case3; Case4,summary,must,PLAN,review,no step chain in the detail
+SC02,Case1; Case2; Case3; Case4,schema,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SC10,Case1; Case2; Case3; Case4,schema,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SC12,Case1; Case2; Case3; Case4,schema,must,QUESTION,review,"options described, not named: are the releases in VERSION.json supported_matlab_versions, "
+SC15,Case1; Case2; Case3; Case4,schema,must,STOP,review,STOP: whether the reason names the same cause is read by a person

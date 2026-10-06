@@ -1,0 +1,53 @@
+name: tests
+
+on: push
+
+jobs:
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONIOENCODING: utf-8
+    steps:
+      - name: Check out SiCoPR-Assist
+        uses: actions/checkout@v4
+
+      - name: Read the SiCoPR commit this state was tested with
+        id: ref
+        shell: bash
+        run: echo "sha=$(head -n 1 SICOPR_REF | tr -d '[:space:]')" >> "$GITHUB_OUTPUT"
+
+      # The folder is not named sicopr: a folder of that name beside the tests would shadow the module.
+      - name: Check out SiCoPR at that commit
+        uses: actions/checkout@v4
+        with:
+          repository: tbermen/SiCoPR
+          ref: ${{ steps.ref.outputs.sha }}
+          path: sicopr-engine
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy scipy openpyxl
+          python -m pip install -e sicopr-engine
+          python -m pip install -e .
+
+      - name: Run every tests/test_*.py
+        shell: bash
+        env:
+          SICOPR_REPO: ${{ github.workspace }}/sicopr-engine
+        run: |
+          for t in tests/test_*.py; do
+            echo "=== $t"
+            python "$t" || exit 1
+          done
+          echo "All tests passed"

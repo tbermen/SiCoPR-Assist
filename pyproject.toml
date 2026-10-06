@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sicopr-assist"
+version = "0.1.0"
+description = "A rules-based front end that turns phrases into SiCoPR runs"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Todd Bermensolo" }]
+# SiCoPR is not on PyPI, so it is not listed here. Install it from its
+# checkout first (pip install -e <SiCoPR folder>); see README.md.
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "openpyxl>=3.1",
+]
+
+[project.scripts]
+sicopr-assist = "sicopr_assist.cli:main"
+
+[tool.setuptools]
+packages = ["sicopr_assist"]
+
+[tool.setuptools.package-data]
+"sicopr_assist" = ["data/*"]

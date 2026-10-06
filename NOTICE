@@ -1,0 +1,49 @@
+SiCoPR-Assist: parts that come from elsewhere
+=============================================
+
+SiCoPR-Assist is BSD-3-Clause, Copyright 2026 Todd Bermensolo (see LICENSE).
+The parts listed here come from elsewhere and keep their own notice. This file
+is a record of where they came from, not a second licence.
+
+Nothing in this repository suggests that IEEE or the 802-COM Authors endorse
+it. It is not affiliated with or approved by either.
+
+
+1. Parameter descriptions
+-------------------------
+
+The description text in the parameter schema
+(sicopr_assist/data/sicopr_param_schema.csv) is taken from comments in the
+IEEE 802.3 COM Reference Code (com_ieee8023_*.m) and from the keywords sheet of
+the COM workbooks.
+
+  Copyright 2025 802-COM Authors
+  SPDX-License-Identifier: BSD-3-Clause
+
+
+2. Test workbooks
+-----------------
+
+The four starting workbooks in tests/configs/ are COM config workbooks,
+committed unchanged. Each carries its own License Notice sheet.
+
+  config_com_dj_200G_CAKR_178_PKGA_06_2_2025__Case1.xlsx
+  config_com_dj_200G_CAKR_178_PKGA_06_2_2025__Case2.xlsx
+  config_com_dj_200G_CAKR_178_PKGB_06_2_2025__Case3.xlsx
+  config_com_dj_200G_CAKR_178_PKGB_06_2_2025__Case4.xlsx
+
+  Copyright 2025 802-COM Authors
+  SPDX-License-Identifier: BSD-3-Clause
+
+The SHA-256 of each is listed in tests/cases/sicopr_starting_configs.csv.
+
+
+3. Spreadsheet reader and writer
+--------------------------------
+
+The spreadsheet reader and writer (sicopr_assist/xlsx_io.py) start from
+gui/config_io.py in SiCoPR (https://github.com/tbermen/SiCoPR), by the same
+author and under the same licence.
+
+  Copyright 2026 Todd Bermensolo
+  SPDX-License-Identifier: BSD-3-Clause
