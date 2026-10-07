@@ -25,7 +25,8 @@ the COM workbooks.
 -----------------
 
 The four starting workbooks in tests/configs/ are COM config workbooks,
-committed unchanged. Each carries its own License Notice sheet.
+committed unchanged. Each carries its own License Notice sheet, which gives
+the BSD-3-Clause terms below.
 
   config_com_dj_200G_CAKR_178_PKGA_06_2_2025__Case1.xlsx
   config_com_dj_200G_CAKR_178_PKGA_06_2_2025__Case2.xlsx

@@ -31,7 +31,7 @@ import fixtures  # noqa: E402
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6'], help='check a gate condition as well')
+    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7'], help='check a gate condition as well')
     ap.add_argument('--review', help='with --gate G4: write the rows of the Phase 4 groups that L4 cannot check by '
                                      'machine, with the outcome given, to this CSV')
     ap.add_argument('--out', help='where to write score_use_cases.csv')
@@ -85,6 +85,8 @@ def main(argv=None):
         gate_g4(rows, results, full, args.review)
     if args.gate == 'G6':
         gate_g6(rows, results)
+    if args.gate == 'G7':
+        gate_g7(rows, results, full)
     if args.gate == 'G1.3':
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
@@ -190,6 +192,85 @@ def gate_g6(rows, results):
     bad = [r for r in frozen if r['L4'] != 'PASS']
     check('G6.1: and L4 where the row is in the frozen list (%d pairs)' % len(frozen), not bad,
           ['%s %s: %s' % (r['id'], r['config'], r['note'][-160:]) for r in bad][:40])
+
+
+def board(results, title):
+    """Print one line per group: pairs, and passes per level out of the pairs the level applies to."""
+    print('-- %s' % title)
+    groups = {}
+    for r in results:
+        g = groups.setdefault(r['group'], {'n': 0, 'L1': [0, 0], 'L2': [0, 0], 'L3': [0, 0], 'L4': [0, 0]})
+        g['n'] += 1
+        for lv in ('L1', 'L2', 'L3', 'L4'):
+            if r[lv] in ('PASS', 'FAIL'):
+                g[lv][1] += 1
+                g[lv][0] += r[lv] == 'PASS'
+    total = {'n': 0, 'L1': [0, 0], 'L2': [0, 0], 'L3': [0, 0], 'L4': [0, 0]}
+    for name in sorted(groups) + ['all']:
+        v = groups.get(name, total)
+        if name != 'all':
+            total['n'] += v['n']
+            for lv in ('L1', 'L2', 'L3', 'L4'):
+                total[lv] = [total[lv][0] + v[lv][0], total[lv][1] + v[lv][1]]
+        print('%-10s pairs %4d  L1 %4d/%-4d  L2 %4d/%-4d  L3 %4d/%-4d  L4 %4d/%-4d'
+              % (name, v['n'], v['L1'][0], v['L1'][1], v['L2'][0], v['L2'][1], v['L3'][0], v['L3'][1],
+                 v['L4'][0], v['L4'][1]))
+
+
+def gate_g7(rows, results, full):
+    """Gates G7.1 to G7.3 (prompt section 8, Phase 7): the final scoreboard. A disputed row is excused and named."""
+    import scoring
+    by_key = {(r['id'], label): r for r in rows for label in scoring.labels_of(r)}
+    disputed = open_disputes()
+    if disputed:
+        print('excused by dispute: %s' % ', '.join(sorted(disputed)))
+    applicable = [r for r in results if r['applies'] == 'yes']
+    gated = [r for r in applicable if r['group'] not in scoring.DEFERRED]
+    must = [r for r in gated if r['priority'] == 'must' and r['id'] not in disputed]
+    board(must, 'must rows outside the deferred groups')
+    board([r for r in gated if r['priority'] != 'must'], 'stretch rows outside the deferred groups (not gated)')
+    board([r for r in applicable if r['group'] in scoring.DEFERRED], 'deferred to version 2, all priorities '
+                                                                     '(not gated)')
+
+    def listed(bad):
+        return ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad]
+    for lv in ('L1', 'L2', 'L3'):
+        bad = [r for r in must if r[lv] == 'FAIL' or (lv == 'L1' and r[lv] != 'PASS')]
+        check('G7.1: every must pair outside the deferred groups passes %s where it applies (%d pairs)'
+              % (lv, len(must)), not bad, listed(bad)[:40])
+    if not full:
+        print('NOTE: G7.1 needs L3 on every pair: run with SICOPR_ASSIST_FULL=1')
+    frozen = {}
+    for r in must:
+        if r['L4'] in ('PASS', 'FAIL'):
+            frozen.setdefault(r['id'] + '|' + by_key[(r['id'], r['config'])]['starting_config'], []).append(r)
+    passed = [k for k, v in frozen.items() if all(x['L4'] == 'PASS' for x in v)]
+    missed = sorted(k for k in frozen if k not in passed)
+    share = len(passed) / float(len(frozen) or 1)
+    print('G7.2: L4 on %d of %d frozen must rows outside the deferred groups (%.1f %%); %d pairs of %d'
+          % (len(passed), len(frozen), 100 * share, sum(1 for v in frozen.values() for x in v if x['L4'] == 'PASS'),
+             sum(len(v) for v in frozen.values())))
+    for k in missed:
+        x = next(x for x in frozen[k] if x['L4'] == 'FAIL')
+        print('  L4 miss %s (%s): %s' % (k.split('|')[0], ', '.join(y['config'] for y in frozen[k] if y['L4'] == 'FAIL'),
+                                         x['note'][-220:]))
+    check('G7.2: L4 passes on at least 95 percent of the frozen must rows outside the deferred groups', share >= 0.95,
+          '%.1f %%' % (100 * share))
+    stretch_l4 = sorted({r['id'] for r in gated if r['priority'] != 'must' and r['L4'] == 'FAIL'})
+    print('stretch L4 misses (not gated): %s' % (', '.join(stretch_l4) or 'none'))
+    for lv in ('L1', 'L2', 'L3'):
+        ids = sorted({r['id'] for r in gated if r['priority'] != 'must' and r[lv] == 'FAIL'})
+        print('stretch %s misses (not gated): %s' % (lv, ', '.join(ids) or 'none'))
+    for lv in ('L1', 'L2', 'L3', 'L4'):
+        ids = sorted({r['id'] for r in applicable if r['group'] in scoring.DEFERRED and r[lv] == 'FAIL'})
+        print('deferred %s misses (not gated): %s' % (lv, ', '.join(ids) or 'none'))
+    n = [sum(int(r[k] or 0) for r in applicable) for k in ('paraphrases_ok', 'paraphrases_asked', 'paraphrases_wrong')]
+    print('paraphrases over the whole table: %d, %d understood, %d asked, %d wrong' % (sum(n), n[0], n[1], n[2]))
+    check('G7.3: stretch rows and the deferred groups were scored (%d and %d pairs)'
+          % (len([r for r in gated if r['priority'] != 'must']),
+             len([r for r in applicable if r['group'] in scoring.DEFERRED])),
+          all(r['L1'] in ('PASS', 'FAIL') for r in applicable if r['priority'] != 'must'
+              or r['group'] in scoring.DEFERRED))
 
 
 _types = {}
