@@ -43,8 +43,8 @@ STEPS = (
     'download', 'drop_override', 'export_feedback', 'export_mat', 'export_xlsx', 'extract', 'fetch_index',
     'import_config', 'infer_interface', 'inventory', 'list_parameters', 'open_report', 'recompute_linked',
     'render_dashboard', 'result_stats', 'result_vs_param', 'revert_override', 'run_batch', 'run_com',
-    'select_zip', 'set_param', 'set_setting', 'show_config', 'show_history', 'show_overrides', 'show_param',
-    'show_settings', 'show_tutor', 'summarize', 'validate_config', 'validate_inputs',
+    'select_zip', 'set_channel', 'set_param', 'set_setting', 'show_config', 'show_history', 'show_overrides',
+    'show_param', 'show_settings', 'show_tutor', 'summarize', 'validate_config', 'validate_inputs',
 )
 
 OUTCOME_TYPES = ('PLAN', 'QUESTION', 'STOP')
@@ -582,6 +582,16 @@ def _plan_v1(text, req, ctx, mods, base):
     if 'compare' in acts and req['files']:
         return _compare(req, ctx, base)
 
+    # a channel file named without a config: after a run, only that channel changes and the config of the last
+    # run is kept (Decision 18); with no run yet, a re-run of it asks for a config, as row S3 does (row CH05)
+    named = [f for f in req['files'] if f['ext'] == 'channel']
+    if named and len(named) == len(req['files']) and not req['sweeps'] and \
+            not {'example', 'these_files', 'this_config'} & set(req['flags']):
+        if ctx.last is not None:
+            return _channel_swap(req, ctx, mods, base)
+        if 'rerun' in acts or 'again' in req['flags'] or 'last_config' in req['flags']:
+            return _no_history(ctx, base, channel=named[0]['text'])
+
     # a run with files named, or the files in the folder
     first_run = bool(req['files'] or 'these_files' in req['flags'] or 'this_config' in req['flags']
                      or 'example' in req['flags']) and not req['sweeps']
@@ -742,10 +752,14 @@ def _words(ws):
     return ', '.join(ws[:-1]) + ' and ' + ws[-1] if len(ws) > 1 else (ws[0] if ws else '')
 
 
-def _no_history(ctx, base):
+def _no_history(ctx, base, channel=None):
     opts = ['the example setup', 'provide files']
-    return _ask('There is no run in this project folder yet, so there is nothing to re-run. Name a config and a channel '
-                'file (Run COM on data\\thru.s4p with data\\config.xlsx), or run the example setup.', opts,
+    text = ('There is no run in this project folder yet, so there is nothing to re-run. Name a config and a channel '
+            'file (Run COM on data\\thru.s4p with data\\config.xlsx), or run the example setup.')
+    if channel:                                 # row CH05: no history, so no config of a last run to keep
+        text = ('There is no run in this project folder yet, so there is no config of a last run to keep for %s. Name '
+                'a config with it (Run COM on %s with data\\config.xlsx), or run the example setup.' % (channel, channel))
+    return _ask(text, opts,
                 {'the example setup': {'stop': 'Run the example setup with: Run SiCoPR on the example setup.'},
                  'provide files': {'stop': 'Name the files, for example: Run COM on data\\thru.s4p with data\\config.xlsx.'}},
                 **base)
@@ -1849,6 +1863,112 @@ def _first_run(req, ctx, mods, base):
 def _last_channels(ctx):
     """[(path, role)] of the channel files of the last run that are still on disk."""
     return [(ctx.path(p), r) for p, sha, r in ctx.channels() if sha is not None]
+
+
+# ----------------------------------------------------------------------------- another channel (Decision 18)
+def _same_file(a, b):
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def _find_channel(ctx, text, last_paths):
+    """[project-relative paths] where a channel file named in a phrase is. A path is taken as written. A bare file
+    name that is not in the project folder is looked for, by that exact name, in data\\ and in the folders of the
+    last run's channel files; nothing else is searched and nothing is matched loosely."""
+    if os.path.isfile(ctx.path(text)):
+        return [text]
+    if re.search(r'[\\/]', text):
+        return []
+    found = []
+    for d in [os.path.join(ctx.root, 'data')] + [os.path.dirname(ctx.path(p)) for p in last_paths]:
+        q = os.path.join(d, text)
+        if os.path.isfile(q) and not any(_same_file(q, ctx.path(f)) for f in found):
+            found.append(os.path.relpath(q, ctx.root))
+    return found
+
+
+def _channel_swap(req, ctx, mods, base):
+    """A re-run with other channel files: the config of the last run is kept with its overrides, and only the
+    channels named change, one set_channel step each (Decision 18, rows CH01 to CH08). A file that does not exist
+    stops and keeps the last setup; the file already in use is a change with no effect. A change of a parameter in
+    the same phrase is planned as a re-run would plan it (row CH06)."""
+    rec = ctx.last
+    wc = ctx.wc
+    if wc is None:
+        return _stop('The last run cannot be repeated with another channel file: %s.' % ctx.base[1], **base)
+    last = [(p, r or 'thru') for p, _, r in ctx.channels()]
+    recorded = {c['path']: c.get('sha256') for c in rec.get('channels') or []}
+    named = [f for f in req['files'] if f['ext'] == 'channel']
+    new, swaps, same, notes = list(last), [], [], []
+    for f, (_, role) in zip(named, channel_roles([f['text'] for f in named])):
+        role = f.get('role') or role
+        where = _find_channel(ctx, f['text'], [p for p, _ in last])
+        if not where:
+            return _stop('%s does not exist in this project folder. The last setup is kept and nothing runs.'
+                         % f['text'], **base)
+        if len(where) > 1:
+            return _ask('%s is in more than one folder: which one?' % f['text'], where + [CANCEL],
+                        {w: {'replace': [f['text'], w]} for w in where} | {CANCEL: None}, **base)
+        path = where[0]
+        if path != f['text']:
+            notes.append('%s was found by its name in %s' % (f['text'], os.path.dirname(path)))
+        bad = touchstone_problem(ctx.path(path))
+        if bad:
+            return _stop('%s is not a valid Touchstone file: %s. The last setup is kept and nothing runs.' % (path, bad),
+                         **base)
+        held = [i for i, (_, r) in enumerate(new) if r == role]
+        if len(held) > 1:
+            return _stop('The last run has %d %s files, so it is not clear which one %s replaces. Name the whole set '
+                         'with its config: Run COM on <THRU> and <aggressors> with <config>.'
+                         % (len(held), role.upper(), path), **base)
+        before = new[held[0]][0] if held else None
+        if before is not None and _same_file(ctx.path(before), ctx.path(path)):
+            if _sha(ctx.path(path)) == recorded.get(before):
+                same.append((role, path))
+                continue
+            notes.append('%s, the %s of the last run, changed on disk since then' % (path, role.upper()))
+        swaps.append(_step('set_channel', role=role, before=before, after=path))
+        if held:
+            new[held[0]] = (path, role)
+        else:
+            new.append((path, role))
+    has_change = bool(req['sets'] or req['packages'] or req['attempts'])
+    rid = ctx.last_run_id()
+    if not swaps and not has_change:                           # row CH07
+        role, path = same[0]
+        return _stop('%s is already the %s of the last run (%s): nothing changed, so the results would equal the last '
+                     'run. Nothing runs.' % (path, role.upper(), rid), **base)
+    if not has_change and req['unplaced'] and not mods.get('ignore_unplaced'):
+        return _unplaced_only(req, base)
+    changes, pre, more = [], [], _context_lines(ctx, [], wc)
+    final = wc
+    if has_change:
+        sub, answers = _change(dict(req, files=[]), ctx, mods, base, wc)
+        if sub['type'] != 'PLAN':
+            return sub, answers
+        changes = sub['changes']
+        pre = [s for s in sub['steps'] if s['op'] in ('set_param', 'add_param', 'recompute_linked')]
+        more = list(sub['announce'])
+        final = config_model.apply_changes(wc, [(c['json_path'], c['after']) for c in changes
+                                                if c['kind'] in ('set', 'add')])['config']
+    roles = list(dict.fromkeys(s['args']['role'].upper() for s in swaps))
+    lines = ['the config of the last run (%s) is kept, and only the %s changes%s'
+             % (rid, _and(roles) if roles else 'parameter named',
+                ', with the parameter change below' if swaps and has_change else '')]
+    for s in swaps:
+        a = s['args']
+        lines.append('%s: %s -> %s' % (a['role'].upper(), a['before'] or 'none', a['after']))
+        if a['role'] != 'thru':
+            n = len([1 for _, r in new if r == a['role']])
+            lines.append('the run now has %d %s aggressor%s' % (n, a['role'].upper(), '' if n == 1 else 's'))
+    lines += ['%s is already the %s of the last run, so it is unchanged' % (p, r.upper()) for r, p in same]
+    stops, warn = input_check(final, [(ctx.path(p), r) for p, r in new])
+    if stops:
+        return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in changes], announce=lines + notes,
+                     **base)
+    thru_only = bool(mods.get('thru_only') or 'thru_only' in req['flags'])
+    steps = swaps + pre + [_step('validate_inputs', channels=[p for p, _ in new]), _step('validate_config'),
+                           _step('run_com', thru_only=thru_only), _step('summarize')]
+    return outcome('PLAN', steps=steps, changes=changes, announce=lines + notes + more + warn, **base), {}
 
 
 def channel_roles(chans):

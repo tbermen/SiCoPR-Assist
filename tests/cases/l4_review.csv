@@ -208,3 +208,5 @@ SC02,Case1; Case2; Case3; Case4,schema,must,STOP,review,STOP: whether the reason
 SC10,Case1; Case2; Case3; Case4,schema,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 SC12,Case1; Case2; Case3; Case4,schema,must,QUESTION,review,"options described, not named: are the releases in VERSION.json supported_matlab_versions, "
 SC15,Case1; Case2; Case3; Case4,schema,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+CH04,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+CH07,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person

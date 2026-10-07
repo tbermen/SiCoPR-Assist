@@ -118,6 +118,20 @@ def main():
           and o['sweeps'][0]['name'] == 'PKG_NAME', o)
     o = read('Now give me the results in a dynamic dashboard.')
     check('a version 2 feature is recognised', 'dashboard' in o['actions'], o)
+    # after first use (Decision 18): the config of the last run, and a role word before a channel file
+    for ph in (r'Re-run COM .\data\x\thru_b.s4p with previous config.', r'Run data\thru2.s4p with the same config',
+               r'Re-run with data\thru2.s4p using the last config'):
+        o = read(ph)
+        check('%s: the last config, a channel file, nothing left over' % ph, 'last_config' in o['flags']
+              and [f['ext'] for f in o['files']] == ['channel'] and not o['unplaced'], o)
+    o = read('Re-run with the previous DER_0 = 1e-4.')
+    check('previous is placed only before config', 'last_config' not in o['flags'] and 'previous' in
+          [a['text'] for a in o['attempts']] + o['unplaced'], o)
+    o = read(r'Re-run with FEXT data\fext1.s4p.')
+    check('a role word before a channel file (CH08)', [(f['text'], f['role']) for f in o['files']]
+          == [(r'data\fext1.s4p', 'fext')] and not o['unplaced'], o)
+    o = read('Re-run with Tx_NPC_250mm_32AWG_BPK_500mm_27AWG_BPK_250mm_32AWG_NPC_Rx_thru1.s4p')
+    check('a bare channel file name is a file', [f['ext'] for f in o['files']] == ['channel'] and not o['unplaced'], o)
     finish()
 
 

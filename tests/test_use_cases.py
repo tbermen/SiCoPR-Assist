@@ -2,6 +2,7 @@
 
     python tests\\test_use_cases.py                 score, write score_use_cases.csv, print one line per group
     python tests\\test_use_cases.py --gate G1.3     also check gate G1.3 (the Phase 1 STOP stub)
+    python tests\\test_use_cases.py --gate G7 --gate M1 --gate M2     several gates on one scoring run
     $env:SICOPR_ASSIST_FULL = "1"                   L3 on every pair (default: Case1 and the variants)
 
 It fails on a defect of the harness itself: a prior state with no builder, a builder that does not
@@ -31,7 +32,8 @@ import fixtures  # noqa: E402
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7'], help='check a gate condition as well')
+    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2'], action='append', default=[],
+                    help='check a gate condition as well (may be given more than once)')
     ap.add_argument('--review', help='with --gate G4: write the rows of the Phase 4 groups that L4 cannot check by '
                                      'machine, with the outcome given, to this CSV')
     ap.add_argument('--out', help='where to write score_use_cases.csv')
@@ -81,13 +83,17 @@ def main(argv=None):
           len(results) == expected_pairs and not harness_errors, '; '.join(harness_errors[:5]))
     check('every applicable pair has an L1 score', all(r['L1'] in ('PASS', 'FAIL') for r in applicable))
 
-    if args.gate == 'G4':
+    if 'G4' in args.gate:
         gate_g4(rows, results, full, args.review)
-    if args.gate == 'G6':
+    if 'G6' in args.gate:
         gate_g6(rows, results)
-    if args.gate == 'G7':
+    if 'G7' in args.gate:
         gate_g7(rows, results, full)
-    if args.gate == 'G1.3':
+    if 'M1' in args.gate:
+        gate_m1(rows, results, full)
+    if 'M2' in args.gate:
+        gate_m2(results)
+    if 'G1.3' in args.gate:
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
         check('G1.3: every STOP row passes L1 (%d pairs)' % len(stop), all(r['L1'] == 'PASS' for r in stop),
@@ -271,6 +277,31 @@ def gate_g7(rows, results, full):
              len([r for r in applicable if r['group'] in scoring.DEFERRED])),
           all(r['L1'] in ('PASS', 'FAIL') for r in applicable if r['priority'] != 'must'
               or r['group'] in scoring.DEFERRED))
+
+
+def gate_m1(rows, results, full):
+    """Gate M1 (after first use, 6 October): every must CH row passes L1, L2, L3 (full mode) and L4 where it is in
+    the frozen list, and no row is excused. The earlier gates are checked by --gate G4, G6 and G7 on the same run."""
+    import scoring
+    want = sum(len(scoring.labels_of(r)) for r in rows if r['id'].startswith('CH') and r['priority'] == 'must')
+    ch = [r for r in results if r['applies'] == 'yes' and r['id'].startswith('CH') and r['priority'] == 'must']
+    check('M1: the must CH rows were scored (%d pairs)' % want, want > 0 and len(ch) == want, len(ch))
+    check('M1: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
+    bad = [r for r in ch if r['L1'] != 'PASS' or 'FAIL' in (r['L2'], r['L3'], r['L4'])]
+    check('M1: every must CH pair passes L1, and L2, L3 and L4 where they apply', not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad])
+    print('M1: %d must CH pairs; L4 on %d of them (the others are STOP rows on the review list)'
+          % (len(ch), sum(1 for r in ch if r['L4'] in ('PASS', 'FAIL'))))
+    check('M1: no row is excused by an open dispute', not open_disputes(), sorted(open_disputes()))
+
+
+def gate_m2(results):
+    """Gate M2: no paraphrase in the whole table produces a wrong PLAN."""
+    wrong = [r for r in results if r['applies'] == 'yes' and str(r['paraphrases_wrong']) not in ('', '0')]
+    n = sum(int(r['paraphrases_ok'] or 0) + int(r['paraphrases_asked'] or 0) + int(r['paraphrases_wrong'] or 0)
+            for r in results if r['applies'] == 'yes')
+    check('M2: no paraphrase in the whole table produces a wrong PLAN (%d paraphrase pairs)' % n, n and not wrong,
+          ['%s %s: %s wrong' % (r['id'], r['config'], r['paraphrases_wrong']) for r in wrong][:40])
 
 
 _types = {}

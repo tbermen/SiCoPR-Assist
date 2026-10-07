@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.2.0 (6 October 2026, not yet released)
+
+After the maintainer's first real use. Tested with SiCoPR 1.1.1 (commit `55c3f71`).
+
+- **A re-run with another channel file keeps the last run's config** (Decision 18). After a run,
+  `Re-run with data\thru_500mm.s4p`, `Re-run COM on <file> with the previous config` (or the same
+  config, or the last config) keep the working config of the last run with its overrides, and change
+  only that channel (new step `set_channel`). A parameter change in the same phrase is made as well.
+  `FEXT <file>` or `NEXT <file>` adds or replaces an aggressor. A bare file name that is not in the
+  project folder is looked for by its exact name in `data\` and beside the last run's THRU. A file
+  that does not exist stops and keeps the last setup; the file already in use is a STOP; with no run
+  yet the tool asks for a config. Before, every phrase naming a file went to the first-run path and
+  asked for a config in the folder. The channel's SHA-256 decides reuse as before: a new THRU is a
+  new run, and an earlier THRU with the same config is reused.
+- **A run shows what is happening** (Decision 17). While a plan is carried out the command line
+  prints a status line as each step starts (with the run id, and the point n of N in a batch), the
+  engine's own progress lines as they arrive, indented and unchanged, and each run's elapsed time and
+  headline COM. The same lines go to `run.log`. `--quiet` leaves out the engine's lines on the
+  screen. The lines come through a callback (`run.carry_out(..., progress=...)`) that a GUI can use.
+  The child now writes UTF-8, so characters such as the engine's multiplication sign reach the log
+  intact.
+- **Tests.** The table gains rows CH01 to CH08 (850 rows) and three prior states. The frozen L4 list
+  gains the six CH rows the normaliser reads and nothing else; CH04 and CH07 (STOP) go to the review
+  list. New checks: the CH gates (`--gate M1`, `--gate M2`), what the command line shows and logs
+  while a run goes (stand-in child), the runner's channel swap and reuse, and an end-to-end run and
+  re-run on a 300 mm THRU (`SICOPR_ASSIST_E2E=1`).
+
+Scoreboard (`SICOPR_ASSIST_FULL=1`), must rows outside the deferred groups: 2281 row and config
+pairs; L1 2281/2281, L2 1582/1582, L3 1617/1617, L4 1703/1707 pairs (579 of 580 rows; the miss is
+RS07, as in 0.1.0). The 14 must CH pairs pass every level that applies. Paraphrases: 3632, of which
+3480 understood, 152 asked, 0 wrong.
+
 ## 0.1.0 (6 October 2026, not yet released)
 
 The first version. Tested with SiCoPR 1.1.1 (commit `55c3f71`, recorded in `SICOPR_REF`).

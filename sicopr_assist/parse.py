@@ -13,12 +13,12 @@ read(phrase, names, blocks) returns a plain dictionary:
     sets        [{name | attempt, value, unit, block, block_attempt, side, op, part}]  one change each
     sweeps      [{name | attempt, start, end, count, step, unit, values, every, side}]  one swept name each
     packages    [{'value': [TX, RX] or [both], 'attempt': text}]                  "package X" and its forms
-    files       [{'text', 'ext'}]
+    files       [{'text', 'ext', 'role'}]   role: thru, fext or next when a role word comes right before it
     attempts    [{'text', 'words', 'value'}]   names that are not a known name, as typed
     unplaced    words that could not be placed
     corrected   {typed: read as} for the typo rule
     flags       set of plain markers: again, this_config, these_files, example, thru_only, crosstalk,
-                different, instead, all, diff, both
+                different, instead, all, diff, both, last_config
     pattern     a short text of how the phrase was read (goes to history)
 
 Nothing here reads a config or the engine: the caller passes the known names and block names.
@@ -70,6 +70,11 @@ RANGE_PARTS = {'step': 'step', 'minimum': 'start', 'min': 'start', 'start': 'sta
                'end': 'end'}
 CONFIG_EXT = ('.xlsx', '.xls', '.csv', '.json', '.mat')
 CHANNEL_EXT = re.compile(r'\.s\d+p$', re.I)
+# "the previous config" and its two other wordings mean the config of the last run (Decision 18). Only before
+# the word config: "previous" alone is not placed.
+LAST_CONFIG_WORDS = ('previous', 'same', 'last')
+# a word right before a channel file that says which channel it is (row CH08)
+CHANNEL_ROLES = {'thru': 'thru', 'fext': 'fext', 'next': 'next'}
 
 # Every word the reader can place: the typo rule reads a near miss of one of these as the word itself.
 KNOWN_WORDS = set(ACTION_WORDS) | FILLER | set(SIDES) | set(WORD_NUMBERS) | {
@@ -188,6 +193,7 @@ class _Reader:
         self.out = {'phrase': phrase, 'actions': [], 'sets': [], 'sweeps': [], 'packages': [], 'files': [],
                     'attempts': [], 'unplaced': [], 'corrected': {}, 'flags': [], 'edits': [], 'pattern': ''}
         self.marks = [None] * self.n               # what each token was read as
+        self.roles = {}                            # token index of a channel file: the role word before it
         self._mark_files()
         self._mark_names()
         self._mark_words()
@@ -318,7 +324,7 @@ class _Reader:
             elif m[0] in ('sep', 'eq'):
                 self.used[i] = True
             elif m[0] == 'file':
-                o['files'].append({'text': m[1], 'ext': _ext(m[1])})
+                o['files'].append({'text': m[1], 'ext': _ext(m[1]), 'role': self.roles.get(i)})
                 self.used[i] = True
         for i, m in enumerate(self.marks):
             if not self.used[i]:
@@ -343,6 +349,17 @@ class _Reader:
                 return k + 1
         if w in ('yes', 'ok', 'okay', 'sure'):
             self.flag('confirm')
+            self.take(i)
+            return i + 1
+        # the previous config, the same config, the last config: the config of the last run (Decision 18)
+        low = self.toks[i]['low']
+        if low in LAST_CONFIG_WORDS and self.word(i + 1) == 'config':
+            self.flag('last_config')
+            self.take(i, i + 1)
+            return i + 2
+        # a role word before a channel file: FEXT data\fext1.s4p (Decision 18, row CH08)
+        if low in CHANNEL_ROLES and self.kind(i + 1) == 'file' and CHANNEL_EXT.search(self.toks[i + 1]['low']):
+            self.roles[i + 1] = CHANNEL_ROLES[low]
             self.take(i)
             return i + 1
         # an edit of a pending sweep: use 16 steps (instead), use steps of 2e-6, use 5 points

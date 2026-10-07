@@ -69,14 +69,15 @@ there, then:
 cd C:\work\my_channel
 sicopr-assist "Run COM on data\thru.s4p with data\config.xlsx"
 sicopr-assist "Re-run with DER_0 = 1e-4"
+sicopr-assist "Re-run with data\thru_500mm.s4p"
 sicopr-assist "Sweep C_b from 0.1e-4 to 0.5e-4 in 2e-5 steps and run DER_0 at 1e-4 and 2e-4"
 sicopr-assist "What's my COM summary statistics for the last set of runs?"
 sicopr-assist                            # an interactive prompt; type quit to leave
 ```
 
 `python -m sicopr_assist "..."` does the same if the `sicopr-assist` script is not on your `PATH`.
-`--json` prints the outcome as JSON. When the answer is a QUESTION, the next phrase is read as the
-answer: an option number, the option's text, or `cancel`.
+`--json` prints the outcome as JSON. `--quiet` is described below. When the answer is a QUESTION, the
+next phrase is read as the answer: an option number, the option's text, or `cancel`.
 
 Some things to know:
 
@@ -92,6 +93,43 @@ Some things to know:
   not run again. More new runs than `max_new_runs` asks first.
 - Runs go one at a time, each in a child process. `Re-run the last one` replays the stored plan.
 
+### A re-run with another channel file
+
+After a run, a phrase that names a channel file and no config re-runs the last run with that file:
+the config of the last run is kept, with every override you made, and only that channel changes
+(step `set_channel`). These all mean the same:
+
+```powershell
+sicopr-assist "Re-run with data\thru_500mm.s4p"
+sicopr-assist "Re-run COM on data\thru_500mm.s4p with the previous config"
+sicopr-assist "Re-run with data\thru_500mm.s4p and DER_0 = 1e-4"      # the channel and one change
+sicopr-assist "Re-run with FEXT data\fext1.s4p"                        # adds or replaces a FEXT aggressor
+```
+
+- The file is taken as written, relative to the project folder. A file name with no folder that is
+  not in the project folder is looked for by that exact name in `data\` and in the folder of the
+  last run's THRU, and the plan says where it was found.
+- A file that does not exist stops, and the last setup is kept.
+- The file already in use, unchanged, is a STOP: the results would equal the last run.
+- With no run in the project yet there is no config to keep, so the tool asks for one. Name both
+  files instead: `Run COM on data\thru.s4p with data\config.xlsx`.
+- The channel file's SHA-256 is part of what decides reuse, so a new THRU is a new run, and going
+  back to an earlier THRU with the same config reuses that earlier run.
+
+### While a run is going
+
+COM can take several minutes per run. While a plan is carried out, the command line prints:
+
+- one status line as each step starts, such as `step 1 of 5: set_channel: THRU ... -> ...` or
+  `step 4 of 5: run_com: run_0002 started` (for a batch, `point 3 of 9` and the values);
+- the engine's own progress lines as they arrive, unchanged and indented by four spaces;
+- at the end of each run, its elapsed time and headline result, such as
+  `run_0002 finished in 4 min 12 s: COM 5.0123 dB`; then the run summary.
+
+The same lines go to `run.log` in the run's folder. `--quiet` leaves out the engine's lines on the
+screen and keeps the status lines; `run.log` still holds everything. The lines come from a callback
+of `run.carry_out(..., progress=...)`, so a GUI can show them the same way.
+
 ### What it writes
 
 Everything goes into `.sicopr\` in the project folder:
@@ -101,7 +139,7 @@ Everything goes into `.sicopr\` in the project folder:
 | `history.jsonl` | one record per phrase: how it was read, the options offered and chosen, and the plan |
 | `configs\run_NNNN.json` | the working config of run NNNN |
 | `configs\run_NNNN.csv` | the config SiCoPR read for run NNNN (the Reference Code's format) |
-| `runs\run_NNNN\` | that run's own results folder: SiCoPR's report, `run.log`, and `result.json` with every result field at full precision |
+| `runs\run_NNNN\` | that run's own results folder: SiCoPR's report, `run.log` (the lines shown while it ran), and `result.json` with every result field at full precision |
 | `runs\batch_summary.csv` | one row per point of every sweep or batch |
 | `assist.ini` | settings for this project (optional) |
 
@@ -135,10 +173,11 @@ about a phrase it did not understand, email `sicopr_assist.showman405@simplelogi
 
 ## How it is tested
 
-The behaviour is specified by a table of 842 use cases (`tests\cases\sicopr_use_cases.csv`), written
-and checked against SiCoPR before any code. Each row gives a phrase, the state of the project before
-it, and the expected outcome. The harness runs every row on each starting workbook it applies to
-(2403 row and config pairs) and scores four levels:
+The behaviour is specified by a table of 850 use cases (`tests\cases\sicopr_use_cases.csv`), written
+and checked against SiCoPR before any code; rows CH01 to CH08 were added on 6 October 2026, after the
+maintainer's first use. Each row gives a phrase, the state of the project before it, and the expected
+outcome. The harness runs every row on each starting workbook it applies to (2419 row and config
+pairs) and scores four levels:
 
 | level | what is compared |
 |---|---|
@@ -162,7 +201,7 @@ at the first failure. It takes 15 minutes or more, most of it in `test_use_cases
 | `SICOPR_REPO` | the SiCoPR checkout to use |
 | `SICOPR_ASSIST_FULL=1` | L3 on every pair (default: Case1 and the twelve variants only) |
 | `SICOPR_ASSIST_HIDE_CONFIGS=1` | hide the four workbooks: tests that need them print `SKIP:` and exit 0 |
-| `SICOPR_ASSIST_E2E=1` | also run one real COM case end to end on a synthetic THRU (about 4 minutes) |
+| `SICOPR_ASSIST_E2E=1` | also run real COM end to end on synthetic THRU files: one case with eight changes, then a run and a re-run with a THRU of another length (three runs, about 4 minutes each) |
 | `SICOPR_ASSIST_INPUTS` | where the harness writes `score_use_cases.csv` (default: the temporary folder) |
 
 `python tests\test_use_cases.py --gate G7` prints the scoreboard by group and level. The final build
@@ -188,7 +227,10 @@ instead.
 
 - The use-case table was written against four 802.3dj KR workbooks and twelve variants of one of
   them. Other sheet families are untested.
-- 216 of the 842 rows have an expected detail that is a sentence, not a list of steps or options.
+- A re-run with another channel file replaces one THRU, or one FEXT or NEXT file. When the last run
+  had several FEXT (or NEXT) files, naming one of them stops and asks for the whole set with its
+  config.
+- 218 of the 850 rows have an expected detail that is a sentence, not a list of steps or options.
   They are scored at L1 (and L2 and L3 where those apply) and listed for a person to review.
 - Four behaviours are assumptions not yet confirmed by the maintainer: matching a typo in an action
   or filler word (`agian` read as `again`, never for a parameter name); the trouble thresholds of

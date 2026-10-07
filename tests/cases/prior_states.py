@@ -390,6 +390,17 @@ def thru_replaced(ctx):
         fixtures.make_s4p().write(ctx.data('thru.s4p'), 300.0)
 
 
+THRU2_MM = 300.0                                    # data\thru2.s4p: a THRU of another length than the 400 mm one
+
+
+def second_thru(ctx):
+    fixtures.link_or_copy(ctx.fx.thru_of(THRU2_MM), ctx.data('thru2.s4p'))
+
+
+def fext_file(ctx):
+    fixtures.link_or_copy(ctx.fx.thru, ctx.data('fext1.s4p'))
+
+
 def crosstalk_run(ctx):
     for n in ('fext_1.s4p', 'next_1.s4p'):
         fixtures.link_or_copy(ctx.fx.thru, ctx.data(n))
@@ -656,6 +667,13 @@ BUILDERS = {
                              [{'N_b': 0}, {'N_b': 1}, {'N_b': 2}], skipped=[{'N_b': 0}], reuse_first=True),
     'F1 complete: every channel run thru-only and with crosstalk': f1_complete,
     'none; both files exist; the config has no f_z row': no_f_z_row,
+    # after the maintainer's first use (6 October): a second THRU, or a FEXT file, beside a finished run
+    r'run complete with the starting config and data\thru.s4p; data\thru2.s4p also exists':
+        lambda c: (seed_run(c), second_thru(c)),
+    r'run complete with one active override: DER_0 = 1e-4; data\thru2.s4p also exists':
+        lambda c: (seed_run(c), seed_override_run(c, {'DER_0': 1e-4}), second_thru(c)),
+    r'run complete with the starting config and data\thru.s4p; data\fext1.s4p also exists':
+        lambda c: (seed_run(c), fext_file(c)),
 }
 
 

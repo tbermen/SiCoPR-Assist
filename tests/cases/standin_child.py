@@ -23,6 +23,8 @@ sys.path.insert(0, ROOT)
 from sicopr_assist import engine  # noqa: E402
 from sicopr_assist.project import result_record  # noqa: E402
 
+PROGRESS = ('stand-in: reading the run CSV', 'stand-in: CTLE 1/3  best_FOM=-inf dB', 'stand-in: CTLE 3/3  done')
+
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
@@ -34,6 +36,8 @@ def main(argv=None):
     ap.add_argument('--fingerprint')
     ap.add_argument('--note', action='append', default=[])
     a = ap.parse_args(argv)
+    for line in PROGRESS:                        # progress lines, as the engine prints while it runs (Decision 17)
+        print(line, flush=True)
     with open(a.config, encoding='utf-8') as f:
         text = ''.join(line for line in f if not line.lower().startswith('result_dir,'))
     k = int(hashlib.sha256(text.encode('utf-8')).hexdigest()[:8], 16)

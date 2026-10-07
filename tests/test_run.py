@@ -6,6 +6,9 @@
 G6.2   statistics and the Pearson coefficient against independent values (statistics module), three seeded sets
 G6.3   reuse by fingerprint, with a stand-in child (tests\\cases\\standin_child.py) that runs no COM
 G6.4   end to end through the real engine, only when SICOPR_ASSIST_E2E=1 (otherwise SKIP)
+M3     what the command line shows while a plan runs, and run.log (Decision 17), with the stand-in child
+D18    a re-run with another channel file keeps the config and is a new run; the same file again is reused
+M4     end to end: Case1 on the 400 mm THRU, then a re-run on a 300 mm THRU, only when SICOPR_ASSIST_E2E=1
 and the checks of Phase 6: what a run leaves behind (rows CP01, CP09, CP10), validate_inputs (rows R7, R8,
 rule EN09), the run summary (row D4, rule VR02), not-a-number results (finding F10), Decision 13 (the command
 line prints what functions return), and the LLM rule (only a plan the core made and recorded is carried out;
@@ -383,7 +386,7 @@ def g64(fx):
         [c for c in out['changes'] if c['kind'] == 'set']) == 8, out.get('reason') or out.get('question'))
     t0 = time.time()
     lines = []
-    done = run.carry_out(p, out, echo=lines.append)
+    done = run.carry_out(p, out, progress=lambda kind, text: lines.append(text))
     took = time.time() - t0
     rid = done['run_ids'][0] if done['run_ids'] else None
     res = p.read_result(rid) if rid else {}
@@ -402,6 +405,168 @@ def g64(fx):
         print('  ' + line)
 
 
+# ----------------------------------------------------------------------------- after first use (6 October)
+THRU2_MM = 300.0                                 # the second synthetic THRU: another length than the 400 mm one
+
+
+def progress_part(printed, outcome, done):
+    """The lines cli.py printed while the plan was carried out: after the PLAN listing, before the plan's lines."""
+    k0 = printed.index('PLAN:') + 1 + len(outcome['steps'])
+    k1 = len(printed) - len(done['lines'])
+    return printed[k0:k1], printed[k1:]
+
+
+def decision17(fx):
+    """Gate M3: with the stand-in child printing progress lines, cli.py shows a status line for each step, every
+    child line in order and before the result, and the elapsed time; --quiet drops the child lines only; run.log
+    holds the same lines."""
+    import re
+    import standin_child
+    p = Project(fx.project('Case1'))
+    buf = io.StringIO()
+    outcome, done = cli.handle_and_run(r'Run COM on data\thru.s4p with data\config.xlsx', p, out=buf, child=STANDIN)
+    printed = buf.getvalue().splitlines()
+    shown, after = progress_part(printed, outcome, done)
+    ops = [s['op'] for s in outcome['steps']]
+    at = [next((i for i, line in enumerate(shown) if line.startswith('step %d of %d: %s' % (k + 1, len(ops), op))), None)
+          for k, op in enumerate(ops)]
+    check('M3: a status line for each step, in the order of the plan (%s)' % ' > '.join(ops),
+          None not in at and at == sorted(at), shown[:8])
+    check('M3: the status line of run_com names the run id', any(re.match(r'step \d+ of \d+: run_com: run_0001 started$', x)
+                                                                 for x in shown), shown[:8])
+    child = [x[len(run.ENGINE_INDENT):] for x in shown if x.startswith(run.ENGINE_INDENT)]
+    check('M3: every child line is shown, indented and unchanged, in order',
+          child[:len(standin_child.PROGRESS)] == list(standin_child.PROGRESS) and len(child) == len(standin_child.PROGRESS) + 1
+          and child[-1].startswith('--- case 1: channel_operating_margin_dB'), child)
+    end = [i for i, x in enumerate(shown) if re.match(r'run_0001 finished in \d+ s: COM -?[\d.]+ dB$', x)]
+    last_child = max((i for i, x in enumerate(shown) if x.startswith(run.ENGINE_INDENT)), default=-1)
+    check('M3: the run ends with its elapsed time and the headline result, after every child line',
+          len(end) == 1 and end[0] > last_child, shown)
+    check('M3: the child lines come before the result: the summary follows the progress lines',
+          after == done['lines'] and done['lines'] and last_child >= 0
+          and printed.index(done['lines'][0]) > printed.index(shown[last_child]), after[:4])
+    with open(os.path.join(p.run_dir('run_0001'), 'run.log'), encoding='utf-8') as f:
+        log = f.read().splitlines()
+    check('M3: run.log holds the same lines as were shown, in the same form', log == shown,
+          '%d logged, %d shown' % (len(log), len(shown)))
+    buf = io.StringIO()
+    outcome, done = cli.handle_and_run('Re-run with DER_0 = 1e-4.', p, out=buf, quiet=True, child=STANDIN)
+    printed = buf.getvalue().splitlines()
+    shown, _ = progress_part(printed, outcome, done)
+    with open(os.path.join(p.run_dir('run_0002'), 'run.log'), encoding='utf-8') as f:
+        log = f.read().splitlines()
+    check('M3: --quiet drops the child lines, and only them',
+          not any(x.startswith(run.ENGINE_INDENT) for x in shown) and shown == [x for x in log if not x.startswith(
+              run.ENGINE_INDENT)] and any(x.startswith('step ') for x in shown)
+          and any(re.match(r'run_0002 finished in \d+ s: COM', x) for x in shown), shown)
+    check('M3: with --quiet, run.log still holds the child lines',
+          [x[len(run.ENGINE_INDENT):] for x in log if x.startswith(run.ENGINE_INDENT)][:3] == list(standin_child.PROGRESS),
+          log[:8])
+    got = []
+    out = core.handle('Re-run with DER_0 = 2e-5.', p)
+    run.carry_out(p, out, child=STANDIN, progress=lambda kind, text: got.append((kind, text)))
+    check('M3: the runner hands each line to a callback as (kind, text), for a GUI as for cli.py',
+          {k for k, _ in got} == {'status', 'engine'} and [t for k, t in got if k == 'engine'][:3]
+          == list(standin_child.PROGRESS), got[:4])
+    env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1', SICOPR_ASSIST_HOME=fx.home,
+               PYTHONPATH=fixtures.ROOT + os.pathsep + os.environ.get('PYTHONPATH', ''))
+    import subprocess
+    r = subprocess.run([sys.executable, '-m', 'sicopr_assist', '--quiet', 'anything'], cwd=fx.project('Case1'),
+                       capture_output=True, text=True, env=env)
+    check('M3: the command line takes --quiet', r.returncode == 0 and r.stdout.startswith('STOP: '), r.stderr[-300:])
+
+
+def decision18_runs(fx):
+    """Decision 18 in the runner: a re-run with another THRU keeps the config and overrides of the last run and
+    is a new run (the channel's SHA-256 is in the fingerprint); the same THRU again is reused."""
+    p = Project(fx.project('Case1'))
+    fixtures.link_or_copy(fx.thru_of(THRU2_MM), os.path.join(p.root, 'data', 'thru2.s4p'))
+    do(p, r'Run COM on data\thru.s4p with data\config.xlsx')
+    do(p, 'Re-run with DER_0 = 1e-4.')
+    out, done = do(p, r'Re-run with data\thru2.s4p.')
+    check('D18: the re-run with data\\thru2.s4p is a PLAN that starts with set_channel and imports nothing',
+          out['type'] == 'PLAN' and out['steps'][0]['op'] == 'set_channel'
+          and 'import_config' not in [s['op'] for s in out['steps']], out.get('reason') or out.get('question'))
+    check('D18: a new THRU makes a new run', done['run_ids'] == ['run_0003'] and p.run_numbers() == [1, 2, 3],
+          (done['run_ids'], p.run_numbers()))
+    a = p.read_working_config('run_0002')
+    b = p.read_working_config('run_0003') if os.path.exists(p.working_config_path('run_0003')) else \
+        {'main': {}, 'packages': None}
+    key = next(k for k in a['main'] if k.strip().lower() == 'result_dir')
+    check('D18: the run keeps the working config of the last run, its override included (only RESULT_DIR differs)',
+          dict(a['main'], **{key: None}) == dict(b['main'], **{key: None}) and a['packages'] == b['packages']
+          and b['main'].get('DER_0') == 1e-4, b['main'].get('DER_0'))
+    rec = p.read_history()[-1]
+    res = p.read_result('run_0003') if os.path.exists(p.result_path('run_0003')) else {}
+    want = sha(os.path.join(p.root, 'data', 'thru2.s4p'))
+    check('D18: the history and the result name the new THRU with its SHA-256, and keep the override',
+          [c['sha256'] for c in rec['channels']] == [want] and [c['sha256'] for c in res.get('channels') or []] == [want]
+          and [o['json_path'] for o in rec['overrides']] == ['/main/DER_0'], (rec['channels'], rec['overrides']))
+    out, done = do(p, r'Re-run with data\thru.s4p.')
+    check('D18: back to data\\thru.s4p with the same config is reused from run_0002, not run again',
+          out['type'] == 'PLAN' and done['run_ids'] == ['run_0002'] and p.run_numbers() == [1, 2, 3],
+          (out.get('reason'), done['run_ids'], p.run_numbers()))
+    out = core.handle(r'Re-run with data\thru.s4p.', p)
+    check('D18 (CH07): the THRU already in use is a STOP, and nothing runs', out['type'] == 'STOP', out.get('steps'))
+    fixtures.link_or_copy(fx.thru, os.path.join(p.root, 'data', 'fext1.s4p'))
+    out, done = do(p, r'Re-run with FEXT data\fext1.s4p.')
+    res = p.read_result(done['run_ids'][0]) if done['run_ids'] else {}
+    check('D18 (CH08): a FEXT file is added to the run as a FEXT aggressor',
+          [c['role'] for c in res.get('channels') or []] == ['thru', 'fext'], res.get('channels'))
+    # the maintainer's phrase 5: a channel named by its file name alone, in the folder of the last THRU
+    q = Project(fx.project('Case1'))
+    ch = os.path.join(q.root, 'ch', 'set1')
+    fixtures.link_or_copy(fx.thru, os.path.join(ch, 'a_thru1.s4p'))
+    fixtures.link_or_copy(fx.thru_of(THRU2_MM), os.path.join(ch, 'b_thru1.s4p'))
+    do(q, r'Run COM on ch\set1\a_thru1.s4p with data\config.xlsx')
+    out = core.handle('Re-run with b_thru1.s4p', q)
+    sw = [s['args'] for s in out['steps'] if s['op'] == 'set_channel']
+    check('D18: a bare file name is found by that exact name beside the THRU of the last run',
+          out['type'] == 'PLAN' and len(sw) == 1 and sw[0]['after'] == os.path.join('ch', 'set1', 'b_thru1.s4p'), sw)
+    out = core.handle('Re-run with c_thru1.s4p', q)
+    check('D18: a bare file name that is nowhere there stops and keeps the last setup', out['type'] == 'STOP'
+          and 'does not exist' in out['reason'], out.get('reason'))
+
+
+def m4(fx):
+    """Gate M4: end to end, Case1 on the synthetic 400 mm THRU, then Re-run with a second synthetic THRU of another
+    length: the second run keeps the config, makes a new run, and its COM differs from the first."""
+    if os.environ.get('SICOPR_ASSIST_E2E', '') != '1':
+        print('SKIP: M4 end to end runs only with SICOPR_ASSIST_E2E=1 (two real COM runs, about 4 minutes each)')
+        return
+    p = Project(fx.project('Case1'))
+    fixtures.link_or_copy(fx.thru_of(THRU2_MM), os.path.join(p.root, 'data', 'thru2.s4p'))
+    buf = io.StringIO()
+    t0 = time.time()
+    o1, d1 = cli.handle_and_run(r'Run COM on data\thru.s4p with data\config.xlsx', p, out=buf)
+    took1 = time.time() - t0
+    buf = io.StringIO()
+    t0 = time.time()
+    o2, d2 = cli.handle_and_run(r'Re-run with data\thru2.s4p.', p, out=buf)
+    took2 = time.time() - t0
+    printed = buf.getvalue().splitlines()
+    com = []
+    for d in (d1, d2):
+        rid = (d or {}).get('run_ids', [None])[0] if d and d.get('run_ids') else None
+        com.append(((p.read_result(rid).get('cases') or [{}])[0].get(summary.COM_FIELD)) if rid else None)
+    check('M4: the first run completes (run_0001, COM %r dB, %.0f s)' % (com[0], took1),
+          d1 and d1['run_ids'] == ['run_0001'] and isinstance(com[0], float))
+    check('M4: Re-run with data\\thru2.s4p is a PLAN that keeps the config: set_channel, no import_config',
+          o2['type'] == 'PLAN' and [s['op'] for s in o2['steps']][:1] == ['set_channel']
+          and 'import_config' not in [s['op'] for s in o2['steps']], o2.get('reason') or o2.get('question'))
+    a, b = p.read_working_config('run_0001'), p.read_working_config('run_0002') if d2 and d2['run_ids'] else None
+    key = next(k for k in a['main'] if k.strip().lower() == 'result_dir')
+    check('M4: the second run is new (run_0002) and keeps the config (only RESULT_DIR differs)',
+          d2 and d2['run_ids'] == ['run_0002'] and b is not None
+          and dict(a['main'], **{key: None}) == dict(b['main'], **{key: None}) and a['packages'] == b['packages'])
+    check('M4: its COM differs from the first (%r against %r dB, %.0f s)' % (com[1], com[0], took2),
+          isinstance(com[1], float) and com[1] != com[0])
+    print('M4 RESULT: COM %r dB on the 400 mm THRU, %r dB on the %g mm THRU' % (com[0], com[1], THRU2_MM))
+    print('M4 what the command line printed for the re-run (%d lines; the first 16 and the last 12):' % len(printed))
+    for line in printed[:16] + ['    ...'] + printed[-12:]:
+        print('| ' + line)
+
+
 def main():
     g62_pure()
     if not fixtures.find_starting_configs():
@@ -414,7 +579,10 @@ def main():
         inputs(fx)
         llm_rule(fx)
         decision13(fx)
+        decision17(fx)
+        decision18_runs(fx)
         g64(fx)
+        m4(fx)
     finish()
 
 

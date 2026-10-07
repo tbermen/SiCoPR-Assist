@@ -157,6 +157,14 @@ class Fixtures:
     def available(self):
         return bool(self.configs)
 
+    def thru_of(self, length_mm):
+        """A synthetic THRU of another length (make_s4p.py), made once and kept with the fixtures."""
+        path = os.path.join(self.base, 'thru_%gmm.s4p' % length_mm)
+        if not os.path.exists(path):
+            with contextlib.redirect_stdout(io.StringIO()):
+                make_s4p().write(path, length_mm)
+        return path
+
     # ---- variants
     def build_variants(self, outdir=None):
         """V01 to V12 from Case1, with gen_use_cases.py --variants run as its own process."""

@@ -632,3 +632,9 @@ SC09,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,set_param > validate_conf
 SC11,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,add_param > validate_config > run_com > summarize
 SC13,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,add_param > validate_config > run_com > summarize
 SC14,Case1; Case2; Case3; Case4,schema,must,PLAN,chain,add_param > validate_config > run_com > summarize
+CH01,Case1; Case3,change,must,PLAN,chain,set_channel > validate_inputs > validate_config > run_com > summarize
+CH02,Case1; Case3,change,must,PLAN,chain,set_channel > validate_inputs > validate_config > run_com > summarize
+CH03,Case1; Case3,change,must,PLAN,chain,set_channel > validate_inputs > validate_config > run_com > summarize
+CH05,Case1; Case3,change,must,QUESTION,options,the example setup | provide files
+CH06,Case1; Case3,change,must,PLAN,chain,set_channel > set_param > validate_inputs > validate_config > run_com > summarize
+CH08,Case1; Case3,change,stretch,PLAN,chain,set_channel > validate_inputs > validate_config > run_com > summarize
