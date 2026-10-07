@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.0 (7 October 2026, not yet released)
+
+After the maintainer's second session. Tested with SiCoPR 1.1.1 (commit `55c3f71`).
+
+- **Adding crosstalk** (Decision 19). After a thru-only run, `Re-run with crosstalk.`,
+  `Add xtalk files and re-run.` and the like keep the config, the overrides and the THRU of the last
+  run, and take the FEXT and NEXT files that belong to the THRU: every FEXT and NEXT file in its
+  folder when it is the only THRU there, otherwise the ones whose names equal the THRU's once the role
+  words are removed. One `set_channel` step carries them; the engine gets FEXT then NEXT, each sorted
+  by name, with their counts. The plan lists every file and the rule that took it. Nothing found, or
+  no name that matches, asks for the files; the crosstalk already in use is a STOP.
+- **No word is dropped.** A known word that means something only inside a clause (crosstalk,
+  package, tx, three, back and the like) was placed silently when no clause took it, so
+  `Add xtalk files and re-run.` replayed the last command, a wrong PLAN. Such a word is now unplaced
+  and asked about. `Add widget files and re-run.` asks too, and nothing runs.
+- **The summary of the last run summarises.** `the last run` and `the previous run` are a run already
+  made, not a request to run, so `Give me the results summary of the last run.` shows the summary and
+  runs nothing.
+- **Thru only after a crosstalk run** replays the last run with its THRU alone. Before, it asked a
+  question that said the last run had no crosstalk files, and the replay ignored the choice.
+- **Tests.** The table gains rows XT01 to XT06 and SM16 (857 rows) and four prior states. The frozen L4
+  list gains XT01, XT02, XT03, XT05, XT06 and SM16 and nothing else; XT04 (STOP) goes to the review
+  list. New: `tests\test_crosstalk.py` (the matching rule on five naming styles, the arguments the
+  runner gives the engine, and a check that no word vanishes in any of several phrase shapes, on the
+  reader and on the core), and `--gate N1`, `--gate N2` in the harness.
+
 ## 0.2.0 (6 October 2026, not yet released)
 
 After the maintainer's first real use. Tested with SiCoPR 1.1.1 (commit `55c3f71`).

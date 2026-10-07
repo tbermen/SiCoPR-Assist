@@ -407,6 +407,52 @@ def crosstalk_run(ctx):
     seed_run(ctx, channels=[('data\\thru.s4p', 'thru'), ('data\\fext_1.s4p', 'fext'), ('data\\next_1.s4p', 'next')])
 
 
+# after the maintainer's second session (7 October): THRUs with crosstalk files named after them (Decision 19).
+# Every file is a hard link to the synthetic THRU: the tests read the names and never run COM on them.
+XT_FEXT = ['b300_xtalk1_Fext.s4p', 'b300_xtalk2_Fext.s4p', 'b300_xtalk3_Fext.s4p']
+XT_NEXT = ['b300_xtalk4_Next.s4p', 'b300_xtalk5_Next.s4p', 'b300_xtalk6_Next.s4p', 'b300_xtalk7_Next.s4p']
+
+
+def _channel_folder(ctx, folder, names):
+    for n in names:
+        fixtures.link_or_copy(ctx.fx.thru, ctx.data(os.path.join(folder, n)))
+
+
+def xtalk_folder(ctx, folder='ch'):
+    """data\\ch: two THRUs, each with three FEXT and four NEXT files named after it."""
+    names = []
+    for stem in ('b300', 'b500'):
+        names += [n.replace('b300', stem) for n in ['b300_thru1.s4p'] + XT_FEXT + XT_NEXT]
+    _channel_folder(ctx, folder, names)
+
+
+def xtalk_thru_only(ctx):
+    xtalk_folder(ctx)
+    seed_run(ctx, phrase='Run COM on data\\ch\\b300_thru1.s4p with data\\config.xlsx',
+             channels=[('data\\ch\\b300_thru1.s4p', 'thru')])
+
+
+def xtalk_done(ctx):
+    xtalk_folder(ctx)
+    seed_run(ctx, phrase='Re-run with crosstalk.',
+             channels=[('data\\ch\\b300_thru1.s4p', 'thru')] + [('data\\ch\\' + n, 'fext') for n in XT_FEXT]
+             + [('data\\ch\\' + n, 'next') for n in XT_NEXT])
+
+
+def xtalk_one_thru(ctx):
+    _channel_folder(ctx, 'ch1', ['x_thru_Tx7_to_Rx7.s4p', 'x_FEXT_Tx5_to_Rx7.s4p', 'x_FEXT_Tx6_to_Rx7.s4p',
+                                 'x_FEXT_Tx8_to_Rx7.s4p', 'x_NEXT_Tx7_to_Rx7.s4p', 'x_NEXT_Tx8_to_Tx7.s4p'])
+    seed_run(ctx, phrase='Run COM on data\\ch1\\x_thru_Tx7_to_Rx7.s4p with data\\config.xlsx',
+             channels=[('data\\ch1\\x_thru_Tx7_to_Rx7.s4p', 'thru')])
+
+
+def xtalk_no_match(ctx):
+    _channel_folder(ctx, 'ch2', ['b300_thru1.s4p', 'b500_thru1.s4p', 'c700_xtalk1_Fext.s4p', 'c700_xtalk2_Fext.s4p',
+                                 'c700_xtalk4_Next.s4p'])
+    seed_run(ctx, phrase='Run COM on data\\ch2\\b300_thru1.s4p with data\\config.xlsx',
+             channels=[('data\\ch2\\b300_thru1.s4p', 'thru')])
+
+
 def config_edited_in_excel(ctx):
     edit_workbook(ctx.fx.configs[ctx.label], ctx.data('config.xlsx'), edits={'SNR_TX': 34})
 
@@ -674,6 +720,17 @@ BUILDERS = {
         lambda c: (seed_run(c), seed_override_run(c, {'DER_0': 1e-4}), second_thru(c)),
     r'run complete with the starting config and data\thru.s4p; data\fext1.s4p also exists':
         lambda c: (seed_run(c), fext_file(c)),
+    # after the maintainer's second session (7 October): adding crosstalk (Decision 19)
+    r'run complete thru-only with the starting config and data\ch\b300_thru1.s4p; data\ch holds two THRUs, '
+    r'b300_thru1.s4p and b500_thru1.s4p, each with three FEXT (b300_xtalk1_Fext.s4p to b300_xtalk3_Fext.s4p) and '
+    r'four NEXT files (b300_xtalk4_Next.s4p to b300_xtalk7_Next.s4p) named after it': xtalk_thru_only,
+    r'run complete with the starting config, data\ch\b300_thru1.s4p and its three FEXT and four NEXT files; data\ch '
+    r'as in the thru-only state': xtalk_done,
+    r'run complete thru-only with the starting config and data\ch1\x_thru_Tx7_to_Rx7.s4p; data\ch1 holds that one '
+    r'THRU, three FEXT files (x_FEXT_Tx5_to_Rx7.s4p, x_FEXT_Tx6_to_Rx7.s4p, x_FEXT_Tx8_to_Rx7.s4p) and two NEXT '
+    r'files (x_NEXT_Tx7_to_Rx7.s4p, x_NEXT_Tx8_to_Tx7.s4p)': xtalk_one_thru,
+    r'run complete thru-only with the starting config and data\ch2\b300_thru1.s4p; data\ch2 holds two THRUs, '
+    r'b300_thru1.s4p and b500_thru1.s4p, and FEXT and NEXT files whose names match neither': xtalk_no_match,
 }
 
 

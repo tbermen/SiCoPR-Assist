@@ -6,7 +6,8 @@ reuse and run-folder checks (gate G6.3) run no COM.
 
 The numbers are made up but fixed by the run CSV (without its RESULT_DIR row), so the same config gives the
 same numbers. The release is the one the config loads to (param.matlab_version), as the engine reports it.
-SICOPR_ASSIST_STANDIN_NAN=1 makes COM not a number.
+SICOPR_ASSIST_STANDIN_NAN=1 makes COM not a number. SICOPR_ASSIST_STANDIN_ARGV=<file> appends the arguments, as
+one JSON list per run, to that file.
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
@@ -36,6 +37,10 @@ def main(argv=None):
     ap.add_argument('--fingerprint')
     ap.add_argument('--note', action='append', default=[])
     a = ap.parse_args(argv)
+    keep = os.environ.get('SICOPR_ASSIST_STANDIN_ARGV')
+    if keep:                                     # a test reads back the arguments the runner gave (gate N3)
+        with open(keep, 'a', encoding='utf-8') as f:
+            f.write(json.dumps(sys.argv[1:] if argv is None else list(argv)) + '\n')
     for line in PROGRESS:                        # progress lines, as the engine prints while it runs (Decision 17)
         print(line, flush=True)
     with open(a.config, encoding='utf-8') as f:

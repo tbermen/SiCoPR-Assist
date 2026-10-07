@@ -245,6 +245,10 @@ def _step_detail(op, a):
                                  validate.show(a.get('after')))
     if op == 'recompute_linked':
         return ', '.join(validate.name_of(c['json_path']) for c in a.get('changes') or [])
+    if op == 'set_channel' and a.get('role') == 'crosstalk':
+        return 'FEXT: %s -> %d files; NEXT: %s -> %d files' % (
+            'none' if not a.get('before') else 'replaced', len(a.get('fext') or []),
+            'none' if not a.get('before') else 'replaced', len(a.get('next') or []))
     if op == 'set_channel':
         return '%s: %s -> %s' % ((a.get('role') or 'thru').upper(), a.get('before') or 'none', a['after'])
     if op == 'clear_overrides':
@@ -259,6 +263,9 @@ def _step_detail(op, a):
 def _apply_channel(channels, a):
     """[(path, role)] after one set_channel step (Decision 18): the THRU is replaced; an aggressor replaces the
     one it names, or is added. Applying the same step twice changes nothing, so a replayed plan is safe."""
+    if a.get('role') == 'crosstalk':             # Decision 19: the THRU is kept and the aggressors are replaced
+        thru = [(p, r) for p, r in channels if r == 'thru'][:1]
+        return thru + [(p, 'fext') for p in a.get('fext') or []] + [(p, 'next') for p in a.get('next') or []]
     role, after, before = a.get('role') or 'thru', a['after'], a.get('before')
     out = list(channels)
     if (after, role) in out:

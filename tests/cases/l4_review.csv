@@ -210,3 +210,4 @@ SC12,Case1; Case2; Case3; Case4,schema,must,QUESTION,review,"options described, 
 SC15,Case1; Case2; Case3; Case4,schema,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 CH04,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 CH07,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+XT04,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person

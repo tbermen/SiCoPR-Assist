@@ -30,8 +30,9 @@ def main():
     for r in rows:
         by_id.setdefault(r['id'], []).append(r)
     states = prior_states.strings()
-    # 91 from the table of 6 October, and 3 added after the maintainer's first use (rows CH01 to CH08)
-    check('the prior-state file lists 94 strings', len(states) == 94 and len(set(states)) == 94, len(states))
+    # 91 from the table of 6 October, 3 added after the maintainer's first use (rows CH01 to CH08), and 4 after his
+    # second session (rows XT01 to XT06)
+    check('the prior-state file lists 98 strings', len(states) == 98 and len(set(states)) == 98, len(states))
     in_table = {r['prior_state'] for r in rows}
     check('every prior_state in the table is in the prior-state file', in_table <= set(states),
           sorted(in_table - set(states))[:5])

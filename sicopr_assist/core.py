@@ -582,6 +582,17 @@ def _plan_v1(text, req, ctx, mods, base):
     if 'compare' in acts and req['files']:
         return _compare(req, ctx, base)
 
+    # the crosstalk files of the THRU in use: the config, the overrides and the THRU of the last run are kept
+    # (Decision 19, rows XT01 to XT05)
+    if 'crosstalk' in req['flags']:
+        if req['files'] or req['sweeps'] or {'example', 'these_files', 'this_config'} & set(req['flags']):
+            return _ask('Crosstalk is added to the THRU of the last run, and this phrase also names files or a sweep, so '
+                        'nothing runs. Add the crosstalk on its own (Re-run with crosstalk), or name each file with its '
+                        'role (Re-run with FEXT <file> and NEXT <file>).', [CANCEL], {CANCEL: None}, **base)
+        if ctx.last is None:
+            return _no_history(ctx, base)
+        return _add_crosstalk(req, ctx, mods, base)
+
     # a channel file named without a config: after a run, only that channel changes and the config of the last
     # run is kept (Decision 18); with no run yet, a re-run of it asks for a config, as row S3 does (row CH05)
     named = [f for f in req['files'] if f['ext'] == 'channel']
@@ -611,6 +622,8 @@ def _plan_v1(text, req, ctx, mods, base):
             return _no_history(ctx, base)
         if wc is not None:
             return _change(req, ctx, mods, base, wc)
+    if 'thru_only' in req['flags'] and wc is not None and any(r in ('fext', 'next') for _, _, r in ctx.channels()):
+        return _replay(req, ctx, base, thru_only=True)        # the last run had crosstalk: run its THRU alone
     if 'thru_only' in req['flags'] and wc is not None:
         return _ask('The last run had no crosstalk files, so a run without crosstalk would be the same run. Run it '
                     'thru-only anyway?', ['run thru-only', CANCEL],
@@ -647,8 +660,11 @@ def _is_results_request(req, text):
         return False
     if any(s.get('value') is not None for s in req['sets']):
         return False
-    return 'summary' in acts or bool(_RESULT_LIST.search(low) or _RESULT_PAIR.search(low)
-                                     or re.search(r'\bwhat were the results\b', low))
+    # "the results of the last run", "what did the last run give": the last run is a run already made (row SM16)
+    last_run = 'last_run' in req['flags'] and 'again' not in req['flags'] and \
+        bool(re.search(r'\b(results?|give|gave|summary)\b', low))
+    return 'summary' in acts or last_run or bool(_RESULT_LIST.search(low) or _RESULT_PAIR.search(low)
+                                                 or re.search(r'\bwhat were the results\b', low))
 
 
 def _results(req, text, ctx, mods, base):
@@ -1937,6 +1953,25 @@ def _channel_swap(req, ctx, mods, base):
         role, path = same[0]
         return _stop('%s is already the %s of the last run (%s): nothing changed, so the results would equal the last '
                      'run. Nothing runs.' % (path, role.upper(), rid), **base)
+    roles = list(dict.fromkeys(s['args']['role'].upper() for s in swaps))
+    lines = ['the config of the last run (%s) is kept, and only the %s changes%s'
+             % (rid, _and(roles) if roles else 'parameter named',
+                ', with the parameter change below' if swaps and has_change else '')]
+    for s in swaps:
+        a = s['args']
+        lines.append('%s: %s -> %s' % (a['role'].upper(), a['before'] or 'none', a['after']))
+        if a['role'] != 'thru':
+            n = len([1 for _, r in new if r == a['role']])
+            lines.append('the run now has %d %s aggressor%s' % (n, a['role'].upper(), '' if n == 1 else 's'))
+    lines += ['%s is already the %s of the last run, so it is unchanged' % (p, r.upper()) for r, p in same]
+    return _swap_plan(req, ctx, mods, base, wc, swaps, new, lines + notes)
+
+
+def _swap_plan(req, ctx, mods, base, wc, swaps, new, lines):
+    """The PLAN of a re-run with other channels and the config of the last run: the set_channel steps, a change of a
+    parameter in the same phrase planned as a re-run would plan it (row CH06), then validate_inputs on the new
+    channels [(path, role)], validate_config, run_com and summarize. lines open the announcement."""
+    has_change = bool(req['sets'] or req['packages'] or req['attempts'])
     if not has_change and req['unplaced'] and not mods.get('ignore_unplaced'):
         return _unplaced_only(req, base)
     changes, pre, more = [], [], _context_lines(ctx, [], wc)
@@ -1950,25 +1985,117 @@ def _channel_swap(req, ctx, mods, base):
         more = list(sub['announce'])
         final = config_model.apply_changes(wc, [(c['json_path'], c['after']) for c in changes
                                                 if c['kind'] in ('set', 'add')])['config']
-    roles = list(dict.fromkeys(s['args']['role'].upper() for s in swaps))
-    lines = ['the config of the last run (%s) is kept, and only the %s changes%s'
-             % (rid, _and(roles) if roles else 'parameter named',
-                ', with the parameter change below' if swaps and has_change else '')]
-    for s in swaps:
-        a = s['args']
-        lines.append('%s: %s -> %s' % (a['role'].upper(), a['before'] or 'none', a['after']))
-        if a['role'] != 'thru':
-            n = len([1 for _, r in new if r == a['role']])
-            lines.append('the run now has %d %s aggressor%s' % (n, a['role'].upper(), '' if n == 1 else 's'))
-    lines += ['%s is already the %s of the last run, so it is unchanged' % (p, r.upper()) for r, p in same]
     stops, warn = input_check(final, [(ctx.path(p), r) for p, r in new])
     if stops:
-        return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in changes], announce=lines + notes,
-                     **base)
+        return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in changes], announce=lines, **base)
     thru_only = bool(mods.get('thru_only') or 'thru_only' in req['flags'])
     steps = swaps + pre + [_step('validate_inputs', channels=[p for p, _ in new]), _step('validate_config'),
                            _step('run_com', thru_only=thru_only), _step('summarize')]
-    return outcome('PLAN', steps=steps, changes=changes, announce=lines + notes + more + warn, **base), {}
+    return outcome('PLAN', steps=steps, changes=changes, announce=lines + more + warn, **base), {}
+
+
+# ----------------------------------------------------------------------------- crosstalk (Decision 19)
+# A role word: thru, through, fext, next, xtalk, crosstalk or xt, each with an optional number and an optional
+# letter (FEXT1a). A file is a FEXT when one of its words is fext with those suffixes, a NEXT likewise, else a THRU.
+_ROLE_WORD = re.compile(r'^(?:thru|through|fext|next|xtalk|crosstalk|xt)\d*[a-z]?$', re.I)
+_FEXT_WORD = re.compile(r'^fext\d*[a-z]?$', re.I)
+_NEXT_WORD = re.compile(r'^next\d*[a-z]?$', re.I)
+
+
+def name_words(name):
+    """The words of a channel file name: the name without its folder and extension, split on _ - . and spaces."""
+    return [w for w in re.split(r'[_\-. ]+', os.path.splitext(os.path.basename(name))[0]) if w]
+
+
+def channel_kind(name):
+    """'fext', 'next' or 'thru', from the words of the file name (Decision 19)."""
+    words = name_words(name)
+    if any(_FEXT_WORD.match(w) for w in words):
+        return 'fext'
+    if any(_NEXT_WORD.match(w) for w in words):
+        return 'next'
+    return 'thru'
+
+
+def _name_stem(name):
+    return tuple(w.lower() for w in name_words(name) if not _ROLE_WORD.match(w))
+
+
+def match_crosstalk(thru, names):
+    """The FEXT and NEXT files that belong to the THRU file thru, among the channel file names of its folder
+    (Decision 19). Returns {'fext': [...], 'next': [...], 'rule': 'only_thru' | 'name', 'thrus': [...]}:
+
+    1. when thru is the only THRU among names, every FEXT and NEXT file there (rule only_thru);
+    2. otherwise the FEXT and NEXT files whose names equal the THRU's once the role words are removed (rule name).
+
+    Each list is sorted by name. Nothing is read from disk."""
+    thru = os.path.basename(thru)
+    names = sorted({os.path.basename(n) for n in names if parse.CHANNEL_EXT.search(n)} | {thru})
+    thrus = [n for n in names if channel_kind(n) == 'thru']
+    if thrus == [thru]:
+        return {'fext': [n for n in names if channel_kind(n) == 'fext'],
+                'next': [n for n in names if channel_kind(n) == 'next'], 'rule': 'only_thru', 'thrus': thrus}
+    stem = _name_stem(thru)
+    return {'fext': [n for n in names if channel_kind(n) == 'fext' and _name_stem(n) == stem],
+            'next': [n for n in names if channel_kind(n) == 'next' and _name_stem(n) == stem],
+            'rule': 'name', 'thrus': thrus}
+
+
+def _add_crosstalk(req, ctx, mods, base):
+    """A re-run that adds the crosstalk files of the THRU in use: the config, the overrides and the THRU of the last
+    run are kept, and its aggressors become the FEXT and NEXT files that belong to the THRU (one set_channel step).
+    Nothing found, or a folder with more than one THRU and no name that matches, asks for the files."""
+    wc = ctx.wc
+    if wc is None:
+        return _stop('The last run cannot be repeated with crosstalk: %s.' % ctx.base[1], **base)
+    last = [(p, r or 'thru') for p, _, r in ctx.channels()]
+    thru = next((p for p, r in last if r == 'thru'), None)
+    if thru is None or not os.path.isfile(ctx.path(thru)):
+        return _stop('The THRU of the last run is not on disk any more, so its crosstalk files cannot be found. Nothing '
+                     'runs.', **base)
+    folder = os.path.dirname(thru)
+    m = match_crosstalk(thru, os.listdir(os.path.dirname(ctx.path(thru))))
+    name_it = 'name the files'
+    answers = {name_it: {'stop': 'Name each file with its role: Re-run with FEXT <file> and NEXT <file>.'},
+               CANCEL: None}
+    if not m['fext'] and not m['next']:
+        if m['rule'] == 'name':                                                 # row XT05
+            return _ask('%s holds more than one THRU (%s) and no FEXT or NEXT file name matches %s once the role words '
+                        'are removed, so which files belong to it cannot be told. Nothing runs.'
+                        % (folder or 'The project folder', ', '.join(m['thrus']), os.path.basename(thru)),
+                        [name_it, CANCEL], answers, **base)
+        return _ask('No FEXT or NEXT file belongs to %s: it is the only THRU in %s, and no FEXT or NEXT file is there, so '
+                    'there is no crosstalk to add. Nothing runs.' % (thru, folder or 'the project folder'),
+                    [name_it, CANCEL], answers, **base)                        # row XT03
+    fext = [os.path.join(folder, n) for n in m['fext']]
+    nxt = [os.path.join(folder, n) for n in m['next']]
+    new = [(thru, 'thru')] + [(p, 'fext') for p in fext] + [(p, 'next') for p in nxt]
+    old = [(p, r) for p, r in last if r != 'thru']
+    recorded = {c['path']: c.get('sha256') for c in (ctx.last.get('channels') or [])}
+    rid = ctx.last_run_id()
+    has_change = bool(req['sets'] or req['packages'] or req['attempts'])
+    unchanged = len(old) == len(new) - 1 and all(
+        ro == rn and _same_file(ctx.path(po), ctx.path(pn)) and recorded.get(po) == _sha(ctx.path(pn))
+        for (po, ro), (pn, rn) in zip(old, new[1:]))
+    if unchanged and not has_change:                                            # row XT04
+        return _stop('The last run (%s) already includes the crosstalk of %s (%d FEXT, %d NEXT files): nothing changed, '
+                     'so the results would equal the last run. Nothing runs.' % (rid, thru, len(fext), len(nxt)), **base)
+    swaps = [] if unchanged else [_step('set_channel', role='crosstalk', thru=thru, before=[p for p, _ in old] or None,
+                                        fext=fext, next=nxt, rule=m['rule'])]
+    count = lambda xs, r: '%d %s file%s' % (len(xs), r, '' if len(xs) == 1 else 's')  # noqa: E731
+    lines = ['the config of the last run (%s) is kept with its THRU %s, and its crosstalk is added: %s and %s'
+             % (rid, thru, count(fext, 'FEXT'), count(nxt, 'NEXT'))]
+    if m['rule'] == 'only_thru':
+        lines.append('%s is the only THRU in %s, so every FEXT and NEXT file there was taken'
+                     % (os.path.basename(thru), folder or 'the project folder'))
+    else:
+        lines.append('the files were matched by name to the THRU: their names equal %s once the role words (thru, '
+                     'fext, next, xtalk and the like, with their numbers) are removed' % os.path.basename(thru))
+    lines += ['FEXT %s' % p for p in fext] + ['NEXT %s' % p for p in nxt]
+    if old and not unchanged:
+        lines.append('they replace the %d aggressor%s of the last run' % (len(old), '' if len(old) == 1 else 's'))
+    lines.append('the engine is given the THRU, then the FEXT files, then the NEXT files, with their counts')
+    return _swap_plan(req, ctx, mods, base, wc, swaps, new, lines)
 
 
 def channel_roles(chans):
@@ -2128,6 +2255,9 @@ def _replay(req, ctx, base, thru_only=False):
         if stops:
             return _stop(_sentence(stops[0]), **base)
     announce = ['replays the last command: %s' % rec.get('phrase')]
+    if thru_only:                                # the THRU alone, without the FEXT and NEXT files of the last run
+        steps = [_step(s['op'], **dict(s['args'], thru_only=True)) if s['op'] == 'run_com' else s for s in steps]
+        announce.append('thru only: the FEXT and NEXT files of the last run are left out')
     for path, sha, role in ctx.channels():
         old = next((c.get('sha256') for c in rec.get('channels') or [] if c['path'] == path), None)
         if sha != old:

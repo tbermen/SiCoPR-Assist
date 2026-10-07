@@ -15,10 +15,11 @@ read(phrase, names, blocks) returns a plain dictionary:
     packages    [{'value': [TX, RX] or [both], 'attempt': text}]                  "package X" and its forms
     files       [{'text', 'ext', 'role'}]   role: thru, fext or next when a role word comes right before it
     attempts    [{'text', 'words', 'value'}]   names that are not a known name, as typed
-    unplaced    words that could not be placed
+    unplaced    words that could not be placed: every word that is not a filler word, an action word, or part of
+                a clause above lands here, so no word is ever dropped
     corrected   {typed: read as} for the typo rule
     flags       set of plain markers: again, this_config, these_files, example, thru_only, crosstalk,
-                different, instead, all, diff, both, last_config
+                different, instead, all, diff, both, last_config, last_run
     pattern     a short text of how the phrase was read (goes to history)
 
 Nothing here reads a config or the engine: the caller passes the known names and block names.
@@ -75,6 +76,10 @@ CHANNEL_EXT = re.compile(r'\.s\d+p$', re.I)
 LAST_CONFIG_WORDS = ('previous', 'same', 'last')
 # a word right before a channel file that says which channel it is (row CH08)
 CHANNEL_ROLES = {'thru': 'thru', 'fext': 'fext', 'next': 'next'}
+# words for the crosstalk files of the THRU in use (Decision 19), and the verbs taken only together with them
+# ("include the matching xtalk files in the simulation")
+CROSSTALK_WORDS = ('crosstalk', 'xtalk', 'cross-talk')
+CROSSTALK_VERBS = ('add', 'include')
 
 # Every word the reader can place: the typo rule reads a near miss of one of these as the word itself.
 KNOWN_WORDS = set(ACTION_WORDS) | FILLER | set(SIDES) | set(WORD_NUMBERS) | {
@@ -315,7 +320,13 @@ class _Reader:
             if self.used[i]:
                 continue
             if m[0] == 'word':
+                # A known word is placed here only when it carries no meaning beyond its own: a filler word, or
+                # an action word. Any other known word (crosstalk, package, tx, three, back, ...) means something
+                # only inside a clause; when no clause took it, it is unplaced, so it is asked about and never
+                # dropped (the maintainer's "Add xtalk files and re-run." once replayed the last command).
                 tag = ACTION_WORDS.get(m[1])
+                if tag is None and m[1] not in FILLER and m[1] not in ("what's", "here's", "it's", "let's"):
+                    continue
                 if tag and tag not in o['actions']:
                     o['actions'].append(tag)
                 if m[1] in ('again', 'repeat'):
@@ -347,10 +358,8 @@ class _Reader:
                 self.flag('this_config' if self.word(k) == 'config' else 'these_files')
                 self.take(*range(i, k + 1))
                 return k + 1
-        if w in ('yes', 'ok', 'okay', 'sure'):
-            self.flag('confirm')
-            self.take(i)
-            return i + 1
+        # yes, ok: an answer to a pending question (the core reads those itself); in a request they place nothing
+        # and are left unplaced, so "Add yes files and re-run." asks
         # the previous config, the same config, the last config: the config of the last run (Decision 18)
         low = self.toks[i]['low']
         if low in LAST_CONFIG_WORDS and self.word(i + 1) == 'config':
@@ -396,7 +405,16 @@ class _Reader:
             self.flag('thru_only')
             self.take(i, i - 1 if self.word(i - 1) == 'without' else i, i + 1 if self.word(i + 1) == 'only' else i)
             return i + 1
-        if w == 'different':
+        # "the last run", "the previous run": a run already made, not a request to run (row SM16)
+        if low in ('run', 'runs') and i > 0 and self.toks[i - 1]['low'] in ('last', 'previous') and not self.used[i - 1]:
+            self.flag('last_run')
+            self.take(i - 1, i)
+            return i + 1
+        end = self._crosstalk(i)
+        if end > i:
+            return end
+        # "a different DER_0", "a different package": placed only before what it qualifies, else unplaced
+        if w == 'different' and (self.kind(i + 1) == 'name' or self.word(i + 1) in ('package', 'packages')):
             self.flag('different')
             self.take(i)
             return i + 1
@@ -444,6 +462,35 @@ class _Reader:
             self.take(*range(i, end))
             return end
         return i
+
+    def _crosstalk(self, i):
+        """[add | include] [the] [matching] crosstalk | xtalk | FEXT and NEXT [files] [in the simulation] [added]:
+        the crosstalk files of the THRU in use (Decision 19). Sets the flag crosstalk; returns the index after it,
+        or i. The words around it are taken only together with it."""
+        low = lambda k: self.toks[k]['low'] if 0 <= k < self.n and not self.used[k] else None  # noqa: E731
+        if low(i) in CROSSTALK_WORDS:
+            k = i + 1
+        elif low(i) in ('fext', 'next') and low(i + 1) == 'and' and low(i + 2) in ('fext', 'next') \
+                and low(i + 2) != low(i) and self.kind(i + 3) != 'file':
+            k = i + 3
+        else:
+            return i
+        if low(k) in ('files', 'file'):
+            k += 1
+        if low(k) == 'in' and low(k + 1 + (low(k + 1) == 'the')) in ('simulation', 'run'):
+            k += 2 + (low(k + 1) == 'the')
+        elif low(k) == 'added':
+            k += 1
+        start = i
+        if low(start - 1) == 'matching':
+            start -= 1
+        if low(start - 1) == 'the':
+            start -= 1
+        if low(start - 1) in CROSSTALK_VERBS:
+            start -= 1
+        self.flag('crosstalk')
+        self.take(*range(start, k))
+        return k
 
     def _switch_names(self, k, val):
         got = []
@@ -698,6 +745,7 @@ class _Reader:
         parts += ['sweep %s' % s['name'] for s in o['sweeps']]
         parts += ['package' for _ in o['packages']]
         parts += ['file' for _ in o['files']]
+        parts += ['crosstalk' for f in o['flags'] if f == 'crosstalk']
         parts += ['ask %s' % a['text'] for a in o['attempts']]
         return '; '.join(parts) or 'nothing matched'
 

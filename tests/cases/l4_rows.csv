@@ -638,3 +638,9 @@ CH03,Case1; Case3,change,must,PLAN,chain,set_channel > validate_inputs > validat
 CH05,Case1; Case3,change,must,QUESTION,options,the example setup | provide files
 CH06,Case1; Case3,change,must,PLAN,chain,set_channel > set_param > validate_inputs > validate_config > run_com > summarize
 CH08,Case1; Case3,change,stretch,PLAN,chain,set_channel > validate_inputs > validate_config > run_com > summarize
+XT01,Case1; Case3,change,must,PLAN,chain,set_channel > validate_inputs > validate_config > run_com > summarize
+XT02,Case1; Case3,change,must,PLAN,chain,set_channel > validate_inputs > validate_config > run_com > summarize
+XT03,Case1; Case3,change,must,QUESTION,options,name the files | cancel
+XT05,Case1; Case3,change,must,QUESTION,options,name the files | cancel
+XT06,Case1; Case3,change,must,QUESTION,options,cancel
+SM16,Case1; Case3,summary,must,PLAN,chain,summarize

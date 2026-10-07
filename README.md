@@ -116,6 +116,41 @@ sicopr-assist "Re-run with FEXT data\fext1.s4p"                        # adds or
 - The channel file's SHA-256 is part of what decides reuse, so a new THRU is a new run, and going
   back to an earlier THRU with the same config reuses that earlier run.
 
+### Adding crosstalk
+
+After a thru-only run, ask for its crosstalk and the tool finds the FEXT and NEXT files that belong to
+the THRU in use. The config of the last run, its overrides and its THRU are kept. These all mean the
+same:
+
+```powershell
+sicopr-assist "Re-run with crosstalk."
+sicopr-assist "Add xtalk files and re-run."
+sicopr-assist "Re-run last config, but include the matching xtalk files in the simulation."
+sicopr-assist "Re-run with the matching FEXT and NEXT files"
+```
+
+How the files are chosen:
+
+- Only the folder of the THRU is looked at, and only Touchstone files (`.s4p` and the like).
+- A file name is split into words on `_`, `-`, `.` and spaces. A role word is `thru`, `through`,
+  `fext`, `next`, `xtalk`, `crosstalk` or `xt`, each with an optional number and an optional letter
+  (`FEXT1a`). A file is a FEXT if one of its words is `fext` in that form, a NEXT likewise, and
+  otherwise a THRU. Case does not matter.
+- If the THRU is the only THRU in its folder, every FEXT and NEXT file there is taken.
+- Otherwise the FEXT and NEXT files whose names equal the THRU's name, once the role words are
+  removed, are taken. So `..._BPK_1200mm_..._thru1.s4p` takes `..._BPK_1200mm_..._xtalk1_Fext.s4p` to
+  `..._xtalk3_Fext.s4p` and `..._xtalk4_Next.s4p` to `..._xtalk7_Next.s4p`, and nothing of the 100 mm or
+  1400 mm channels beside it.
+- The engine is given the THRU, then the FEXT files, then the NEXT files, each sorted by name, with
+  their counts.
+- The plan lists every file it took and which of the two rules took it, before anything runs.
+- If nothing is found, or the folder holds more than one THRU and no name matches, the tool asks you
+  to name the files: `Re-run with FEXT <file> and NEXT <file>`.
+- If the last run already had exactly those files, it is a STOP: the results would equal the last run.
+- `Re-run thru only` after a crosstalk run runs the THRU alone with the same config.
+
+A word the tool cannot place is never dropped. `Add widget files and re-run.` asks, and nothing runs.
+
 ### While a run is going
 
 COM can take several minutes per run. While a plan is carried out, the command line prints:

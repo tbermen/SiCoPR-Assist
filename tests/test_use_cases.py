@@ -3,6 +3,7 @@
     python tests\\test_use_cases.py                 score, write score_use_cases.csv, print one line per group
     python tests\\test_use_cases.py --gate G1.3     also check gate G1.3 (the Phase 1 STOP stub)
     python tests\\test_use_cases.py --gate G7 --gate M1 --gate M2     several gates on one scoring run
+    python tests\\test_use_cases.py --gate N1 --gate N2                the gates of the second session
     $env:SICOPR_ASSIST_FULL = "1"                   L3 on every pair (default: Case1 and the variants)
 
 It fails on a defect of the harness itself: a prior state with no builder, a builder that does not
@@ -32,7 +33,7 @@ import fixtures  # noqa: E402
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2'], action='append', default=[],
+    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2'], action='append', default=[],
                     help='check a gate condition as well (may be given more than once)')
     ap.add_argument('--review', help='with --gate G4: write the rows of the Phase 4 groups that L4 cannot check by '
                                      'machine, with the outcome given, to this CSV')
@@ -93,6 +94,11 @@ def main(argv=None):
         gate_m1(rows, results, full)
     if 'M2' in args.gate:
         gate_m2(results)
+    if 'N1' in args.gate:
+        gate_n1(rows, results, full)
+    if 'N2' in args.gate:
+        gate_m2(results)
+        gate_n2(rows)
     if 'G1.3' in args.gate:
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
@@ -302,6 +308,57 @@ def gate_m2(results):
             for r in results if r['applies'] == 'yes')
     check('M2: no paraphrase in the whole table produces a wrong PLAN (%d paraphrase pairs)' % n, n and not wrong,
           ['%s %s: %s wrong' % (r['id'], r['config'], r['paraphrases_wrong']) for r in wrong][:40])
+
+
+NEW_ROWS_N = ('XT01', 'XT02', 'XT03', 'XT04', 'XT05', 'XT06', 'SM16')
+
+
+def gate_n1(rows, results, full):
+    """Gate N1 (second session, 7 October): every must XT row and SM16 pass L1, L2, L3 (full mode) and L4 where
+    they are in the frozen list; no row is excused; only the new rows entered the frozen list (639 rows after
+    first use, 645 now: XT01, XT02, XT03, XT05, XT06 and SM16; XT04 is a STOP row on the review list)."""
+    import csv
+    import scoring
+    want = sum(len(scoring.labels_of(r)) for r in rows if r['id'] in NEW_ROWS_N and r['priority'] == 'must')
+    got = [r for r in results if r['applies'] == 'yes' and r['id'] in NEW_ROWS_N and r['priority'] == 'must']
+    check('N1: the must XT rows and SM16 were scored (%d pairs)' % want, want > 0 and len(got) == want, len(got))
+    check('N1: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
+    bad = [r for r in got if r['L1'] != 'PASS' or 'FAIL' in (r['L2'], r['L3'], r['L4'])]
+    check('N1: every must XT and SM16 pair passes L1, and L2, L3 and L4 where they apply', not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad])
+    print('N1: %d pairs; L4 on %d of them' % (len(got), sum(1 for r in got if r['L4'] in ('PASS', 'FAIL'))))
+    check('N1: no row is excused by an open dispute', not open_disputes(), sorted(open_disputes()))
+    frozen = [r['id'] for r in csv.DictReader(open(scoring.FROZEN, newline='', encoding='utf-8'))]
+    check('N1: the frozen list has 645 rows and its new ones are exactly XT01, XT02, XT03, XT05, XT06 and SM16',
+          len(frozen) == 645 and sorted(i for i in frozen if i in NEW_ROWS_N) ==
+          ['SM16', 'XT01', 'XT02', 'XT03', 'XT05', 'XT06'] and frozen[-6:] ==
+          ['XT01', 'XT02', 'XT03', 'XT05', 'XT06', 'SM16'], (len(frozen), frozen[-8:]))
+
+
+MAINTAINER_XT = ('Re-run last config, but include the matching xtalk files in the simulation.',
+                 'Add xtalk files and re-run.')
+
+
+def gate_n2(rows):
+    """Gate N2: the maintainer's two crosstalk phrases (paraphrases of XT01) give XT01's plan, step for step with
+    the same arguments, on every config XT01 names."""
+    import scoring
+    import prior_states
+    from sicopr_assist import core
+    xt01 = next(r for r in rows if r['id'] == 'XT01')
+    check('N2: the maintainer\'s two phrases are paraphrases of XT01',
+          all(p in [x.strip() for x in xt01['paraphrases'].split(' | ')] for p in MAINTAINER_XT))
+    with fixtures.Fixtures() as fx:
+        for label in scoring.labels_of(xt01):
+            plans = []
+            for phrase in (xt01['phrase'],) + MAINTAINER_XT:
+                ctx = prior_states.Ctx(fx, label)
+                prior_states.build(xt01['prior_state'], ctx)
+                o = core.handle(phrase, ctx.project)
+                plans.append((o['type'], o['steps']))
+            check('N2 %s: both phrases give the PLAN of XT01 (%s)' % (label, ' > '.join(s['op'] for s in plans[0][1])),
+                  plans[0][0] == 'PLAN' and plans[1] == plans[0] and plans[2] == plans[0],
+                  [(t, [s['op'] for s in st]) for t, st in plans])
 
 
 _types = {}
