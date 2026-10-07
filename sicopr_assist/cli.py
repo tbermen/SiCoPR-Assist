@@ -4,7 +4,9 @@
     python -m sicopr_assist "Re-run with DER_0 = 1e-4"
     sicopr-assist                       (prompts until "quit" or end of input)
 
-The project is the folder the tool is run from. --json prints the outcome as JSON.
+The project is the folder the tool is run from. --json prints the outcome as JSON. A PLAN is shown, then
+carried out (run.carry_out), and what it gives is printed; cli.py only formats and prints what the core and
+run.py return.
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
@@ -13,7 +15,7 @@ import json
 import os
 import sys
 
-from sicopr_assist import __version__, core
+from sicopr_assist import __version__, core, run
 from sicopr_assist.project import Project
 
 
@@ -38,6 +40,23 @@ def show(outcome, as_json=False, out=None):
             out.write('  %d. %s\n' % (i, step.get('op')))
 
 
+def handle_and_run(phrase, project, as_json=False, out=None):
+    """One phrase: the outcome is shown; a PLAN is then carried out and its lines printed."""
+    out = out or sys.stdout
+    outcome = core.handle(phrase, project)
+    show(outcome, as_json, out)
+    if outcome['type'] != 'PLAN':
+        return outcome, None
+
+    def echo(line):
+        if line.startswith('--- case'):
+            out.write(line + '\n')
+    done = run.carry_out(project, outcome, echo=echo)
+    for line in done['lines']:
+        out.write(line + '\n')
+    return outcome, done
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='sicopr-assist', description='Turn a phrase into a SiCoPR run.')
     ap.add_argument('phrase', nargs='*', help='the phrase; with none, an interactive prompt starts')
@@ -46,7 +65,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     project = Project(os.getcwd())
     if args.phrase:
-        show(core.handle(' '.join(args.phrase), project), args.json)
+        handle_and_run(' '.join(args.phrase), project, args.json)
         return 0
     while True:
         try:
@@ -57,7 +76,7 @@ def main(argv=None):
         if phrase.strip().lower() in ('quit', 'exit'):
             return 0
         if phrase.strip():
-            show(core.handle(phrase, project), args.json)
+            handle_and_run(phrase, project, args.json)
 
 
 if __name__ == '__main__':

@@ -299,6 +299,26 @@ class Project:
             f.write(json.dumps(record) + '\n')
         return record
 
+    def update_history(self, seq, **fields):
+        """Fill in the record with this seq once its plan has been carried out (the runs it made, the files it
+        used). Only HISTORY_KEYS may be set; the file is rewritten whole and replaced in one step."""
+        bad = sorted(set(fields) - set(HISTORY_KEYS))
+        if bad:
+            raise ValueError('not history keys: %s' % ', '.join(bad))
+        hist = self.read_history()
+        rec = next((r for r in hist if r.get('seq') == seq), None)
+        if rec is None:
+            raise ValueError('no history record with seq %r' % seq)
+        if fields.get('status') is not None and fields['status'] not in STATUSES:
+            raise ValueError('history status must be one of %s' % ', '.join(STATUSES))
+        rec.update(fields)
+        tmp = self.history_path + '.tmp'
+        with open(tmp, 'w', encoding='utf-8', newline='\n') as f:
+            for r in hist:
+                f.write(json.dumps(r) + '\n')
+        os.replace(tmp, self.history_path)
+        return rec
+
     def last_record(self, with_runs=False):
         for rec in reversed(self.read_history()):
             if not with_runs or rec.get('run_ids'):

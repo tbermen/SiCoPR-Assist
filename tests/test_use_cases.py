@@ -31,7 +31,7 @@ import fixtures  # noqa: E402
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--gate', choices=['G1.3', 'G4'], help='check a gate condition as well')
+    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6'], help='check a gate condition as well')
     ap.add_argument('--review', help='with --gate G4: write the rows of the Phase 4 groups that L4 cannot check by '
                                      'machine, with the outcome given, to this CSV')
     ap.add_argument('--out', help='where to write score_use_cases.csv')
@@ -83,6 +83,8 @@ def main(argv=None):
 
     if args.gate == 'G4':
         gate_g4(rows, results, full, args.review)
+    if args.gate == 'G6':
+        gate_g6(rows, results)
     if args.gate == 'G1.3':
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
@@ -168,6 +170,26 @@ def gate_g4(rows, results, full, review_path):
                 w.writerow([r['id'], r['config'], r['group'], r['priority'], row['expected_type'],
                             row['expected_detail'], o.get('type'), o.get('detail'), o.get('text')])
         print('review list written to %s' % review_path)
+
+
+PHASE6_GROUPS = ('run', 'summary', 'combo')
+
+
+def gate_g6(rows, results):
+    """Gate G6.1: every must row of the groups run, summary and combo passes L1, and L4 where it is in the frozen
+    list, on seeded results. A disputed row is excused and named."""
+    disputed = open_disputes()
+    if disputed:
+        print('excused by dispute: %s' % ', '.join(sorted(disputed)))
+    must = [r for r in results if r['applies'] == 'yes' and r['group'] in PHASE6_GROUPS and r['priority'] == 'must'
+            and r['id'] not in disputed]
+    bad = [r for r in must if r['L1'] != 'PASS']
+    check('G6.1: every must row of run, summary and combo passes L1 (%d pairs)' % len(must), not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad][:40])
+    frozen = [r for r in must if r['L4'] in ('PASS', 'FAIL')]
+    bad = [r for r in frozen if r['L4'] != 'PASS']
+    check('G6.1: and L4 where the row is in the frozen list (%d pairs)' % len(frozen), not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][-160:]) for r in bad][:40])
 
 
 _types = {}

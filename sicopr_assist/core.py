@@ -33,7 +33,7 @@ import math
 import os
 import re
 
-from sicopr_assist import config_model, engine, parse, validate, xlsx_io
+from sicopr_assist import config_model, engine, parse, summary, validate, xlsx_io
 from sicopr_assist.project import history_record, read_settings, setting_text
 
 # The step vocabulary, frozen in Phase 1 from the expected_detail chains of the use-case table
@@ -210,17 +210,35 @@ class Context:
 
     @property
     def base(self):
-        """(working config the next command starts from, how it was found, import issues) or (None, why, [])."""
+        """(working config the next command starts from, how it was found, import issues) or (None, why, []).
+        When the source config changed since the last run, it is imported again and the active overrides of
+        the last run are reapplied to it (row CP10); how it was found is then 'source changed'."""
         def make():
             rec = self.last
             if rec is not None:
                 try:
                     with open(self.path(rec['working_config']), encoding='utf-8') as f:
-                        return json.load(f), 'last run', []
+                        wc = json.load(f)
                 except (OSError, ValueError) as e:
                     return None, 'the working config of the last run cannot be read: %s' % e, []
+                if self.source_changed():
+                    new, issues = config_model.import_config(self.path(rec['source']['path']))
+                    if new is not None and not config_model.stops(issues):
+                        ov = [(o['json_path'], o['after']) for o in rec.get('overrides') or []
+                              if o.get('kind') in ('set', 'add')]
+                        return config_model.apply_changes(new, ov)['config'], 'source changed', issues
+                return wc, 'last run', []
             return None, 'no run in this project yet', []
         return self._get('base', make)
+
+    def source_changed(self):
+        """Whether the source config of the last run is on disk with other bytes than the run recorded."""
+        rec = self.last
+        src = (rec or {}).get('source') or {}
+        if not src.get('path') or not src.get('sha256'):
+            return False
+        p = self.path(src['path'])
+        return os.path.exists(p) and _sha(p) != src['sha256']
 
     @property
     def wc(self):
@@ -551,6 +569,10 @@ def _plan_v1(text, req, ctx, mods, base):
         return _stop('SiCoPR-Assist does not send anything. Each run leaves its results in its own folder under '
                      '.sicopr\\runs, which you can attach yourself.', **base)
 
+    # questions about results: a summary, statistics, a parameter against a result (Decision 8)
+    if _is_results_request(req, text):
+        return _results(req, text, ctx, mods, base)
+
     # questions about the config and the project
     asked = _show(req, text, ctx, base)
     if asked is not None:
@@ -594,6 +616,120 @@ def _plan_v1(text, req, ctx, mods, base):
     return _stop('Not a supported request. SiCoPR-Assist runs a config (Run COM on data\\thru.s4p with data\\config.xlsx), '
                  're-runs it with changes (Re-run with DER_0 = 1e-4), sweeps a parameter (Sweep C_b from 1e-5 to 5e-5 '
                  'in 5 steps), and shows the config (What can I change?).', **base)
+
+
+# ----------------------------------------------------------------------------- results (Decision 8)
+_RESULT_LIST = re.compile(r"\b(what|which) results\b|\bresult names\b")
+_RESULT_PAIR = re.compile(r'\bcorrelat\w*|\bversus\b|\bvs\b|\brelates?\b')
+# Words a question about results is made of. Anything else that is not a result or a keyword is asked about.
+_RESULT_WORDS = {'summary', 'statistics', 'stats', 'set', 'last', 'runs', 'run', 'batch', 'result', 'results', 'of',
+                 'for', 'the', 'my', 'what', 'whats', "what's", 'how', 'does', 'do', 'correlate', 'correlation',
+                 'between', 'and', 'to', 'with', 'versus', 'vs', 'against', 'show', 'me', 'again', 'print', 'give',
+                 'can', 'i', 'ask', 'about', 'list', 'names', 'name', 'which', 'are', 'there', 'is', 'were', 'a',
+                 'summarize', 'summarise', 'relate', 'relates', 'com', 'over', 'all', 'please', 'it', 'its', 'of'}
+
+
+def _is_results_request(req, text):
+    """A question about the results of runs already made: no change, no sweep, no run asked for."""
+    low = text.lower()
+    acts = req['actions']
+    if 'sweep' in acts or req['sweeps'] or req['files'] or req['packages'] or 'rerun' in acts or 'run' in acts:
+        return False
+    if any(s.get('value') is not None for s in req['sets']):
+        return False
+    return 'summary' in acts or bool(_RESULT_LIST.search(low) or _RESULT_PAIR.search(low)
+                                     or re.search(r'\bwhat were the results\b', low))
+
+
+def _results(req, text, ctx, mods, base):
+    """The summary of the last run, statistics of a result over the last set of runs, how a parameter (or a
+    result) relates to a result, or the list of result names. Reads the results on disk; never runs COM."""
+    low = text.lower()
+    s = summary.last_set(ctx.project)
+    if s is None or not s['runs']:
+        return _ask('No results exist in this project yet, so there is nothing to summarise. Run a config first, '
+                    'for example the example setup.', ['run the example setup', 'point to a results folder'],
+                    {'run the example setup': {'stop': 'Run the example setup with: Run SiCoPR on the example setup.'},
+                     'point to a results folder': {'stop': 'SiCoPR-Assist reads the results of this project folder '
+                                                           '(.sicopr\\runs). Start it in the project folder that holds '
+                                                           'them.'}}, **base)
+    names = summary.result_names(s)
+    if mods.get('list_results') or _RESULT_LIST.search(low):
+        return outcome('PLAN', steps=[_step('summarize', what='result names')],
+                       announce=['results you can ask about (from %s): %s' % (
+                           s['runs'][-1]['run_id'], ', '.join(summary.label_of(n) for n in names))], **base), {}
+    # the names in the phrase, in the order they are written: results, and keywords of the config
+    found = []
+    params = [st['name'] for st in req['sets'] if st.get('value') is None]
+    for n in params:
+        m = re.search(r'(?<![\w])%s(?![\w(])' % re.escape(n).replace(r'\ ', r'\s*'), text, re.I)
+        found.append((m.start() if m else len(text), n, 'param'))
+    for tok in parse.tokenize(text):
+        if tok['kind'] != 'word':
+            continue
+        f = summary.result_field(tok['text'], names)
+        if f is not None and not any(parse.squash(n) == parse.squash(tok['text']) for _, n, _ in found):
+            m = re.search(r'(?<![\w])%s(?![\w])' % re.escape(tok['text']), text)
+            found.append((m.start() if m else len(text), f, 'result'))
+    found.sort()
+    taken = {parse.squash(w) for _, n, _ in found for w in n.split()} | {'com'}
+    unknown = [a['text'] for a in req['attempts'] if parse.squash(a['text']) not in taken
+               and not all(w.lower() in _RESULT_WORDS for w in a['text'].split())]
+    unknown += [w for w in req['unplaced'] if w.lower() not in _RESULT_WORDS and parse.squash(w) not in taken
+                and w not in unknown]
+    unknown += [w for w, read in req['corrected'].items() if read not in _RESULT_WORDS and w not in unknown]
+    if unknown:
+        at = sorted((m.start(), m.end()) for m in (re.search(r'(?<![\w])%s(?![\w])' % re.escape(u), text)
+                                                   for u in unknown) if m)
+        span = text[at[0][0]:at[-1][1]] if at else ''
+        said = span if span and all(w in unknown for w in span.split()) else _words(unknown)
+        words = [w.lower() for u in unknown for w in re.findall(r'[A-Za-z]+', u)]
+        near = [n for n in names if any(w in n.lower() for w in words if len(w) >= 3)]
+        opts = [summary.label_of(n) for n in near][:ctx.setting('max_options')] + ['list the result names', CANCEL]
+        answers = {summary.label_of(n): {'replace': [unknown[0], n]} for n in near}
+        answers['list the result names'] = {'list_results': True}
+        answers[CANCEL] = None
+        return _ask('%s is not a result name, so nothing is computed. A result is named by its field name in the result '
+                    'file (COM is %s); the result file holds no descriptions to search.'
+                    % (said, summary.COM_FIELD), opts, answers, **base)
+    min_points = ctx.setting('min_correlation_points')
+    if _RESULT_PAIR.search(low):
+        if len(found) != 2:
+            return _ask('A comparison needs two names, a keyword or a result and then a result, for example: How does '
+                        'C_b correlate to COM?', ['list the result names', CANCEL],
+                        {'list the result names': {'list_results': True}, CANCEL: None}, **base)
+        (_, a, ka), (_, b, kb) = found
+        if ka == 'result' and kb == 'param':                # COM versus C_b: the keyword is the x
+            (a, ka), (b, kb) = (b, kb), (a, ka)
+        if kb == 'param':
+            return _ask('%s is a keyword, not a result: the second name must be a result, for example COM.' % b,
+                        ['list the result names', CANCEL], {'list the result names': {'list_results': True},
+                                                            CANCEL: None}, **base)
+        rel = summary.relation(s, a, b, ka == 'param', min_points)
+        if rel['kind'] == 'one_value':
+            o = 'sweep %s' % a
+            return _ask('%s. Sweep it first.' % _sentence(rel['lines'][0]).rstrip('.'), [o, CANCEL],
+                        {o: {'stop': 'Give the values: Sweep %s from <a> to <b> in <count> steps.' % a}, CANCEL: None},
+                        **base)
+        return outcome('PLAN', steps=[_step('result_vs_param', param=a, result=b, set=s['seq'])],
+                       announce=['%s against %s over the last set of runs (%s); no run, and no statement about cause'
+                                 % (a, summary.label_of(b), s['phrase'])] + rel['lines'], **base), {}
+    fields = [n for _, n, k in found if k == 'result']
+    if not fields and not [n for _, n, k in found if k == 'param'] and \
+            (re.search(r'\bagain\b|\blast summary\b|\bwhat were the results\b', low) or 'statistic' not in low):
+        rid = ctx.last_run_id()                                 # the summary of the last run (row D4)
+        return outcome('PLAN', steps=[_step('summarize', run=rid)], announce=summary.run_summary(ctx.project, rid)['lines'],
+                       **base), {}
+    if len(fields) != 1 or len(found) != 1:
+        opts = [summary.label_of(n) for n in names][:ctx.setting('max_options')] + [CANCEL]
+        return _ask('Which result should the statistics be of? Name one result, for example COM.', opts,
+                    {summary.label_of(n): {'stop': '%s summary statistics for the last set of runs.' % n} for n in names}
+                    | {CANCEL: None}, **base)
+    st = summary.result_stats(s, fields[0])
+    return outcome('PLAN', steps=[_step('result_stats', result=fields[0], set=s['seq'])],
+                   announce=['%s over the last set of runs (%s): %d result%s; no run, and no interpretation'
+                             % (summary.label_of(fields[0]), s['phrase'], len(s['results']),
+                                '' if len(s['results']) == 1 else 's')] + st['lines'], **base), {}
 
 
 def _unplaced_only(req, base):
@@ -1101,6 +1237,10 @@ def _change_outcome(res, changes, req, ctx, mods, base, wc):
         return _ask('Strict mode: %s could not be placed, so nothing runs. What was understood: %s.'
                     % (_words(req['unplaced']), said), [opt, CANCEL], {opt: {'ignore_unplaced': True}, CANCEL: None},
                     changes=out_changes, announce=announce, **base)
+    stops, _ = input_check(res['config'], _last_channels(ctx), with_notes=False) if res.get('config') else ([], [])
+    if stops:
+        return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in out_changes], announce=announce,
+                     **base)
     steps = []
     for c in out_changes:
         if c['kind'] in ('set', 'add'):
@@ -1171,9 +1311,11 @@ def _context_lines(ctx, changes, wc):
                      'that was selected before' % show(rt))
     if rec and rec.get('source') and rec['source'].get('path'):
         p = ctx.path(rec['source']['path'])
-        if os.path.exists(p) and rec['source'].get('sha256') and _sha(p) != rec['source']['sha256']:
-            lines.append('the source config %s changed since the last run; the run uses the working config of the last '
-                         'run with this change' % rec['source']['path'])
+        if ctx.source_changed():
+            n = len([o for o in rec.get('overrides') or [] if o.get('kind') in ('set', 'add')])
+            lines.append('the source config %s changed since the last run: it is imported again and the %d active '
+                         'override%s of the last run %s reapplied' % (rec['source']['path'], n, '' if n == 1 else 's',
+                                                                     'is' if n == 1 else 'are'))
         lock = os.path.join(os.path.dirname(p), '~$' + os.path.basename(p))
         if os.path.exists(lock):
             lines.append('%s is open in Excel: unsaved edits there are not included' % rec['source']['path'])
@@ -1446,6 +1588,7 @@ def _sweep(req, ctx, mods, base_fields):
     combos = list(itertools.product(*[d['points'] for d in dims]))
     channels = ctx.channels()
     chan_shas = [s for _, s, _ in channels]
+    chans = _last_channels(ctx)
     sic = engine.engine_sha256()
     prior = ctx.runs
     last = ctx.last_run_id()
@@ -1471,6 +1614,11 @@ def _sweep(req, ctx, mods, base_fields):
         fields, err = config_model.loaded_fields(res['config'])
         if err:
             pt['skipped'] = 'validate_config fails: %s' % err
+            points.append(pt)
+            continue
+        stops, _ = input_check(res['config'], chans, with_notes=False)
+        if stops:
+            pt['skipped'] = 'validate_inputs fails: %s' % stops[0]
             points.append(pt)
             continue
         fp = _fingerprint(fields, chan_shas, sic)
@@ -1586,9 +1734,11 @@ def _first_run(req, ctx, mods, base):
     found_cfg = ctx.config_files()
     found_ch = ctx.channel_files()
     announce = []
-    if 'example' in req['flags'] and not configs:
-        return _stop('The example setup has no channel file of its own in this version. Name a channel file and a '
-                     'config, for example: Run COM on data\\thru.s4p with data\\config.xlsx.', **base)
+    example = 'example' in req['flags'] and not configs
+    if example:                                 # the example setup: the shipped working config (from Case1)
+        configs = [EXAMPLE]
+        announce.append('the config is the example setup (%s, the working config of the Case1 workbook)'
+                        % os.path.basename(EXAMPLE))
     if not configs:
         cands = [c for c in found_cfg]
         if len(cands) == 1:
@@ -1610,6 +1760,11 @@ def _first_run(req, ctx, mods, base):
         elif found_ch:
             return _ask('There is more than one channel file in this folder: which one?', found_ch + [CANCEL],
                         {c: {'stop': 'Run COM on %s with %s.' % (c, configs[0])} for c in found_ch}, **base)
+        else:
+            return _ask('There is no channel file in this project folder, so there is nothing to run COM on. Name one, '
+                        'for example: Run COM on data\\thru.s4p with data\\config.xlsx.', ['provide files', CANCEL],
+                        {'provide files': {'stop': 'Name the files: Run COM on <channel> with <config>.'}, CANCEL: None},
+                        **base)
     cfg = configs[0]
     path = ctx.path(cfg)
     if not os.path.exists(path):
@@ -1650,8 +1805,8 @@ def _first_run(req, ctx, mods, base):
                        ({'set': res['answers'][o]['set']} if 'set' in res['answers'][o] else {'allow': res['answers'][o].get('allow', [])}))
                    for o in opts}
         return _ask(_sentence(res['text']), opts, answers, announce=announce, **base)
-    is_json = path.lower().endswith('.json')
-    steps = [] if is_json else [_step('import_config', path=cfg)]
+    is_json = path.lower().endswith('.json') and not example
+    steps = [] if is_json else [_step('import_config', path=cfg, example=example)]
     changes = []
     if req['sets'] or req['packages'] or req['attempts']:
         ctx._c['base'] = (wc, 'import', [])
@@ -1680,9 +1835,96 @@ def _first_run(req, ctx, mods, base):
         steps.append(_step('validate_config'))
     elif req['unplaced'] and not mods.get('ignore_unplaced'):
         return _unplaced_only(req, base)
+    final = config_model.apply_changes(wc, [(c['json_path'], c['after']) for c in changes
+                                            if c['kind'] in ('set', 'add')])['config'] if changes else wc
+    stops, notes = input_check(final, [(ctx.path(c), r) for c, r in channel_roles(chans)])
+    if stops:
+        return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in changes], announce=announce, **base)
+    announce += notes
     steps += [_step('validate_inputs', channels=chans), _step('run_com', channels=chans, thru_only=len(chans) <= 1),
               _step('summarize')]
     return outcome('PLAN', steps=steps, changes=changes, announce=announce, **base), {}
+
+
+def _last_channels(ctx):
+    """[(path, role)] of the channel files of the last run that are still on disk."""
+    return [(ctx.path(p), r) for p, sha, r in ctx.channels() if sha is not None]
+
+
+def channel_roles(chans):
+    """[(path, role)] for the channel files of a run, in order: the first is the THRU; a file whose name says
+    fext or next is that kind of aggressor; any other is a FEXT aggressor."""
+    out = []
+    for i, c in enumerate(chans):
+        name = os.path.basename(c).lower()
+        role = 'thru' if i == 0 else ('next' if 'next' in name else 'fext')
+        out.append((c, role))
+    return out
+
+
+def touchstone_info(path):
+    """{'ports', 'fmin', 'fmax', 'points', 'problem'} of a Touchstone file, frequencies in Hz (the option line
+    gives the unit). problem is None when the file reads; then the rest is filled."""
+    info = {'ports': None, 'fmin': None, 'fmax': None, 'points': 0, 'problem': touchstone_problem(path)}
+    if info['problem']:
+        return info
+    m = parse.CHANNEL_EXT.search(path)
+    ports = int(re.search(r'\d+', m.group(0)).group(0)) if m else 4
+    per = 1 + 2 * ports * ports
+    scale = 1e9                                  # Touchstone's default unit is GHz
+    nums = []
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            text = line.split('!', 1)[0].strip()
+            if text.startswith('#'):
+                unit = next((w for w in text[1:].lower().split() if w in ('hz', 'khz', 'mhz', 'ghz')), 'ghz')
+                scale = {'hz': 1.0, 'khz': 1e3, 'mhz': 1e6, 'ghz': 1e9}[unit]
+            elif text:
+                nums += [float(t) for t in text.split()]
+    freqs = nums[0::per]
+    info.update(ports=ports, fmin=freqs[0] * scale, fmax=freqs[-1] * scale, points=len(freqs))
+    return info
+
+
+def input_check(wc, channels, with_notes=True):
+    """(stops, notes) for a config and its channel files, the checks that need the files (validate_inputs):
+
+    - rule EN09: with TDR = 1 and TDR_W_TXPKG = 1 the engine adds the TX package to the THRU for the TDR, which
+      a 2-port file cannot take: SiCoPR stops with IndexError in add_pkg_with_die, as the COM reference does
+      (it indexes S(1,2) of a 1-port), and with ERL = 2 both stop with their own message, for any file.
+    - row R8 (open decision R8): a channel whose highest frequency is below the signaling rate f_b. Neither the
+      reference nor SiCoPR stops. With ZERO_PAD = 0 both print an INFO line and extrapolate above it by the
+      S-parameter extrapolation policies; with ZERO_PAD = 1 both zero-pad above it and print nothing. The run
+      goes ahead and the note says which.
+    channels: [(path, role)]. A config that does not load gives no finding here (validate_config reports it).
+    with_notes False skips the notes, which read every channel file."""
+    fields, err = config_model.loaded_fields(wc)
+    if err or not fields:
+        return [], []
+    stops, notes = [], []
+    on = lambda k: bool(fields.get(k)) and fields.get(k) not in ('0', 0)      # noqa: E731
+    thru = channels[0][0] if channels else None
+    if on('OP.TDR') and on('OP.TDR_W_TXPKG'):
+        if fields.get('OP.ERL') == 2:
+            stops.append('EN09: with TDR_W_TXPKG = 1 and ERL = 2 the engine stops with its own message: Cannot add '
+                         'package to s2p files. ERL==2 not supported with TDR_W_TXPKG=1. Nothing runs')
+        elif thru and re.search(r'\.s2p$', thru, re.I):
+            stops.append('EN09: TDR_W_TXPKG = 1 cannot be used with a 2-port THRU file (%s): the engine adds the TX '
+                         'package for the TDR and stops with IndexError: index 1 is out of bounds for axis 2 with size 1, '
+                         'as the COM reference does. Set TDR_W_TXPKG = 0 or use a 4-port file. Nothing runs'
+                         % os.path.basename(thru))
+    fb = fields.get('param.fb')
+    for path, role in (channels if with_notes else []):
+        info = touchstone_info(path)
+        if info['problem'] or not isinstance(fb, (int, float)) or info['fmax'] >= fb:
+            continue
+        what = ('zero-pads it above %s GHz (ZERO_PAD = 1) and prints nothing' % summary.fmt(info['fmax'] / 1e9)
+                if on('OP.ZERO_PAD') else 'extrapolates it above %s GHz and prints an INFO line (ZERO_PAD = 0)'
+                % summary.fmt(info['fmax'] / 1e9))
+        notes.append('warning: in %s the maximum frequency provided, %s GHz, is less than the signaling rate f_b, %s '
+                     'GHz; the run goes ahead: the engine, like the COM reference, %s'
+                     % (os.path.basename(path), summary.fmt(info['fmax'] / 1e9), summary.fmt(fb / 1e9), what))
+    return stops, notes
 
 
 def touchstone_problem(path):
@@ -1761,6 +2003,10 @@ def _replay(req, ctx, base, thru_only=False):
                                                % ', '.join(near) if near else ''),
                     near + [CANCEL], {p: {'stop': 'Run COM on %s with %s.' % (p, cfg)} for p in near} | {CANCEL: None},
                     **base)
+    if ctx.wc is not None:
+        stops, _ = input_check(ctx.wc, _last_channels(ctx), with_notes=False)
+        if stops:
+            return _stop(_sentence(stops[0]), **base)
     announce = ['replays the last command: %s' % rec.get('phrase')]
     for path, sha, role in ctx.channels():
         old = next((c.get('sha256') for c in rec.get('channels') or [] if c['path'] == path), None)
