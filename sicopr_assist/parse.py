@@ -91,7 +91,8 @@ _UNIT_RE = re.compile(r'\s*(%s)(?![\w^/])' % '|'.join(re.escape(u) for u in _UNI
 _NUM = r'[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?'
 _TOKEN = re.compile(r'''
      (?P<bracket>\[[^\[\]]*\])
-    |(?P<path>(?:[A-Za-z]:)?[\w.{}~$-]*(?:\\[\w.{}~$-]*)+\\?(?=[\s,;?!]|\.?$)|[\w~$-]+\.(?:s\d+p|xlsx|xls|csv|json|mat)\b)
+    |(?P<path>(?:[A-Za-z]:[\\/])?(?:[\w.{}~$-]+[\\/])+[\w.{}~$-]*\.(?:s\d+p|xlsx|xls|csv|json|mat)\b
+             |(?:[A-Za-z]:)?[\w.{}~$-]*(?:\\[\w.{}~$-]*)+\\?(?=[\s,;?!]|\.?$)|[\w~$-]+\.(?:s\d+p|xlsx|xls|csv|json|mat)\b)
     |(?P<num>%s(?![\w]|\.\d))
     |(?P<word>[A-Za-z_\d][\w'.-]*?(?:\([^()\s]*\))?(?=[\s,;=&?!:\[]|\.(?:\s|$)|$))
     |(?P<paren>\([^()]*\))

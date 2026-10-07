@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.3.0 (7 October 2026, not yet released)
+## 0.3.1 (7 October 2026)
+
+- **A path written with `/` is read as a path.** `Run COM on ch/a_thru1.s4p with data/config.xlsx` kept only the
+  file names, so the files were looked for at the top of the project and the tool asked for them. It
+  broke on Linux (CI) and for anyone who types `/` on Windows. A path with `/`, `\` or both is now one
+  path when it ends in a file extension the tool reads, so `w/` and `dB/GHz` are unchanged.
+  `tests/test_paths.py` guards it.
+
+## 0.3.0 (7 October 2026)
 
 After the maintainer's second session. Tested with SiCoPR 1.1.1 (commit `55c3f71`).
 
