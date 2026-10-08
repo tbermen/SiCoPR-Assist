@@ -58,7 +58,8 @@ shipped workbooks from SiCoPR's folder. It finds that folder through the environ
 `SICOPR_REPO` when it is set, and otherwise through the installed `sicopr` module. It only reads
 SiCoPR; it never writes there.
 
-The dependencies are numpy, scipy and openpyxl. There is no network access anywhere in the tool.
+The dependencies are numpy, scipy and openpyxl. The only network access in the tool is a channel
+download you ask for (see "Channel download"), from the standard library.
 
 ## Run it
 
@@ -201,7 +202,8 @@ force and where each one came from. The example file
 | `trouble_misses`, `trouble_window` | 3, 5 | that many misses in the last commands bring the tutor up; `trouble_misses = 0` turns this off |
 | `feedback_notice_gap`, `feedback_notice` | 20, on | the line about Export feedback that comes with trouble: at most once in this many commands; off = never |
 | `mask_names`, `mask_numbers` | on, off | what Export feedback masks |
-| `max_download_mb`, `download_retries` | 500, 1 | version 2 (channel download); read and kept, no effect yet |
+| `max_download_mb` | 500 | a channel download larger than this many megabytes asks first |
+| `download_retries` | 1 | how many more times an interrupted download is tried before the tool stops |
 
 ## The dashboard
 
@@ -222,6 +224,55 @@ the dashboard of that run. A re-run right after a dashboard builds it again.
 Rscript is found as SiCoPR's GUI finds it: on PATH, else the newest R in `C:\Program Files\R` (by
 version number). R needs the packages R.matlab, plotly and htmltools. With no Rscript the dashboard is a
 STOP that names the CSV summary of the last run, so the results can still be read.
+
+## Channel download
+
+```powershell
+sicopr-assist "Here's my config spreadsheet at data\config.xls. Download the latest 802.3dj channels posted and analyze with SiCoPR, both thru-only and xtalk."
+```
+
+The tool reads the IEEE P802.3dj tools page
+(`https://www.ieee802.org/3/dj/public/tools/index.html`), takes the newest zip for the interface of
+your project, downloads it, unpacks it, pairs each FEXT and NEXT file with its THRU, and runs every
+channel thru-only and with its crosstalk:
+
+1. **The interface** (KR, CR, C2C or C2M) is asked once per project, with what the config file name
+   and `RUNTAG` say, and the answer is kept. On the page the interface is the folder of the zip link
+   (`tools/KR/`, `tools/CR/`, `c2c/`, `c2m/`).
+2. **The zip** is the newest for that interface by the date written under its link. An entry whose
+   cell says its files have been superseded is skipped, with every zip in it; a zip whose own link says
+   "do not use" is skipped alone. The plan names what was skipped and why. When the newest entry holds
+   several zips, or two entries share the newest date, it asks which one.
+3. **The size** is the page's where it gives one, else the server's (Content-Length). A zip larger
+   than `max_download_mb` asks before it is downloaded.
+4. **The download** goes through a partial file in `.sicopr\` and reaches the cache only when it
+   arrived whole. An interrupted download is tried again `download_retries` times; if it still fails,
+   the tool stops and the cache holds nothing of it.
+5. **Unpacking.** Every path in the zip is checked to stay inside the cache before anything is
+   written (no `..`, no absolute path); a zip that breaks this is refused and removed. A zip inside
+   the zip is unpacked in place. A path longer than the 260 characters Windows allows is warned about.
+6. **The inventory** (`<zip>.inventory.csv` beside the unpacked folder) lists every file: THRU, FEXT,
+   NEXT or other, the THRU each FEXT and NEXT file belongs to (Decision 19, as for
+   `Re-run with crosstalk`), whether it reads as Touchstone, its SHA-256, and the role SiCoPR's
+   `benchmark\208_case_4p15p0\channels.csv` gives a file with the same SHA-256. When a FEXT or NEXT
+   file cannot be paired with confidence, the tool asks: correct the `thru` column and say
+   `continue`, or run thru-only only.
+7. **The run matrix** is each THRU thru-only, and with its FEXT and NEXT files. The plan says how
+   many runs, how many are new and how many are reused (Decision 6, and `max_new_runs` applies). A
+   file that does not read as Touchstone skips the runs that need it, and `batch_summary.csv` says
+   why. A zip with no FEXT or NEXT file runs thru-only and says so.
+
+The plan is shown in two parts: first the zip, before anything is downloaded, then, once it is
+unpacked, the run matrix, before any run starts. Asked again, a zip that is in the cache is not
+downloaded or unpacked again. With the site unreachable, the zips already in the cache for that
+interface are offered.
+
+Only the download touches the network (`sicopr_assist\fetch.py`), and only when you ask for one.
+`SICOPR_ASSIST_FETCH_INDEX` names another index URL, such as a mirror.
+
+**The channel files are IEEE public-area files.** They are kept in `.sicopr\cache` of your project
+for your own use. Do not commit them or redistribute them; this repository holds none of them, and
+its tests use small synthetic files written by the tests themselves.
 
 ## The tutor
 
@@ -298,9 +349,15 @@ at the first failure. It takes 15 minutes or more, most of it in `test_use_cases
 | `SICOPR_ASSIST_HIDE_CONFIGS=1` | hide the four workbooks: tests that need them print `SKIP:` and exit 0 |
 | `SICOPR_ASSIST_E2E=1` | also run real COM end to end on synthetic THRU files: one case with eight changes, then a run and a re-run with a THRU of another length (three runs, about 4 minutes each); and in `test_dashboard.py` a run, then the dashboard phrase with the real Rscript (about 10 minutes) |
 | `SICOPR_ASSIST_INPUTS` | where the harness writes `score_use_cases.csv` (default: the temporary folder) |
+| `SICOPR_ASSIST_LIVE_FETCH=1` | `test_fetch.py` also reads the real IEEE tools page once: the index and the size of the newest KR zip, not the zip |
+| `SICOPR_ASSIST_LIVE_FETCH_ZIP=1` | with the one above, it also downloads that zip into a temporary folder, unpacks it, checks it against SiCoPR's `channels.csv`, and removes it |
+
+No other test touches the network: `tests\test_fetch.py` and the fetch rows of the harness use a
+stand-in of the tools page in its own markup, served from 127.0.0.1 (`tests\cases\standin_ieee.py`),
+with small zips the tests write.
 
 `python tests\test_use_cases.py --gate G7` prints the scoreboard by group and level, `--gate V1.1`
-the tutor and feedback rows, and `--gate V2.1` the dashboard rows. The tutor text and the feedback
+the tutor and feedback rows, `--gate V2.1` the dashboard rows, and `--gate V3.1` the download rows. The tutor text and the feedback
 file, which the four levels do not read, are checked by `tests\test_tutor.py` and
 `tests\test_feedback.py`. `tests\test_dashboard.py` carries out dashboard plans with a stand-in COM
 child and a stand-in Rscript, so it needs no R. The build scores are in
@@ -309,14 +366,12 @@ child and a stand-in Rscript, so it needs no R. The build scores are in
 ## What version 2 adds
 
 Version 2 is being built in phases. The tutor and feedback export (above) are in 0.4.0, the dashboard
-in 0.5.0. Until their phase, the rest are answered with a STOP that says they are not in this version
-and what to do instead.
+in 0.5.0, and channel download in 0.6.0. Still to come:
 
 - **A GUI**, in this repository: a command box that takes the same phrases, with views of the project
   folder, the history, run results and summaries, the pending question as buttons, and the settings.
-  It calls the same functions as the command line.
-- **Channel download** from the IEEE P802.3dj tools page, with the FEXT and NEXT files paired to their
-  THRU.
+  It calls the same functions as the command line. Its design comes first, for the maintainer to
+  approve.
 
 ## What is known to be incomplete
 
@@ -350,6 +405,14 @@ The build also found:
   finish within 15 minutes. It was not investigated.
 - The channel-download rows of the table were written from a description of the IEEE tools page.
   The page was read on 7 October 2026, and rows F1 and F5 were rewritten and F11 and F12 added from it.
+  The page is hand-made HTML: its reader follows the markup of that day (the date line under each
+  link, the link folder as the interface, the superseded and do-not-use notes). A change in how the
+  page is written may need a change in the reader; the live test (`SICOPR_ASSIST_LIVE_FETCH=1`) shows
+  it.
+- Channel download pairs FEXT and NEXT files with their THRU only inside one folder of the zip, by
+  Decision 19. Files that the rule does not pair get a best guess and a question, not a silent run.
+- When a FEXT or NEXT file cannot be paired, the tool asks before anything runs, the thru-only runs
+  included; the table says those could go ahead at once.
 - Feedback masking recognises a package block name by the package clause it is typed in, by the
   working configs of the project, or by a name written like an identifier. A block name typed where
   the tool cannot place it, and never named anywhere else, is kept as an unplaced word.

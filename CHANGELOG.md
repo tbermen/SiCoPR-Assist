@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.6.0 (8 October 2026)
+
+Version 2, Phase V2-3: channel download (rows F1 to F12). Tested with SiCoPR 1.1.1 (commit `55c3f71`).
+
+- **Channel download.** `Download the latest 802.3dj channels posted and analyze with SiCoPR, both
+  thru-only and xtalk.` reads the IEEE P802.3dj tools page, takes the newest zip for the interface of the
+  project, downloads it into `.sicopr\cache\<interface>\`, unpacks it, writes its inventory, pairs each
+  FEXT and NEXT file with its THRU by Decision 19, and runs every channel thru-only and with its crosstalk
+  as one batch (`batch_summary.csv`, reuse by fingerprint, `max_new_runs`).
+- **The page as it is** (read on 7 October 2026). The interface is the folder of the zip link
+  (`tools/KR/`, `tools/CR/`, `c2c/`, `c2m/`); the date of a zip is the line under its link, in every form
+  the page uses, never a date in a note; a superseded note covers every zip of its entry, "do not use"
+  only the zip whose link says it; a row with no link is skipped; a relative link is resolved; the page
+  is read as Windows-1252. An entry with several zips under its date asks which one (F11), and so do
+  two entries that share the newest date (F12). The skipped entries are named in the plan, with why (F5).
+- **The interface** is asked once per project, KR first when the config file name or `RUNTAG` says KR,
+  with that evidence, and the answer is kept (F2).
+- **Two parts.** The core plans and never downloads: it reads the page, and asks the server for the
+  size (Content-Length) when the page gives none. `run.py` downloads and unpacks the zip; the core then
+  plans the run matrix from the cache (`core.fetch_followup`), and the command line shows it and carries
+  it out. A zip already in the cache is not downloaded again (F4), and one already unpacked is not
+  unpacked again.
+- **Safe download.** A zip larger than `max_download_mb` asks first. A download arrives through a
+  partial file outside the cache; an interrupted one is tried again `download_retries` times, then stops
+  with nothing in the cache (F9). With the site unreachable it stops, or offers the zips already cached
+  (F3).
+- **Safe unpacking.** Every path in a zip is checked to stay inside the cache before anything is
+  written: `..\`, `../`, an absolute path and a drive are refused, with nothing written, and the zip is
+  removed. A zip inside the zip is unpacked in place. A path longer than the 260 characters Windows
+  allows is warned about.
+- **Inventory and pairing.** `<zip>.inventory.csv` lists every file with its role, its THRU, the rule
+  that paired it, whether it reads as Touchstone, its SHA-256, and the role SiCoPR's
+  `benchmark\208_case_4p15p0\channels.csv` gives a file with the same SHA-256; a download that is one of
+  those six contributions is checked against it. A FEXT or NEXT file Decision 19 cannot pair asks:
+  correct the inventory and say `continue`, or run thru-only only (F6). A file that does not read as
+  Touchstone skips the runs that need it, with the reason in `batch_summary.csv` (F7). A zip with no
+  Touchstone file offers the next zips for the interface (F8); one with THRU files only runs thru-only
+  and says so (F10).
+- **Network.** Only `sicopr_assist\fetch.py` touches the network, from the standard library, and only
+  when a download is asked for (Rule 5 relaxed for that module alone; gate G5.3 narrowed, gate V3.4).
+  `SICOPR_ASSIST_FETCH_INDEX` names another index URL.
+- **IEEE public-area files** are kept in the project's `.sicopr\cache` and are never committed or
+  redistributed; `.gitignore` now also leaves out `*.zip` and `*.s2p`.
+- **Decision 16 is gone**: no phrase is answered with "not in this version" any more. `grab` is a
+  download word.
+- **Tests.** New: `tests\test_fetch.py` (the page reader, V3.2, V3.3, pairing and the known channels,
+  the answers to F2, F3, F6, F8 and F11, and the F1 and F7 plans carried out with the stand-in child),
+  and `tests\cases\standin_ieee.py`, a stand-in of the tools page in its recorded markup with small zips,
+  served from 127.0.0.1. No test touches the network; with `SICOPR_ASSIST_LIVE_FETCH=1`, `test_fetch.py`
+  reads the real page and the size of its newest KR zip, and with `SICOPR_ASSIST_LIVE_FETCH_ZIP=1` also
+  downloads that zip into a temporary folder and checks it against `channels.csv`. The harness reads
+  `same as F1` as F1's phrase, gives every fetch row its stand-in site, scores the outcome met before
+  any run (after the download part, for a download plan), and gates the group fetch (`--gate V3.1`).
+  Every group is now gated.
+- **Scores** (full harness, `SICOPR_ASSIST_FULL=1`): 2435 applicable pairs; must pairs 2340: L1 2340/2340, L2 1582/1582, L3 1623/1623, L4 1740/1744 (the miss is RS07, as before); the 11 fetch must pairs pass L1, and L4 on F1 and F2; paraphrases 3669: 3518 understood, 151 asked, 0 wrong.
+
 ## 0.5.0 (8 October 2026)
 
 Version 2, Phase V2-2: the dashboard (rows D1 to D4, CB17 and C2). Tested with SiCoPR 1.1.1 (commit

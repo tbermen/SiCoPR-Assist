@@ -14,6 +14,11 @@ one at a time. Each run gets the next run id and writes, under the project's .si
 
 A point whose loaded parameters, channel files and engine equal an earlier run's is reused, not run again
 (Decision 6). A point that fails validation is skipped and reported, and a batch goes on (Decision 7).
+
+A channel download (rows F1 to F12) is carried out in two parts. First the zip: downloaded with fetch.py into
+.sicopr\\cache\\<interface>\\ (unless it is there), unpacked with every path checked, and its inventory written; the
+core then plans the run matrix from the cache (core.fetch_followup), and that outcome is handed back under "next".
+Then that plan, a batch whose points each name their own channel files.
 Everything returned is data: the lines to show are in the result's "lines" (Decision 13).
 
 While a plan is carried out (Decision 17), each line is handed to the progress callback as (kind, text) as it
@@ -262,6 +267,13 @@ def _step_detail(op, a):
         return '%s points' % a.get('points', '')
     if op == 'export_xlsx':
         return a.get('path') or ''
+    if op == 'infer_interface':
+        return '%s (%s)' % (a.get('interface'), a.get('how'))
+    if op == 'select_zip':
+        return a.get('zip') or ''
+    if op in ('download', 'extract', 'inventory'):
+        what = a.get('path') or a.get('folder') or ''
+        return '%s%s' % (what, ', done before this plan' if a.get('done') else '')
     return ''
 
 
@@ -353,16 +365,107 @@ def open_page(path):
     return None if ok else 'no browser could be started; the page is %s' % path
 
 
+def fetch_pending(out):
+    """Whether a channel-download plan still has its download, its unpacking or its inventory to do."""
+    return any(s['op'] in ('download', 'extract', 'inventory') and not (s.get('args') or {}).get('done')
+               for s in out.get('steps') or [])
+
+
+def write_inventory(path, rows):
+    """inventory.csv of an unpacked zip (core.INVENTORY_COLUMNS), which the user may correct (row F6)."""
+    import csv
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', newline='', encoding='utf-8') as f:
+        w = csv.DictWriter(f, fieldnames=core.INVENTORY_COLUMNS, lineterminator='\n')
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: r.get(k, '') for k in core.INVENTORY_COLUMNS})
+    return path
+
+
+def _fetch_stage(project, out, rec, progress):
+    """The download part of a channel-download plan (rows F1 to F12): the zip is downloaded into .sicopr\\cache
+    (unless it is there), unpacked with every member path checked, and its inventory written; then the core plans
+    the run matrix from the cache (core.fetch_followup), and that outcome is returned under 'next' for the caller to
+    show and, if it is a PLAN, to carry out. Runs no COM. A download or unpacking that does not complete leaves
+    nothing in the cache, and 'next' is the STOP that says why (row F9)."""
+    import shutil
+    from sicopr_assist import fetch
+
+    def say(text, kind='status'):
+        if progress:
+            progress(kind, text)
+    steps = [(s['op'], s.get('args') or {}) for s in out['steps']]
+    sel = next(a for op, a in steps if op == 'select_zip')
+    iface, name = sel['interface'], sel['zip']
+    zpath = core.cached_zip(project, iface, name)
+    folder = core.unpack_dir(project, iface, name)
+    inv = core.inventory_path(project, iface, name)
+    lines = list((out.get('tutor') or {}).get('lines') or [])
+
+    def stopped(why):
+        project.update_history(rec['seq'], status='failed', reason=why)
+        say(why)
+        nxt = core.fetch_followup(project, out, failure=why)
+        return {'status': 'failed', 'run_ids': [], 'points': [], 'lines': lines, 'next': nxt}
+    files, warnings = None, []
+    for k, (op, a) in enumerate(steps):
+        if op not in ('import_config', 'infer_interface', 'fetch_index', 'select_zip', 'download', 'extract',
+                      'inventory'):
+            break
+        detail = _step_detail(op, a)
+        say('step %d of %d: %s%s' % (k + 1, len(steps), op, ': ' + detail if detail else ''))
+        if a.get('done'):
+            continue
+        if op == 'download':
+            t0 = time.time()
+            try:
+                got = fetch.download(a['url'], zpath, core.partial_path(project, name), retries=a.get('retries', 1),
+                                     say=lambda t: say(t, 'engine'))
+            except fetch.FetchError as e:
+                return stopped('The download of %s is incomplete: %s (download_retries = %s). Nothing was kept in the '
+                               'cache, and nothing runs.' % (name, e, a.get('retries', 1)))
+            say('downloaded %s (%s) in %s%s' % (name, _size_text(got['bytes']), elapsed_text(time.time() - t0),
+                                                ', on try %d' % got['tries'] if got['tries'] > 1 else ''))
+        elif op == 'extract':
+            shutil.rmtree(folder, ignore_errors=True)
+            if os.path.exists(inv):
+                os.remove(inv)
+            try:
+                un = fetch.unpack(zpath, folder)
+            except fetch.FetchError as e:
+                if os.path.exists(zpath):        # a zip that cannot be unpacked safely is not kept either
+                    os.remove(zpath)
+                return stopped('%s. It was removed from the cache, and nothing runs.' % e)
+            files, warnings = un['files'], un['warnings']
+            say('unpacked %d files into %s' % (len(files), project.relative(folder)))
+            for w in warnings:
+                say('warning: %s' % w)
+        elif op == 'inventory':
+            if files is None:                    # unpacked by an earlier plan: the files as they are on disk
+                files = sorted(os.path.relpath(os.path.join(d, n), folder).replace(os.sep, '/')
+                               for d, _, ns in os.walk(folder) for n in ns)
+            rows = core.fetch_inventory(folder, files, engine.known_channels())
+            write_inventory(inv, rows)
+            say('inventory written to %s: %d files' % (project.relative(inv), len(rows)))
+    nxt = core.fetch_followup(project, out, announce=['warning: %s' % w for w in warnings])
+    return {'status': 'ok', 'run_ids': [], 'points': [], 'lines': lines, 'next': nxt}
+
+
 def carry_out(project, out, child=None, progress=None, open_folder=open_folder, rscript=None, open_page=open_page):
     """Carry out a PLAN that core.handle returned and recorded. child replaces the command that runs one case
     (a test gives a stand-in that writes a seeded result.json). progress, when given, is called with (kind, text)
     for every line said while the plan is carried out (Decision 17; see line_text for the form shown).
     open_folder opens a folder for Send feedback, rscript replaces the Rscript command of the dashboard (a list;
     default: the Rscript engine.find_rscript finds), and open_page opens the dashboard page (tests give stand-ins).
-    Returns {'status', 'run_ids', 'points', 'lines'} and fills in the history record."""
+    Returns {'status', 'run_ids', 'points', 'lines'} and fills in the history record. A channel-download plan whose
+    zip is not yet downloaded or unpacked does only that part (_fetch_stage) and adds 'next', the outcome the core
+    plans from the cache."""
     if out.get('type') != 'PLAN':
         raise ValueError('only a PLAN is carried out')
     rec = _record_of(project, out)
+    if fetch_pending(out):                       # a channel download: the zip first, then the core plans the runs
+        return _fetch_stage(project, out, rec, progress)
     steps = [(s['op'], s.get('args') or {}) for s in out['steps']]
     ops = [op for op, _ in steps]
     R = _Runner(project, child, progress)
@@ -434,7 +537,8 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
     run_com = next((a for op, a in steps if op == 'run_com'), None)
     if run_com and run_com.get('thru_only'):
         channels = channels[:1]
-    if not channels and any(op in ops for op in ('run_com', 'run_batch', 'export_mat')):
+    point_channels = any(pt.get('channels') for pt in out.get('points') or [])     # a fetched batch names its own
+    if not channels and not point_channels and any(op in ops for op in ('run_com', 'run_batch', 'export_mat')):
         return _failed(project, rec, 'no channel file is known for this run')
     chan_recs = [{'path': _native(p), 'sha256': _sha(ctx.path(p)), 'role': r} for p, r in channels]
     fields = dict(source=source, channels=chan_recs, overrides=overrides)
@@ -457,8 +561,13 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
             if pt.get('skipped'):
                 R.say('status', '%s: skipped, %s' % (where, pt['skipped']))
             else:
-                point_wc = config_model.apply_changes(wc, list((pt.get('writes') or pt.get('values') or {}).items()))
-                got = R.run_point(point_wc['config'], channels, where)
+                if pt.get('channels'):           # a fetched batch: each point has its own channel files, no change
+                    point_wc = {'config': wc}
+                    point_chans = [(p, r) for p, r in pt['channels']]
+                else:
+                    point_wc = config_model.apply_changes(wc, list((pt.get('writes') or pt.get('values') or {}).items()))
+                    point_chans = channels
+                got = R.run_point(point_wc['config'], point_chans, where)
                 rec_pt.update(run_id=got['run_id'], new=got['new'], reused_from=got['reused_from'],
                               skipped=got['skipped'])
                 if got['status'] == 'failed':

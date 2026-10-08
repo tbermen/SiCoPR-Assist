@@ -22,12 +22,12 @@ import re
 import fixtures
 import l4
 import prior_states
-from sicopr_assist import engine
+from sicopr_assist import core, engine, run
 from sicopr_assist.project import Project
 
-# the groups not gated yet: version 2 builds the tutor and feedback in Phase V2-1, the dashboard (report) in V2-2
-# and channel download (fetch) in V2-3, and each group is gated from the phase that builds it
-DEFERRED = ('fetch',)
+# the groups not gated yet: none since Phase V2-3. Version 2 built the tutor and feedback in Phase V2-1, the dashboard
+# (report) in V2-2 and channel download (fetch) in V2-3, and each group is gated from the phase that built it
+DEFERRED = ()
 FROZEN = os.path.join(fixtures.HERE, 'l4_rows.csv')
 FROZEN_COLUMNS = ['id', 'starting_config', 'group', 'priority', 'expected_type', 'kind', 'expected']
 REVIEW = os.path.join(fixtures.HERE, 'l4_review.csv')
@@ -231,11 +231,25 @@ class Scorer:
         prior_states.build(row['prior_state'], ctx)
         return ctx
 
+    def phrase_of(self, row, column='phrase'):
+        """The phrase (or the paraphrases) of a row; "same as F1" means that column of row F1 (prompt section 3)."""
+        text = row[column].strip()
+        m = re.fullmatch(r'same as ([A-Z]{1,3}\d+)', text)
+        if m and m.group(1) in self.by_id:
+            return self.by_id[m.group(1)][0][column]
+        return row[column]
+
     def call(self, ctx, phrase):
+        """The outcome of one phrase. For a channel download that is the outcome the user meets before anything
+        runs: the core plans the zip, run.py downloads and unpacks it from the local stand-in site (no COM, no
+        network), and the core plans the run matrix from the cache (rows F1 to F12)."""
         old = {k: os.environ.get(k) for k in ctx.env}
         os.environ.update(ctx.env)
         try:
-            return self.handle(phrase, Project(ctx.root))
+            o = self.handle(phrase, Project(ctx.root))
+            if isinstance(o, dict) and o.get('type') == 'PLAN' and self.handle is core.handle and run.fetch_pending(o):
+                o = run.carry_out(Project(ctx.root), o)['next']
+            return o
         finally:
             for k, v in old.items():
                 if v is None:
@@ -322,7 +336,7 @@ class Scorer:
         notes = []
         ctx = self.context(row, label)
         try:
-            o = self.call(ctx, row['phrase'])
+            o = self.call(ctx, self.phrase_of(row))
             bad = well_formed(o)
             if bad:
                 res.update(L1='FAIL', note=bad)
@@ -368,9 +382,10 @@ class Scorer:
                                'tutor_error': (o.get('tutor') or {}).get('why') == 'error'}
         finally:
             self.fx.remove_project(ctx.root)
-        if paraphrases and row['paraphrases'].strip():
+        paras = self.phrase_of(row, 'paraphrases')
+        if paraphrases and paras.strip():
             okn = asked = wrong = 0
-            for ph in [p.strip() for p in row['paraphrases'].split(' | ') if p.strip()]:
+            for ph in [p.strip() for p in paras.split(' | ') if p.strip()]:
                 c2 = self.context(row, label)
                 try:
                     o2 = self.call(c2, ph)

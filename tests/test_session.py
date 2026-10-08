@@ -1,5 +1,5 @@
 """Project state: the history of Decision 9 and replay, Send feedback (Decision 10), and
-gate G5.3 (no network import anywhere in the package). No workbook is needed: the working
+gates G5.3 and V3.4 (no network import in the package but fetch.py). No workbook is needed: the working
 config of a seeded run is the shipped example.
 
   - every phrase is recorded with its pattern, unplaced words, options offered, the option chosen, and the
@@ -11,7 +11,8 @@ config of a seeded run is the shipped example.
   - What did I run last? shows the last command, its inputs, its overrides and its result folders (S2)
   - Send feedback (version 2, Decision 10): with no history a STOP; otherwise the export plan, which writes
     nothing at plan time and gives the address and subject when carried out; the address is one constant
-  - no module under sicopr_assist imports urllib, http, socket, smtplib, ftplib or requests
+  - no module under sicopr_assist imports urllib, http, socket, smtplib, ftplib or requests, but fetch.py, the one
+    module allowed to touch the network in version 2 (channel download, gate V3.4)
 
     python tests\\test_session.py
 """
@@ -36,17 +37,22 @@ from sicopr_assist import core, project as P  # noqa: E402
 
 PACKAGE = os.path.join(ROOT, 'sicopr_assist')
 NETWORK = ('urllib', 'http', 'socket', 'smtplib', 'ftplib', 'requests')
+# Rule 5 is relaxed in version 2 for one module: channel download (gate V3.4)
+NETWORK_MODULE = os.path.join(PACKAGE, 'fetch.py')
 STORED_STEPS = ['set_param', 'validate_config', 'run_com', 'summarize']
 
 
-def network_imports(folder=PACKAGE):
-    """[(file, line, module)] for every import of a network module, or a dynamic import of one by name."""
+def network_imports(folder=PACKAGE, exempt=(NETWORK_MODULE,)):
+    """[(file, line, module)] for every import of a network module, or a dynamic import of one by name, in every
+    module under folder but the exempt ones."""
     out = []
     for dirpath, _, files in os.walk(folder):
         for n in sorted(files):
             if not n.endswith('.py'):
                 continue
             path = os.path.join(dirpath, n)
+            if any(os.path.normcase(path) == os.path.normcase(e) for e in exempt):
+                continue
             with open(path, encoding='utf-8') as f:
                 tree = ast.parse(f.read(), path)
             for node in ast.walk(tree):
@@ -122,7 +128,10 @@ class Place:
 
 def main():
     found = network_imports()
-    check('G5.3: no module under sicopr_assist imports %s' % ', '.join(NETWORK), not found, found)
+    check('G5.3, V3.4: no module under sicopr_assist but fetch.py imports %s' % ', '.join(NETWORK), not found, found)
+    every = network_imports(exempt=())
+    check('V3.4: fetch.py is the only module that does (the exemption covers it and nothing else)',
+          every and {f for f, _, _ in every} == {os.path.relpath(NETWORK_MODULE, ROOT)}, every)
 
     with Place() as pl:
         o = core.handle('Re-run.', pl.project)

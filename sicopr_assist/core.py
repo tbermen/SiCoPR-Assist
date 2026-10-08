@@ -23,10 +23,14 @@ the point sets, in the config's own form (a [TX RX] pair written to both sides, 
 
 Inputs and outcome stay plain data so that a language-model layer can work upstream of this function: it may
 turn loose wording into a phrase, and the core resolves it exactly as it resolves typed input.
+
+A channel download (rows F1 to F12) is planned here and never made here: the core reads the IEEE tools page through
+fetch.py and plans the zip; run.py downloads and unpacks it; fetch_followup then plans the run matrix from the cache.
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
 import copy
+import csv
 import glob
 import hashlib
 import itertools
@@ -35,7 +39,7 @@ import math
 import os
 import re
 
-from sicopr_assist import config_model, engine, parse, summary, validate, xlsx_io
+from sicopr_assist import config_model, engine, fetch, parse, summary, validate, xlsx_io
 from sicopr_assist.project import history_record, read_settings, setting_text
 
 # The step vocabulary, frozen in Phase 1 from the expected_detail chains of the use-case table
@@ -59,19 +63,10 @@ SWEEP_ASK_OPTIONS = ('run all points anyway', 'run only the points that pass', C
 EXAMPLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'sicopr_config_example.json')
 CONFIG_EXT = ('.xlsx', '.xls', '.csv', '.json')
 
-# Version 2 features not built yet (Decision 16): what to do instead, in this version.
-NOT_IN_V1 = {
-    'fetch': 'Downloading channels is not in this version of SiCoPR-Assist. Download the channel files from the IEEE '
-             'P802.3dj tools page (https://www.ieee802.org/3/dj/public/tools/index.html), unpack them into the '
-             'project folder, and name them in the phrase, for example Run COM on data\\thru.s4p with data\\config.xlsx.',
-}
-
-# The same, as one announced line when the rest of the phrase is planned (Decision 16). The tutor and feedback
-# export are built (Decision 11, Decision 10): asked for beside a run, they are named on their own. The dashboard is
-# built (Phase V2-2): asked for beside a run, it follows the run (rows CB17 and C2).
+# Asked for beside a run, the tutor and feedback export are named on their own, as one announced line (Decisions 10
+# and 11). The dashboard follows the run (rows CB17 and C2), and a channel download is planned on its own (rows F1
+# to F12): version 2 builds them all, so Decision 16 no longer stops any phrase.
 NOT_IN_V1_PART = {
-    'fetch': 'downloading channels is not in this version of SiCoPR-Assist (version 2 adds it); the run uses the '
-             'channel files in the project folder',
     'tutor': 'the tutor is asked for on its own: What can I say?',
     'feedback': 'feedback is exported on its own: Export feedback',
 }
@@ -565,15 +560,15 @@ def _plan(text, ctx, mods):
     if not _has_v1_action(req) and (send or 'feedback' in acts or
                                      ('save' in acts and re.search(r'\bhistory\b', low) and re.search(r'\bdevelopers?\b', low))):
         return _feedback_request(req, ctx, base, send)
+    # channel download: the newest zip for the interface, unpacked, inventoried and run (rows F1 to F12)
+    if 'fetch' in acts:
+        return _fetch_request(req, low, ctx, mods, base)
     # the dashboard on its own: the .mat export of the last run, SiCoPR's R report on it, the page (rows D1 to D3)
     dash = 'dashboard' in acts
     if dash and not _has_v1_action(req):
         return _dashboard_request(req, ctx, base)
-    # a version 2 feature not built yet alone is a STOP; asked for with a version 1 action, the version 1 part is
-    # planned and the rest is announced as not in this version (Decision 16, channel download until Phase V2-3)
-    deferred = [f for f in ('fetch', 'tutor', 'feedback') if f in acts]
-    if deferred and not _has_v1_action(req):
-        return _stop(NOT_IN_V1[deferred[0]], **base)
+    # the tutor or feedback asked for with a version 1 action: the version 1 part is planned and the rest is named
+    deferred = [f for f in ('tutor', 'feedback') if f in acts]
     if deferred or dash:
         req = dict(req, actions=[a for a in acts if a not in deferred and a != 'dashboard'])
     out, answers = _plan_v1(text, req, ctx, mods, base)
@@ -793,6 +788,558 @@ def _with_dashboard(out, ctx, base, asked):
     out['announce'] = list(out['announce']) + ([] if asked else [
         'the last command built the dashboard, so it is built again for this run']) + lines
     return out
+
+
+# ----------------------------------------------------------------------------- channel download (rows F1 to F12)
+# The core plans a download and never makes one: it reads the IEEE tools page (and asks the server for a zip's size
+# when the page gives none) through fetch.py, the only module that touches the network, because the plan has to name
+# the zip and its size, and a large one asks first. run.py downloads and unpacks the zip into .sicopr\cache and takes
+# its inventory; then fetch_followup plans the run matrix from the cache.
+INTERFACES = tuple(fetch.INTERFACES.values())         # KR, CR, C2C, C2M: the link folders of the tools page
+FETCH_MODES = ('thru_only', 'xtalk')
+INVENTORY_COLUMNS = ('file', 'kind', 'thru', 'rule', 'touchstone', 'sha256', 'bytes', 'known_role', 'contribution')
+IEEE_LINE = ('the channel files are IEEE public-area files: they are kept in .sicopr\\cache for use here and must '
+             'not be committed or redistributed')
+# words a download request is made of besides its action word and its config
+_FETCH_WORDS = {'spreadsheet', 'workbook', 'latest', 'newest', 'new', 'newer', 'recent', 'channels', 'channel',
+                'posted', 'published', '802.3dj', 'p802.3dj', 'dj', 'ieee', 'zip', 'grab', 'get', 'them', 'set', 'sets',
+                'without', 'and', 'or', 'run', 'both', 'xtalk', 'crosstalk', 'thru-only', 'page', 'site', 'tools'}
+
+
+def cache_dir(project, interface):
+    """.sicopr\\cache\\<interface>: the zips downloaded for one interface, each unpacked beside it."""
+    return os.path.join(project.dir, 'cache', interface)
+
+
+def cached_zip(project, interface, name):
+    return os.path.join(cache_dir(project, interface), name)
+
+
+def unpack_dir(project, interface, name):
+    return os.path.join(cache_dir(project, interface), os.path.splitext(name)[0])
+
+
+def inventory_path(project, interface, name):
+    return unpack_dir(project, interface, name) + '.inventory.csv'
+
+
+def partial_path(project, name):
+    """Where a download arrives until it is complete: in .sicopr, outside the cache."""
+    return os.path.join(project.dir, name + '.part')
+
+
+def _mb(n):
+    if n is None:
+        return 'size unknown'
+    return '%s MB' % summary.fmt(round(n / 1e6, 1)) if n >= 1e5 else '%d bytes' % n
+
+
+def interface_evidence(path, wc):
+    """[(interface, why)] that the config file name and RUNTAG give. PMD_type is not used: the 802.3dj KR workbooks
+    set it to C2C (row F2)."""
+    out = []
+    for w in re.split(r'[_\-. ]+', os.path.splitext(os.path.basename(path))[0]):
+        m = re.fullmatch(r'(?:CA)?(KR|CR|C2C|C2M)\d*', w, re.I)
+        if m:
+            out.append((m.group(1).upper(), 'the config file name says %s' % w))
+            break
+    tag = str(_current(wc, 'RUNTAG') or '')
+    m = re.match(r'(KR|CR|C2C|C2M)(?![A-Za-z0-9])', tag, re.I)
+    if m:
+        out.append((m.group(1).upper(), 'RUNTAG (%s) starts with %s' % (tag, m.group(1).upper())))
+    return out
+
+
+def confirmed_interface(history):
+    """The interface confirmed for this project: the answer to the last interface question (row F2: asked once per
+    project, and the answer is kept), else None."""
+    by_seq = {r.get('seq'): r for r in history}
+    for r in reversed(history):
+        chosen = (r.get('chosen') or '').split(' ')[0].upper()
+        asked = 'confirm_interface' in (r.get('pattern') or '') or \
+            'confirm_interface' in ((by_seq.get(r.get('answers')) or {}).get('pattern') or '')
+        if chosen in INTERFACES and asked:
+            return chosen
+    return None
+
+
+def select_zip(entries, interface, pick=None, entry=None):
+    """The zip a download takes from the entries of the tools page (fetch.parse_index), for one interface: the newest
+    by the date under its link, in an entry not marked superseded, and not itself marked do not use (rows F1, F5).
+    Returns {'zip': (entry, zip) or None, 'ask': None | ('zips', [(entry, zip)]) | ('entries', [entry]),
+    'skipped': [(zip, why)], 'candidates': [(entry, zip)]}: several zips of one entry under the newest date ask (F11),
+    and two entries that share it ask (F12). pick names a zip by URL and entry an entry by name, as an answer does."""
+    valid, skipped = [], []
+    for e in entries:
+        for z in e['zips']:
+            if z['interface'] != interface:
+                continue
+            if z['date'] is None:
+                skipped.append((z, 'the page gives no date under its link'))
+            elif e['superseded']:
+                skipped.append((z, 'its entry is marked superseded: %s' % e['superseded']))
+            elif z['do_not_use']:
+                skipped.append((z, 'its link says do not use: %s' % z['text']))
+            else:
+                valid.append((e, z))
+    out = {'zip': None, 'ask': None, 'skipped': [], 'candidates': []}
+    pool = valid
+    if pick:
+        pool = [(e, z) for e, z in valid if z['url'] == pick]
+    elif entry:
+        pool = [(e, z) for e, z in valid if e['name'] == entry]
+    if not pool:
+        out['skipped'] = skipped
+        return out
+    newest = max(z['date'] for _, z in pool)
+    top = [(e, z) for e, z in pool if z['date'] == newest]
+    names = list(dict.fromkeys(e['name'] for e, _ in top))
+    if len(names) > 1:
+        out['ask'] = ('entries', [next(e for e, _ in top if e['name'] == n) for n in names])
+    elif len(top) > 1:
+        out['ask'] = ('zips', top)
+    else:
+        out['zip'] = top[0]
+    out['skipped'] = [(z, why) for z, why in skipped if z['date'] is None or z['date'] >= newest]
+    out['candidates'] = sorted([(e, z) for e, z in valid if (e, z) not in top], key=lambda ez: ez[1]['date'],
+                               reverse=True)
+    return out
+
+
+def _fetch_modes(req, low, mods):
+    if mods.get('modes'):
+        return list(mods['modes'])
+    t, x = 'thru_only' in req['flags'], 'crosstalk' in req['flags']
+    if t == x or re.search(r'\bwith and without\b|\bboth\b', low):
+        return list(FETCH_MODES)
+    return ['thru_only'] if t else ['xtalk']
+
+
+def _fetch_config(req, ctx, mods, base):
+    """((config as typed, working config), None), or (None, (outcome, answers)): the config the downloaded channels
+    are run with, named in the phrase or the one config in the folder, imported and checked as a run checks it."""
+    named = [f['text'] for f in req['files'] if f['ext'] in CONFIG_EXT]
+    found = ctx.config_files()
+    cfg = mods.get('config') or (named[0] if named else (found[0] if len(found) == 1 else None))
+    if cfg is None:
+        if not found:
+            return None, _stop('There is no config in this project folder to run the downloaded channels with. Name '
+                               'one, for example: Download the latest 802.3dj channels and run them with '
+                               'data\\config.xlsx.', **base)
+        return None, _ask('There is more than one config in this folder: which one should the downloaded channels be '
+                          'run with?', found + [CANCEL], {c: {'config': c} for c in found} | {CANCEL: None}, **base)
+    path = ctx.path(cfg)
+    if not os.path.exists(path):
+        return None, _stop('%s does not exist in this project folder. Nothing is downloaded.' % cfg, **base)
+    sel = None
+    if path.lower().endswith(('.xlsx', '.xls')):
+        try:
+            sel = xlsx_io.selection_lists(path)
+        except Exception:
+            sel = None
+    wc, res = validate.validate_import(path, sel, allow=mods.get('allow') or ())
+    if res['status'] == 'stop':
+        return None, _stop(_sentence(res['text']), **base)
+    if res['status'] == 'ask':
+        opts = list(res['options']) or [CANCEL]
+        answers = {o: (None if res['answers'].get(o) is None else
+                       ({'set': res['answers'][o]['set']} if 'set' in res['answers'][o] else
+                        {'allow': res['answers'][o].get('allow', [])})) for o in opts}
+        return None, _ask(_sentence(res['text']), opts, answers, **base)
+    return (cfg, wc), None
+
+
+def _interface_question(cfg, wc, base):
+    """Row F2: which interface the channels are for, asked once per project with the evidence, the interface it
+    points to first."""
+    ev = interface_evidence(cfg, wc)
+    first = ev[0][0] if ev and all(i == ev[0][0] for i, _ in ev) else None
+    order = ([first] if first else []) + [i for i in INTERFACES if i != first]
+    why = '; '.join(w for _, w in ev) or 'neither the config file name nor RUNTAG names one'
+    pmd = _current(wc, 'PMD_type')
+    text = ('Which interface are the channels for? The newest entry is chosen among the zips of that interface on the '
+            'IEEE P802.3dj tools page. Evidence: %s.%s The answer is kept for this project.'
+            % (why, ' PMD_type (%s) is not used: the 802.3dj KR workbooks set it to C2C.' % show(pmd) if pmd else ''))
+    opts = [('%s (the evidence points here)' % i) if i == first else i for i in order]
+    return _ask(text, opts, {o: {'interface': o.split(' ')[0]} for o in opts},
+                **dict(base, pattern=(base.get('pattern') or '') + '; confirm_interface'))
+
+
+def _remark(text):
+    """A title as the remark after an option: its own parentheses dropped, so the remark reads as one."""
+    return ' '.join(re.sub(r'[()]', ' ', text).split())
+
+
+def _cached_zips(project, interface):
+    d = cache_dir(project, interface)
+    return sorted(n for n in os.listdir(d) if n.lower().endswith('.zip')) if os.path.isdir(d) else []
+
+
+def _from_cache(project, interface, name):
+    """What select_zip gives, for a zip already in the cache when the page cannot be read."""
+    return {'zip': name, 'url': None, 'interface': interface, 'date': None, 'date_text': None,
+            'entry': os.path.splitext(name)[0], 'title': name, 'size': os.path.getsize(cached_zip(project, interface, name)),
+            'size_from': 'the cache', 'candidates': [], 'skipped': [], 'index': None, 'entries': None}
+
+
+def _fetch_select(ctx, iface, mods, base):
+    """(selection, None) or (None, (outcome, answers)): the tools page read, the zip chosen and its size."""
+    url = fetch.index_url()
+    try:
+        text = fetch.read_index(url)
+    except fetch.FetchError as e:                                               # row F3
+        cached = _cached_zips(ctx.project, iface)
+        if cached:
+            return None, _ask('The IEEE site is unreachable: %s. These zips for %s are already in the cache '
+                              '(.sicopr\\cache\\%s): run one of them?' % (e, iface, iface), cached + [CANCEL],
+                              {n: {'selected': _from_cache(ctx.project, iface, n)} for n in cached} | {CANCEL: None},
+                              **base)
+        return None, _stop('The IEEE site is unreachable: %s. Nothing was downloaded, and no zip for %s is in the cache '
+                           '(.sicopr\\cache\\%s).' % (e, iface, iface), **base)
+    entries = fetch.parse_index(text, url)
+    got = select_zip(entries, iface, pick=mods.get('pick'), entry=mods.get('pick_entry'))
+    skipped = ['skipped %s (%s): %s' % (z['name'], z['date_text'] or 'no date', why) for z, why in got['skipped']]
+    if got['ask'] and got['ask'][0] == 'entries':                               # row F12
+        es = got['ask'][1]
+        opts = ['%s (%s)' % (e['name'], _remark(e['title'])) for e in es]
+        date = next(z['date_text'] for z in es[0]['zips'] if z['interface'] == iface and z['date_text'])
+        return None, _ask('%d %s entries on the tools page share the newest date, %s: which one?'
+                          % (len(es), iface, date), opts + [CANCEL],
+                          {o: {'pick_entry': e['name']} for o, e in zip(opts, es)} | {CANCEL: None},
+                          announce=skipped, **base)
+    if got['ask']:                                                              # row F11
+        top = got['ask'][1]
+        opts = ['%s (%s)' % (z['name'], _remark(z['text'])) for _, z in top]
+        return None, _ask('The newest %s entry on the tools page, %s (%s), holds %d zips: which one?'
+                          % (iface, top[0][0]['title'], top[0][1]['date_text'], len(top)), opts + [CANCEL],
+                          {o: {'pick': z['url']} for o, (_, z) in zip(opts, top)} | {CANCEL: None},
+                          announce=skipped, **base)
+    if got['zip'] is None:                                                      # row F5 fallback
+        return None, _stop('No zip for %s on the tools page can be used%s. Nothing was downloaded.'
+                           % (iface, ': ' + '; '.join(skipped) if skipped else ' (the page lists none)'), **base)
+    e, z = got['zip']
+    if z['size_mb'] is not None:
+        size, src = int(round(z['size_mb'] * 1e6)), 'the page'
+    elif os.path.isfile(cached_zip(ctx.project, iface, z['name'])):
+        size, src = os.path.getsize(cached_zip(ctx.project, iface, z['name'])), 'the cache'
+    else:
+        size = fetch.head_size(z['url'])
+        src = "the server's Content-Length" if size is not None else None
+    return {'zip': z['name'], 'url': z['url'], 'interface': iface, 'date': z['date'], 'date_text': z['date_text'],
+            'entry': e['name'], 'title': z['text'], 'size': size, 'size_from': src, 'skipped': skipped,
+            'candidates': [{'zip': cz['name'], 'url': cz['url'], 'date': cz['date']} for _, cz in got['candidates']],
+            'index': url, 'entries': len(entries)}, None
+
+
+def _fetch_request(req, low, ctx, mods, base):
+    """Download the newest channel zip for the interface of the project and run its channels thru-only and with
+    crosstalk (rows F1 to F12). Before the zip is in the cache and unpacked, the plan ends with the run matrix still to
+    be built: run.py downloads, unpacks and takes the inventory, and fetch_followup plans the matrix."""
+    left = _leftover(req, _FETCH_WORDS)
+    if left:
+        return _unplaced_only(dict(req, unplaced=left), dict(base, unplaced=left))
+    base = dict(base, unplaced=[])
+    if req['sets'] or req['sweeps'] or req['packages'] or any(f['ext'] == 'channel' for f in req['files']):
+        return _stop('A channel download is planned on its own, with the config it runs: the channels come from the '
+                     'zip. Download and run them first, then ask for the change or the other channel.', **base)
+    modes = _fetch_modes(req, low, mods)
+    got, ask = _fetch_config(req, ctx, mods, base)
+    if ask:
+        return ask
+    cfg, wc = got
+    steps = [_step('import_config', path=cfg)]
+    announce = ['the config is %s' % cfg]
+    iface = mods.get('interface')
+    how = 'answered'
+    if iface is None:
+        iface, how = confirmed_interface(ctx.history), 'confirmed for this project earlier'
+    if iface is None:
+        return _interface_question(cfg, wc, base)
+    steps.append(_step('infer_interface', interface=iface, how=how))
+    announce.append('interface %s (%s)' % (iface, how))
+    sel = mods.get('selected')
+    if sel is None:
+        sel, ask = _fetch_select(ctx, iface, mods, base)
+        if ask:
+            return ask
+    project = ctx.project
+    zpath = cached_zip(project, iface, sel['zip'])
+    cached = os.path.isfile(zpath)
+    limit = ctx.setting('max_download_mb')
+    if not cached and sel['size'] is not None and sel['size'] > limit * 1e6 and not mods.get('size_ok'):
+        o = 'download it'
+        return _ask('%s is %s (from %s), more than max_download_mb (%s MB): download it anyway?'
+                    % (sel['zip'], _mb(sel['size']), sel['size_from'], summary.fmt(limit)), [o, CANCEL],
+                    {o: {'size_ok': True, 'selected': sel}, CANCEL: None}, announce=announce + sel['skipped'], **base)
+    rel = project.relative
+    resume = {'phrase': req['phrase'], 'mods': dict(copy.deepcopy(mods), selected=sel)}
+    steps.append(_step('fetch_index', url=sel['index'], entries=sel['entries']))
+    steps.append(_step('select_zip', zip=sel['zip'], url=sel['url'], interface=iface, date=sel['date'],
+                       size=sel['size'], size_from=sel['size_from']))
+    if sel['index']:
+        announce.append('read the IEEE P802.3dj tools page %s: %d entries' % (sel['index'], sel['entries']))
+    announce += sel['skipped']
+    announce.append('zip: %s (%s), dated %s, %s%s' % (
+        sel['zip'], sel['title'], sel['date_text'] or 'not read', _mb(sel['size']),
+        ' (from %s)' % sel['size_from'] if sel['size_from'] else ''))
+    if not cached:
+        steps.append(_step('download', url=sel['url'], zip=sel['zip'], path=rel(zpath), size=sel['size'],
+                           retries=ctx.setting('download_retries')))
+        announce.append('downloads it to %s, through a partial file that is removed unless the zip arrives whole; an '
+                        'interrupted download is tried again %d more time%s' % (
+                            rel(zpath), ctx.setting('download_retries'),
+                            '' if ctx.setting('download_retries') == 1 else 's'))
+    elif mods.get('downloaded'):
+        steps.append(_step('download', url=sel['url'], zip=sel['zip'], path=rel(zpath), size=sel['size'], done=True))
+        announce.append('downloaded to %s (%s)' % (rel(zpath), _mb(os.path.getsize(zpath))))
+    else:
+        announce.append('cache hit: %s is already in the cache, so nothing is downloaded' % rel(zpath))
+    rows = _read_inventory(project, iface, sel['zip']) if cached else None
+    folder = unpack_dir(project, iface, sel['zip'])
+    inv = inventory_path(project, iface, sel['zip'])
+    if rows is None:
+        steps += [_step('extract', zip=sel['zip'], folder=rel(folder), resume=resume),
+                  _step('inventory', path=rel(inv)), _step('validate_inputs'), _step('build_matrix', modes=modes),
+                  _step('run_batch'), _step('batch_summary')]
+        announce += ['unpacks it into %s, with every path in the zip checked to stay there before anything is written; '
+                     'a zip inside it is unpacked in place' % rel(folder),
+                     'then the inventory (%s) pairs each FEXT and NEXT file with its THRU, and the run matrix (the '
+                     'channels x %s) is planned and shown before any run starts'
+                     % (rel(inv), ' and '.join(m.replace('_', '-') for m in modes)), IEEE_LINE]
+        return outcome('PLAN', steps=steps, announce=announce, **base), {}
+    steps += [_step('extract', zip=sel['zip'], folder=rel(folder), resume=resume, done=True),
+              _step('inventory', path=rel(inv), done=True)]
+    return _fetch_matrix(ctx, mods, base, wc, sel, rows, modes, steps, announce)
+
+
+def _read_inventory(project, interface, name):
+    """The rows of the inventory of an unpacked zip, or None when the zip is not unpacked (no inventory, or a file it
+    lists is gone)."""
+    path = inventory_path(project, interface, name)
+    folder = unpack_dir(project, interface, name)
+    try:
+        with open(path, newline='', encoding='utf-8') as f:
+            rows = list(csv.DictReader(f))
+    except (OSError, ValueError):
+        return None
+    if any(not os.path.isfile(os.path.join(folder, *r['file'].split('/'))) for r in rows):
+        return None
+    return rows
+
+
+def fetch_inventory(folder, files, known=()):
+    """The inventory of an unpacked zip: one row per file (paths relative to folder, with /), as INVENTORY_COLUMNS.
+    A channel file is a THRU, FEXT or NEXT by Decision 19's words; each FEXT and NEXT file is paired with its THRU by
+    Decision 19's rule, in its own folder (rule only_thru or name). A file the rule pairs with no THRU, or with more
+    than one, gets the best guess by name (rule guess), or none when the zip has no THRU. touchstone is ok or why
+    the file does not read. known_role is the role SiCoPR's benchmark channels.csv gives a file with the same SHA-256."""
+    import difflib
+    by_sha = {k['sha256'].lower(): k for k in known if k.get('sha256')}
+    rows = []
+    for f in files:
+        p = os.path.join(folder, *f.split('/'))
+        sha = _sha(p)
+        k = by_sha.get(sha, {})
+        is_ch = bool(parse.CHANNEL_EXT.search(f))
+        rows.append({'file': f, 'kind': channel_kind(f) if is_ch else 'other', 'thru': '', 'rule': '',
+                     'touchstone': (touchstone_problem(p) or 'ok') if is_ch else '', 'sha256': sha,
+                     'bytes': os.path.getsize(p), 'known_role': k.get('role', ''), 'contribution': k.get('contribution', '')})
+    chans = [r for r in rows if r['kind'] != 'other']
+    thrus = [r for r in chans if r['kind'] == 'thru']
+    for t in thrus:
+        t['thru'] = t['file']
+    dirs = {}
+    for r in chans:
+        dirs.setdefault(os.path.dirname(r['file']), []).append(r)
+    claims = {}
+    for d, group in dirs.items():
+        names = [os.path.basename(r['file']) for r in group]
+        for t in [r for r in group if r['kind'] == 'thru']:
+            m = match_crosstalk(t['file'], names)
+            for n in m['fext'] + m['next']:
+                claims.setdefault((d + '/' + n) if d else n, []).append((t['file'], m['rule']))
+    stem = lambda f: ' '.join(_name_stem(f))                                           # noqa: E731
+    for r in chans:
+        if r['kind'] == 'thru':
+            continue
+        c = claims.get(r['file'], [])
+        if len(c) == 1:
+            r['thru'], r['rule'] = c[0]
+            continue
+        pool = [t for t, _ in c] or [t['file'] for t in thrus]
+        if pool:
+            r['thru'] = max(pool, key=lambda t: (difflib.SequenceMatcher(None, stem(r['file']), stem(t)).ratio(), t))
+            r['rule'] = 'guess'
+        else:
+            r['rule'] = 'none'
+    return rows
+
+
+def _fetch_matrix(ctx, mods, base, wc, sel, rows, modes, steps, announce):
+    """The run matrix of an unpacked zip: for each THRU, a thru-only point and a point with its FEXT and NEXT files,
+    each reused by fingerprint (Decision 6), or skipped and reported when a file it needs does not read as
+    Touchstone (row F7). No Touchstone file asks for another zip (F8); a pairing that is only a guess asks (F6); no
+    FEXT or NEXT file runs thru-only and says so (F10)."""
+    project = ctx.project
+    rel = project.relative
+    iface = sel['interface']
+    folder = unpack_dir(project, iface, sel['zip'])
+    inv = rel(inventory_path(project, iface, sel['zip']))
+    chans = [r for r in rows if r['kind'] in ('thru', 'fext', 'next')]
+    other = [r['file'] for r in rows if r['kind'] not in ('thru', 'fext', 'next')]
+    if not chans:                                                               # row F8
+        what = '%d file%s: %s' % (len(other), '' if len(other) == 1 else 's', ', '.join(other[:8]) +
+                                  (' and %d more' % (len(other) - 8) if len(other) > 8 else '')) if other else 'nothing'
+        cands = sel.get('candidates') or []
+        if not cands:
+            return _stop('%s holds no Touchstone file (.sNp): it holds %s. No other zip for %s on the tools page can be '
+                         'used, so nothing runs.' % (sel['zip'], what, iface), announce=announce, **base)
+        cands = cands[:max(1, ctx.setting('max_options') - 1)]
+        opts = ['%s (%s)' % (c['zip'], c['date']) for c in cands]
+        return _ask('%s holds no Touchstone file (.sNp): it holds %s. The next candidate zips for %s, newest first: '
+                    'run one of them?' % (sel['zip'], what, iface), opts + [CANCEL],
+                    {o: {'pick': c['url'], 'selected': None, 'downloaded': None, 'size_ok': None}
+                     for o, c in zip(opts, cands)} | {CANCEL: None}, announce=announce, **base)
+    count = lambda k: len([r for r in chans if r['kind'] == k])                 # noqa: E731
+    announce.append('unpacked in %s: %d Touchstone files (%d THRU, %d FEXT, %d NEXT)%s; inventory %s'
+                    % (rel(folder), len(chans), count('thru'), count('fext'), count('next'),
+                       ' and %d other file%s' % (len(other), '' if len(other) == 1 else 's') if other else '', inv))
+    guess = [r for r in chans if r['rule'] in ('guess', 'none')]
+    if guess and 'xtalk' in modes and mods.get('pairing') != 'file':           # row F6
+        o1, o2 = 'continue', 'run thru-only only'
+        listed = '; '.join('%s -> %s' % (r['file'], r['thru'] or 'no THRU') for r in guess[:6]) + \
+            ('; and %d more' % (len(guess) - 6) if len(guess) > 6 else '')
+        return _ask('%d FEXT and NEXT file%s of %s cannot be paired with a THRU file with confidence (Decision 19: no '
+                    'name matches, or more than one does). The best guess is in the thru column of %s: %s. The '
+                    'thru-only runs need no pairing. Correct that column and say continue to run thru-only and xtalk '
+                    'with it, or run thru-only only.' % (len(guess), '' if len(guess) == 1 else 's', sel['zip'], inv,
+                                                         listed),
+                    [o1, o2, CANCEL], {o1: {'pairing': 'file'}, o2: {'modes': ['thru_only']}, CANCEL: None},
+                    announce=announce, **base)
+    by_file = {r['file']: r for r in rows}
+    fields, err = config_model.loaded_fields(wc)
+    if err:
+        return _stop('The config does not load: %s. Nothing runs.' % err, announce=announce, **base)
+    sic = engine.engine_sha256()
+    prior = ctx.runs
+    points, new_fps, lines, no_xt = [], [], [], []
+    thrus = sorted(r['file'] for r in chans if r['kind'] == 'thru')
+    for t in thrus:
+        fext = sorted(r['file'] for r in chans if r['kind'] == 'fext' and r['thru'] == t)
+        nxt = sorted(r['file'] for r in chans if r['kind'] == 'next' and r['thru'] == t)
+        rule = next((by_file[f]['rule'] for f in fext + nxt), None)
+        if fext or nxt:
+            lines.append('%s: %d FEXT, %d NEXT (%s)' % (t, len(fext), len(nxt), {
+                'only_thru': 'the only THRU in its folder, so every FEXT and NEXT file there',
+                'name': 'matched by name, once the role words are removed', 'guess': 'as corrected in the inventory',
+                'none': 'as corrected in the inventory', 'user': 'as corrected in the inventory'}.get(rule, rule)))
+        elif 'xtalk' in modes:
+            no_xt.append(t)
+        for mode in modes:
+            if mode == 'xtalk' and not (fext or nxt):
+                continue
+            files = [(t, 'thru')] + ([(f, 'fext') for f in fext] + [(n, 'next') for n in nxt] if mode == 'xtalk' else [])
+            paths = [(os.path.join(folder, *f.split('/')), r) for f, r in files]
+            pt = {'values': {'channel': t, 'mode': mode}, 'writes': {}, 'channels': [[rel(p), r] for p, r in paths],
+                  'new': False, 'reused_from': None, 'skipped': None}
+            bad = [f for f, _ in files if by_file.get(f, {}).get('touchstone') != 'ok']
+            if bad:
+                pt['skipped'] = 'validate_inputs: %s is not a valid Touchstone file: %s' % (
+                    bad[0], by_file.get(bad[0], {}).get('touchstone') or 'it is not in the inventory')
+                points.append(pt)
+                continue
+            stops, _ = input_check(wc, paths, with_notes=False)
+            if stops:
+                pt['skipped'] = 'validate_inputs fails: %s' % stops[0]
+                points.append(pt)
+                continue
+            fp = _fingerprint(fields, [_sha(p) for p, _ in paths], sic)
+            rid = next((r for r, f in prior if _same_fingerprint(f, fp)), None)
+            if rid is not None:
+                pt['reused_from'] = rid
+            elif any(_same_fingerprint(f, fp) for f in new_fps):
+                pt['reused_from'] = 'earlier point of this batch'
+            else:
+                pt['new'] = True
+                new_fps.append(fp)
+            points.append(pt)
+    announce += lines
+    announce += _known_lines(sel, rows)
+    if 'xtalk' in modes and not count('fext') and not count('next'):           # row F10
+        announce.append('xtalk runs are not possible for this set: %s holds no FEXT or NEXT file, so every channel runs '
+                        'thru-only' % sel['zip'])
+    elif no_xt:
+        announce.append('no FEXT or NEXT file belongs to %s, so %s thru-only only' % (
+            _and(no_xt), 'it runs' if len(no_xt) == 1 else 'they run'))
+    skipped = [p for p in points if p['skipped']]
+    for p in skipped:                                                           # row F7
+        announce.append('%s %s is skipped and listed in batch_summary.csv: %s' % (
+            p['values']['channel'], p['values']['mode'].replace('_', '-'), p['skipped']))
+    n_new = sum(1 for p in points if p['new'])
+    n_reused = sum(1 for p in points if p['reused_from'])
+    fields_out = dict(points=points, new_runs=n_new, reused_runs=n_reused, **base)
+    if not points or len(skipped) == len(points):
+        return _stop('No channel of %s can be run: %s.' % (sel['zip'], '; '.join(p['skipped'] for p in skipped) or
+                                                            'it holds no THRU file'), announce=announce, **fields_out)
+    summary_line = 'run matrix: %d channel%s x %s: %d run%s, %d new, %d reused%s' % (
+        len(thrus), '' if len(thrus) == 1 else 's', ' and '.join(m.replace('_', '-') for m in modes), len(points),
+        '' if len(points) == 1 else 's', n_new, n_reused, ', %d skipped' % len(skipped) if skipped else '')
+    limit = ctx.setting('max_new_runs')
+    if n_new > limit and not mods.get('confirm_limit'):          # Decision 6: max_new_runs covers a fetched batch too
+        o_run = 'run all'
+        return _ask('%s. That is more new runs than max_new_runs (%d), so the batch waits for you: run all or cancel.'
+                    % (_sentence(summary_line).rstrip('.'), limit), [o_run, CANCEL],
+                    {o_run: {'confirm_limit': True}, CANCEL: None}, announce=announce, **fields_out)
+    steps += [_step('validate_inputs', files=len(chans), invalid=len([r for r in chans if r['touchstone'] != 'ok'])),
+              _step('build_matrix', modes=modes, points=len(points)), _step('run_batch', new_runs=n_new),
+              _step('batch_summary')]
+    announce += [summary_line, IEEE_LINE]
+    return outcome('PLAN', steps=steps, announce=announce, **fields_out), {}
+
+
+def _known_lines(sel, rows):
+    """What SiCoPR's benchmark channels.csv says about the files of a download: the roles and SHA-256 of the 164 files
+    of six IEEE contributions."""
+    known = engine.known_channels()
+    mine = [k for k in known if sel.get('url') and k.get('ieee_url') == sel['url']]
+    have = {r['sha256'] for r in rows}
+    out = []
+    if mine:
+        present = [k for k in mine if k['sha256'] in have]
+        out.append("checked against SiCoPR's benchmark channels.csv: %d of the %d files it lists for %s are here with "
+                   'the same SHA-256' % (len(present), len(mine), mine[0]['contribution']))
+    for r in rows:
+        if r['known_role'] and r['kind'].upper() != r['known_role'].upper():
+            out.append("warning: %s is a %s by its name, and SiCoPR's benchmark channels.csv lists it as %s"
+                       % (r['file'], r['kind'].upper(), r['known_role']))
+    if any(r['known_role'] for r in rows) and not any(l.startswith('warning') for l in out):
+        n = len([r for r in rows if r['known_role']])
+        out.append('%d file%s match%s a file of that list by SHA-256, and every role agrees' % (
+            n, '' if n == 1 else 's', 'es' if n == 1 else ''))
+    return out
+
+
+def fetch_followup(project, out, failure=None, announce=()):
+    """The outcome after run.py has carried out the download part of a channel-download plan (rows F1 to F12): the
+    phrase of that plan is resolved again with what it chose, now from the cache, so the run matrix is planned from
+    the inventory, or a QUESTION or a STOP comes instead. failure: the download or the unpacking did not complete,
+    which is a STOP (row F9). The outcome is recorded in the history, and a QUESTION is the pending question, as
+    handle records them. announce: lines from the unpacking, shown first."""
+    ctx = Context(project)
+    a = next((s.get('args') or {} for s in out['steps'] if s['op'] == 'extract'), {})
+    resume = a.get('resume') or {}
+    phrase = resume.get('phrase') or ''
+    if failure:
+        o, answers, res = outcome('STOP', reason=failure, announce=list(announce), pattern='fetch: failed'), {}, None
+    else:
+        mods = dict(copy.deepcopy(resume.get('mods') or {}),
+                    downloaded=any(s['op'] == 'download' for s in out['steps']))
+        o, answers, res = _resolve(phrase, ctx, mods)
+        o['announce'] = list(announce) + list(o['announce'])
+    seq = _record(project, phrase, o, None, answered=False)
+    if o['type'] == 'QUESTION' and res is not None:
+        project.write_pending(res['phrase'], dict(o, resume=dict(res, answers=answers)), seq)
+    return o
 
 
 def _plan_v1(text, req, ctx, mods, base):

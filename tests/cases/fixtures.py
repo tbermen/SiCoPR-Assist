@@ -46,9 +46,22 @@ VARIANTS = tuple('V%02d' % i for i in range(1, 13))
 WC_KEYS = ('schema', 'source', 'main', 'packages', 'links')
 
 
+FETCH_INDEX_ENV = 'SICOPR_ASSIST_FETCH_INDEX'     # the index URL of a channel download (sicopr_assist.fetch)
+
+
 def _sha(path):
     with open(path, 'rb') as f:
         return hashlib.sha256(f.read()).hexdigest()
+
+
+def closed_url(path='3/dj/public/tools/index.html'):
+    """A URL on a local port where nothing listens: a connection to it is refused, and nothing leaves the machine."""
+    import socket
+    s = socket.socket()
+    s.bind(('127.0.0.1', 0))
+    port = s.getsockname()[1]
+    s.close()
+    return 'http://127.0.0.1:%d/%s' % (port, path)
 
 
 def starting_rows():
@@ -139,6 +152,10 @@ class Fixtures:
         self.home = tempfile.mkdtemp(prefix='sicopr_assist_home_')
         self._old_home = os.environ.get('SICOPR_ASSIST_HOME')
         os.environ['SICOPR_ASSIST_HOME'] = self.home
+        # tests never touch the network: unless a prior state points it at its local stand-in, a channel download
+        # reads its index from a local port where nothing listens
+        self._old_index = os.environ.get(FETCH_INDEX_ENV)
+        os.environ[FETCH_INDEX_ENV] = closed_url()
         self.configs = dict(find_starting_configs())
         self.thru = os.path.join(self.base, 'thru.s4p')
         with contextlib.redirect_stdout(io.StringIO()):
@@ -152,6 +169,10 @@ class Fixtures:
             os.environ.pop('SICOPR_ASSIST_HOME', None)
         else:
             os.environ['SICOPR_ASSIST_HOME'] = self._old_home
+        if self._old_index is None:
+            os.environ.pop(FETCH_INDEX_ENV, None)
+        else:
+            os.environ[FETCH_INDEX_ENV] = self._old_index
         shutil.rmtree(self.base, ignore_errors=True)
         shutil.rmtree(self.home, ignore_errors=True)
         return False

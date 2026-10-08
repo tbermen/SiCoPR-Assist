@@ -1,10 +1,12 @@
 # project state the tool writes in the folder it runs from
 .sicopr/
 
-# run output
+# run output, and channel files and zips (IEEE public-area files are never committed)
 results/
 *.s4p
+*.s2p
 *.mat
+*.zip
 
 # caches and build output
 __pycache__/

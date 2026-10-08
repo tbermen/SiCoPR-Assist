@@ -21,7 +21,6 @@ workbook, data\\thru.s4p the synthetic THRU), and a state adds to it or takes fr
 import copy
 import hashlib
 import os
-import zipfile
 
 import fixtures
 import l4
@@ -33,7 +32,7 @@ RESULT_NAMES = ('channel_operating_margin_dB', 'FOM', 'ERL', 'VEC_dB', 'VEO_mV',
                 'available_signal_after_eq_mV')
 STANDARD_PLAN = ('import_config', 'validate_inputs', 'run_com', 'summarize')
 CHANGE_PLAN = ('set_param', 'validate_config', 'run_com', 'summarize')
-FETCH_INDEX_ENV = 'SICOPR_ASSIST_FETCH_INDEX'       # where a test points the version 2 fetch at its stand-in page
+FETCH_INDEX_ENV = fixtures.FETCH_INDEX_ENV           # where a test points a channel download at its stand-in page
 
 
 def sha(path):
@@ -485,71 +484,124 @@ def zp_select_all(ctx):
 
 
 # ----------------------------------------------------------------------------- fetch environment (version 2)
+TOOLS = '3/dj/public/tools/'                    # the stand-in site keeps the real page's folders
+NEWEST = 'standin_3dj_01_2609.zip'              # the newest KR zip of the stand-in page
+_S4P = {}
+
+
+def s4p_bytes(length_mm):
+    """A small synthetic THRU (67 points), one per length, so every file of a stand-in zip has its own SHA-256."""
+    if length_mm not in _S4P:
+        import contextlib
+        import io
+        import tempfile
+        d = tempfile.mkdtemp(prefix='s4p_')
+        p = os.path.join(d, 'x.s4p')
+        with contextlib.redirect_stdout(io.StringIO()):
+            fixtures.make_s4p().write(p, length_mm, df=1e9)
+        with open(p, 'rb') as f:
+            _S4P[length_mm] = f.read()
+        os.remove(p)
+        os.rmdir(d)
+    return _S4P[length_mm]
+
+
+def standin_zip_files(thru_only=False, unpaired=False, invalid=False, no_touchstone=False):
+    """{member: bytes} of the newest KR zip of the stand-in page: two channels named in one folder (Decision 19 rule
+    name), a third in a zip inside the zip in the akinwale style (rule only_thru), and a text file."""
+    import standin_ieee
+    if no_touchstone:
+        return {'readme.txt': b'channel data to follow\n', 'slides.pdf': b'%PDF-1.4 stand-in\n'}
+    if unpaired:
+        return {'chans/lane1_thru.s4p': s4p_bytes(110), 'chans/lane2_thru.s4p': s4p_bytes(120),
+                'chans/aggr_a_fext.s4p': s4p_bytes(130), 'chans/aggr_b_next.s4p': s4p_bytes(140)}
+    files = {'README.txt': b'stand-in channels for the tests of SiCoPR-Assist\n'}
+    nested = {}
+    for k, ch in enumerate(('ch1', 'ch2')):
+        files['chans/%s_thru.s4p' % ch] = s4p_bytes(200 + 100 * k)
+        if not thru_only:
+            files['chans/%s_fext1.s4p' % ch] = s4p_bytes(205 + 100 * k)
+            files['chans/%s_next1.s4p' % ch] = s4p_bytes(210 + 100 * k)
+    nested['ch3_thru1.s4p'] = s4p_bytes(400)
+    if not thru_only:
+        nested['ch3_xtalk1_Fext.s4p'] = s4p_bytes(405)
+        nested['ch3_xtalk2_Next.s4p'] = s4p_bytes(410)
+    files['set_b.zip'] = standin_ieee.zip_bytes(nested)
+    if invalid:
+        good = files['chans/ch2_thru.s4p']
+        files['chans/ch2_thru.s4p'] = good[:len(good) // 2]
+    return files
+
+
 def fetch_env(ctx, confirmed=True, network='up', cached=False, superseded=False, unpaired=False,
               invalid=False, no_touchstone=False, interrupted=False, thru_only=False, multi=False, tie=False):
-    """A local stand-in for the IEEE P802.3dj tools page and its zips. Tests never touch the network:
-    the page is a file, and FETCH_INDEX_ENV points at it while the core is called.
+    """A local stand-in for the IEEE P802.3dj tools page and its zips (tests\\cases\\standin_ieee.py), served from
+    127.0.0.1; FETCH_INDEX_ENV points the product at it while the core is called. Tests never touch the network.
 
-    A minimal stand-in until Phase V2-3 writes the page in the recorded markup: multi gives the newest
-    entry a second zip under the same date (row F11), tie gives a second entry the newest date (row F12)."""
-    import contextlib
-    import io
+    The page has, newest first: an MTF zip (not an interface), a CR zip newer than every KR zip, the newest KR entry
+    (NEWEST), an older KR entry, a KR entry marked superseded, a C2C entry dated by month only, and a C2M entry with a
+    relative link and a size on the page. superseded marks the newest KR entry superseded (by a note dated after
+    every entry) and adds a KR entry whose two zips are one marked do not use and one to use (row F5); multi gives
+    the newest KR entry a second zip (F11); tie gives a second KR entry the same date (F12); interrupted makes the
+    newest zip stop halfway (F9); network down points at a port where nothing listens (F3); cached puts the newest
+    zip in .sicopr\\cache\\KR (F4). The other flags shape what the newest zip holds (F6, F7, F8, F10)."""
+    import standin_ieee
     replace_file(ctx.data('config.xls'), open(ctx.fx.configs[ctx.label], 'rb').read())   # an .xlsx named .xls
-    d = os.path.join(ctx.root, 'ieee_standin')
-    os.makedirs(d)
-    small = os.path.join(d, '_small.s4p')
-    with contextlib.redirect_stdout(io.StringIO()):
-        fixtures.make_s4p().write(small, df=1e9)
-    good = open(small, 'rb').read()
-    os.remove(small)
-
-    def zip_of(name, files):
-        path = os.path.join(d, name)
-        with zipfile.ZipFile(path, 'w') as z:
-            for n, data in files.items():
-                z.writestr(n, data)
-        return path
-
-    files = {}
-    for ch in ('ch1', 'ch2', 'ch3'):
-        files['%s_thru.s4p' % ch] = good
-        if not thru_only:
-            files['%s_fext1.s4p' % ch] = good
-            files['%s_next1.s4p' % ch] = good
-    if unpaired:
-        files = {('alpha_%d.s4p' % i): good for i in range(len(files))}
-    if invalid:
-        files['ch2_thru.s4p'] = good[:len(good) // 2]
-    if no_touchstone:
-        files = {'readme.txt': b'channel data to follow\n'}
-    newest = zip_of('dj_kr_channels_2026_09.zip', files)
-    older = zip_of('dj_kr_channels_2026_06.zip', {'ch1_thru.s4p': good, 'ch1_fext1.s4p': good, 'ch1_next1.s4p': good})
-    rows = [('2026-09-20', os.path.basename(newest), 'superseded' if superseded else 'current', 'KR'),
-            ('2026-06-11', os.path.basename(older), 'current', 'KR')]
-    if multi or tie:
-        second = zip_of('dj_kr_channels_2026_09_b.zip', files)
-        rows.insert(1, ('2026-09-20', os.path.basename(second), 'same entry' if multi else 'current', 'KR'))
-    size = os.path.getsize(newest)
-    html = ['<html><body><table>']
-    for date, name, status, iface in rows:
-        listed = size * 3 if (interrupted and name == os.path.basename(newest)) else os.path.getsize(os.path.join(d, name))
-        html.append('<tr><td>%s</td><td><a href="%s" data-size="%d">%s</a></td><td>%s</td><td>%s</td></tr>'
-                    % (date, name, listed, name, status, iface))
-    html.append('</table></body></html>')
-    with open(os.path.join(d, 'index.html'), 'w', encoding='utf-8', newline='\n') as f:
-        f.write('\n'.join(html) + '\n')
-    with open(os.path.join(d, 'network'), 'w', encoding='utf-8', newline='\n') as f:
-        f.write(network + '\n')
-    ctx.env[FETCH_INDEX_ENV] = os.path.join(d, 'index.html')
+    site = standin_ieee.Site()
+    files = standin_zip_files(thru_only=thru_only, unpaired=unpaired, invalid=invalid, no_touchstone=no_touchstone)
+    newest = standin_ieee.zip_bytes(files)
+    older = standin_ieee.zip_bytes({'kr2/ch9_thru.s4p': s4p_bytes(900), 'kr2/ch9_fext.s4p': s4p_bytes(905)})
+    tools = site.url(TOOLS)
+    add = lambda name, data, **kw: site.add(TOOLS + name, data, **kw)            # noqa: E731
+    kr = {'zips': [(add('KR/' + NEWEST, newest, interrupt=interrupted),
+                    'Stand-in 212 Gb/s KR Cabled Backplane Channels')], 'date': '20-Sep-2026',
+          'continuation': 'C. Author, D. Author'}
+    if multi:
+        kr['zips'].append((add('KR/standin_3dj_01b_2609.zip', older), 'Stand-in KR Channels (Lower Density)'))
+    if superseded:
+        kr['note_after'] = 'These files have been superseded by 30-Sep-2026 contribution from<br>%s Doe/Roe' % (
+            '&nbsp;' * 8)
+    entries_kr = [kr]
+    if tie:
+        entries_kr.append({'zips': [(add('KR/other_3dj_01_2609.zip', older), 'Another Stand-in KR Set')],
+                           'date': '20-Sep 2026'})
+    if superseded:
+        entries_kr.append({'zips': [(add('KR/standin_3dj_04a_2609.zip', older),
+                                     'Original contribution (contained port mapping error, do not use)'),
+                                    (add('KR/standin_3dj_04_2609.zip', newest), 'Stand-in KR Channels, fixed')],
+                           'date': '15-Sept 2026'})
+    entries_kr += [
+        {'zips': [(add('KR/standin_3dj_02_2606.zip', older), 'Older Stand-in KR Channels')], 'date': '11-June 2026'},
+        {'note_before': 'Note - These files have been superseded by 11-June 2026 contribution from Doe/Roe',
+         'zips': [(add('KR/oldkr_3dj_01_2509.zip', older), 'First Stand-in KR Channels')], 'date': '09-Sep 2025'}]
+    cr = {'zips': [(add('CR/standin_3dj_03_2610.zip', older),
+                    'Stand-in CR Channels for the %sUniversal Port%s' % (chr(0x201c), chr(0x201d)))],
+          'date': '01-Oct 2026',
+          'link_note': '(Note - 0.2 MB file)'}
+    sections = [
+        ('h2', 'Mated Test Fixture (MTF) Data',
+         [{'zips': [(add('MTF/standin_mtf_01_2610.zip', older), 'Stand-in MTF Data')], 'date': '05-Oct-2026'}]),
+        ('h2', '200Gb/s Per Lane Channel Data', []),
+        ('h3', '200 Gb/s CR and KR channel data (TP0 to TP5)', [cr] + entries_kr),
+        ('h3', 'C2C', [{'zips': [(add('c2c/standin_c2c_01_2608.zip', older), 'Stand-in C2C Channels')],
+                        'date': 'Aug-2026'}]),
+        ('h3', 'C2M', [{'zips': [('c2m/standin_c2m_01_2607.zip', 'Stand-in C2M Channels')], 'date': '12-Sept 2026',
+                        'size': '(0.1M)'}]),
+    ]
+    add('c2m/standin_c2m_01_2607.zip', older)
+    site.add(TOOLS + 'index.html', standin_ieee.page(sections), ctype='text/html')
+    ctx.site = site
+    ctx.env[FETCH_INDEX_ENV] = tools + 'index.html' if network == 'up' else fixtures.closed_url()
     if cached:
-        cache = os.path.join(ctx.project.dir, 'cache')
+        cache = os.path.join(ctx.project.dir, 'cache', 'KR')
         os.makedirs(cache, exist_ok=True)
-        fixtures.link_or_copy(newest, os.path.join(cache, os.path.basename(newest)))
+        with open(os.path.join(cache, NEWEST), 'wb') as f:
+            f.write(newest)
     if confirmed:
         ctx.project.append_history(history_record(
             phrase='KR', pattern='confirm_interface', outcome='PLAN', status='ok',
             options=['KR', 'CR', 'C2C', 'C2M'], chosen='KR'))
-    return d
+    return site
 
 
 def f1_complete(ctx):

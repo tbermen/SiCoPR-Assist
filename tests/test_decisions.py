@@ -4,9 +4,9 @@ Decision 7: a sweep with points that a rule asks about asks once for the batch, 
 run all points anyway, run only the points that pass, cancel. Each answer leads to its plan: every point; only
 the points no rule asks about; nothing. A point a rule stops is never run, whatever the answer.
 
-Decision 16, for the version 2 feature not built yet (channel download, until Phase V2-3): asked for on its own it
-is a STOP that says so. The dashboard is built (Phase V2-2): CB17 and C2 plan it after the run here, and
-tests/test_dashboard.py checks the rest.
+Decision 16 is replaced in version 2: channel download is built (Phase V2-3), so asked for on its own it asks for
+the interface here and tests/test_fetch.py checks the rest. The dashboard is built (Phase V2-2): CB17 and C2 plan it
+after the run here, and tests/test_dashboard.py checks the rest.
 
 Also row RS28: the question about two package blocks carries the change asked for, and each option leads to it.
 
@@ -136,7 +136,7 @@ def main():
         check('run only the points that pass leaves out both the asked and the stopped points',
               b['type'] == 'PLAN' and labels(b) == ['0.85, 1e-4'], (b['type'], labels(b)))
 
-        # Decision 16 for channel download; the dashboard after a run (CB17, C2)
+        # channel download on its own (Decision 16 replaced); the dashboard after a run (CB17, C2)
         dash = ['set_param', 'validate_config', 'run_com', 'summarize', 'export_mat', 'render_dashboard', 'open_report']
         for label in ('Case1', 'Case3'):
             o, = t.talk('CB17', [None], label)
@@ -151,8 +151,10 @@ def main():
         check('the same change without the dashboard plans no dashboard step',
               o['type'] == 'PLAN' and steps(o) == dash[:4], steps(o))
         o, = t.talk('CB17', ['Download the channels.'])
-        check('Download the channels.: a phrase that asks only for a version 2 feature not built yet is a STOP that '
-              'says so', o['type'] == 'STOP' and 'not in this version' in o['reason'], (o['type'], o.get('reason')))
+        check('Download the channels.: Decision 16 is replaced in version 2; with no interface confirmed for the '
+              'project it asks which one (row F2), before anything is read from the network',
+              o['type'] == 'QUESTION' and [x.split(' ')[0] for x in o['question']['options']] == ['KR', 'CR', 'C2C', 'C2M'],
+              (o['type'], o.get('question'), o.get('reason')))
 
         # CB12 and its paraphrase: four package blocks, each run with every z_p select case
         for ph in (None, 'sweep all packages and all z_p select cases'):

@@ -47,8 +47,10 @@ def show(outcome, as_json=False, out=None):
 
 def handle_and_run(phrase, project, as_json=False, out=None, quiet=False, child=None, **stand_ins):
     """One phrase: the outcome is shown; a PLAN is then carried out, its progress printed as it comes, then its
-    lines. child replaces the command that runs one case, and stand_ins the other outside pieces run.carry_out
-    takes (rscript, open_page, open_folder); a test gives stand-ins."""
+    lines. A channel download is carried out in two parts: the zip, then the outcome the core plans from it, which
+    is shown and, if it is a PLAN, carried out; that last outcome is returned. child replaces the command that runs
+    one case, and stand_ins the other outside pieces run.carry_out takes (rscript, open_page, open_folder); a test
+    gives stand-ins."""
     out = out or sys.stdout
     outcome = core.handle(phrase, project)
     show(outcome, as_json, out)
@@ -63,6 +65,17 @@ def handle_and_run(phrase, project, as_json=False, out=None, quiet=False, child=
     done = run.carry_out(project, outcome, child=child, progress=progress, **stand_ins)
     for line in done['lines']:
         out.write(line + '\n')
+    while done.get('next') is not None:          # a channel download: what the core plans once the zip is unpacked
+        outcome = done['next']
+        show(outcome, as_json, out)
+        if outcome['type'] != 'PLAN':
+            break
+        if run.fetch_pending(outcome):           # the zip should be in the cache now: never download in a loop
+            out.write('the downloaded zip is not in the cache as planned, so nothing more is done\n')
+            break
+        done = run.carry_out(project, outcome, child=child, progress=progress, **stand_ins)
+        for line in done['lines']:
+            out.write(line + '\n')
     return outcome, done
 
 

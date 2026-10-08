@@ -45,9 +45,9 @@ ACTION_WORDS = {
     'summary': 'summary', 'summarize': 'summary', 'summarise': 'summary', 'statistics': 'summary',
     'correlate': 'summary', 'correlation': 'summary',
     'why': 'why', 'explain': 'why', 'limiting': 'why', 'diagnose': 'why',
-    # version 2 features: the dashboard, the tutor and feedback (built), and channel download (Decision 16 until built)
+    # version 2 features: the dashboard, the tutor, feedback and channel download
     'dashboard': 'dashboard', 'plot': 'dashboard', 'interactive': 'dashboard', 'report': 'dashboard',
-    'download': 'fetch', 'fetch': 'fetch',
+    'download': 'fetch', 'fetch': 'fetch', 'grab': 'fetch',
     'tutor': 'tutor', 'hints': 'tutor', 'help': 'tutor',
     'feedback': 'feedback',
 }

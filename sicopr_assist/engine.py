@@ -1,5 +1,5 @@
-"""The package's view of SiCoPR: load a config, the releases, which keywords the loader reads, and what its R
-dashboard needs (R/com_analysis.R and an Rscript to run it).
+"""The package's view of SiCoPR: load a config, the releases, which keywords the loader reads, what its R
+dashboard needs (R/com_analysis.R and an Rscript to run it), and the known channel files of its benchmark.
 
 This is one of the three modules that import sicopr or read its folder (with run_case.py and
 schema_check.py). SiCoPR is found by schema_check.find_sicopr: the folder named by SICOPR_REPO, else
@@ -10,6 +10,7 @@ write a .mat beside the file it reads).
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
 import contextlib
+import csv
 import glob
 import hashlib
 import io
@@ -163,6 +164,18 @@ def flatten(param, OP):
     walk(param, 'param.')
     walk(OP, 'OP.')
     return out
+
+
+def known_channels():
+    """The rows of the channels.csv in SiCoPR's benchmark folder: {'contribution', 'ieee_url', 'role' (THRU, FEXT
+    or NEXT), 'file', 'sha256'} for the 164 channel files of six IEEE contributions, so a download can be checked
+    against them. [] when this SiCoPR has no such file."""
+    hits = sorted(glob.glob(os.path.join(folder(), 'benchmark', '*', 'channels.csv')))
+    if not hits:
+        return []
+    p = hits[0]
+    with open(p, newline='', encoding='utf-8') as f:
+        return [{k: (v or '').strip() for k, v in r.items()} for r in csv.DictReader(f)]
 
 
 def com_analysis_script():
