@@ -8,7 +8,9 @@ sicopr_assist.project, so the formats are the product's own.
     build(row['prior_state'], ctx)
     ctx.root        the project folder
     ctx.prior_wc    the working config the next command starts from
-    ctx.env         environment variables to set while the core is called (PATH without Rscript)
+    ctx.env         environment variables to set while the core is called: by default a stand-in Rscript is
+                    found and nothing else (fx.r_env), so a dashboard plans the same on every machine; row D3
+                    hides it, from PATH and from Program Files
 
 Readings the table leaves open are written down where they are made, and in the Phase 1 report:
 every project folder starts from the fixture layout (data\\config.xlsx is the row's starting
@@ -50,7 +52,7 @@ class Ctx:
         user_file = _user()
         if os.path.exists(user_file):                  # the user settings folder is shared by every project
             os.remove(user_file)
-        self.env = {}
+        self.env = fx.r_env()
         self.prior_wc = fx.working_config(label) if label in fx.configs else None
         self._k = 0
 
@@ -365,12 +367,9 @@ def d1_complete(ctx):
 
 
 def no_rscript(ctx):
-    """PATH without any folder that holds Rscript, for the call to the core."""
-    keep = []
-    for d in os.environ.get('PATH', '').split(os.pathsep):
-        if d and not any(os.path.exists(os.path.join(d, n)) for n in ('Rscript', 'Rscript.exe')):
-            keep.append(d)
-    ctx.env['PATH'] = os.pathsep.join(keep)
+    """No Rscript for the call to the core: PATH without any folder that holds one, and ProgramFiles pointing at an
+    empty folder, because a Windows R install is found there when it is not on PATH (as on this workspace)."""
+    ctx.env.update(ctx.fx.r_env(found=False))
 
 
 def four_package_cases(ctx):

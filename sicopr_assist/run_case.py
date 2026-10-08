@@ -1,13 +1,15 @@
 """The child process: one case through the engine, every result field to result.json.
 
     python -u run_case.py CONFIG.csv RESULT.json --thru T [--fext F ...] [--next N ...]
-                          [--fingerprint HEX] [--note TEXT ...]
+                          [--fingerprint HEX] [--note TEXT ...] [--export-mat]
 
 Written after the model of SiCoPR's tools/_sicopr_case.py: it calls sicopr._run_com on the run CSV
 (Decision 2) as the command line does, so the engine's own report is written unchanged to the RESULT_DIR
 the CSV names, and it writes every attribute of each package case's result at full precision to RESULT.json
 (JSON floats round-trip; not-a-number is kept as NaN). The release is the COM Version keyword when the
-config has one, otherwise SiCoPR's default (rule VR02); the engine reports it in each result.
+config has one, otherwise SiCoPR's default (rule VR02); the engine reports it in each result. --export-mat turns
+on the engine's .mat export (the command line's --export-mat), which writes <run>_caseNN.mat for each package
+case into the same RESULT_DIR, for the dashboard; it does not change a result.
 
 The parent (run.py) starts this from an argument list, with no shell and unbuffered output, one run at a time.
 A failure is written to RESULT.json too, with status failed and the engine's message, and the exit code is 1.
@@ -67,16 +69,17 @@ def main(argv=None):
     ap.add_argument('--next', nargs='*', default=[])
     ap.add_argument('--fingerprint')
     ap.add_argument('--note', action='append', default=[])
+    ap.add_argument('--export-mat', action='store_true')
     a = ap.parse_args(argv)
     files = [a.thru] + a.fext + a.next
     channels = [{'path': p, 'sha256': _sha(p), 'role': r}
                 for p, r in [(a.thru, 'thru')] + [(f, 'fext') for f in a.fext] + [(n, 'next') for n in a.next]]
     rid = os.path.basename(os.path.dirname(os.path.abspath(a.result)))
     common = dict(run_id=rid, sicopr_sha256=engine.engine_sha256(), config_csv=a.config, channels=channels,
-                  fingerprint=a.fingerprint)
+                  fingerprint=a.fingerprint, export_mat=a.export_mat)
     try:
         S = engine.module()
-        results = S._run_com(a.config, len(a.fext), len(a.next), files, export_mat=False)
+        results = S._run_com(a.config, len(a.fext), len(a.next), files, export_mat=a.export_mat)
         if results is None:
             raise RuntimeError('COM returned no result')
         if not isinstance(results, list):

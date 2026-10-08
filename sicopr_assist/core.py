@@ -27,6 +27,7 @@ turn loose wording into a phrase, and the core resolves it exactly as it resolve
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
 import copy
+import glob
 import hashlib
 import itertools
 import json
@@ -58,20 +59,17 @@ SWEEP_ASK_OPTIONS = ('run all points anyway', 'run only the points that pass', C
 EXAMPLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'sicopr_config_example.json')
 CONFIG_EXT = ('.xlsx', '.xls', '.csv', '.json')
 
-# Version 2 features (Decision 16): what to do instead, in this version.
+# Version 2 features not built yet (Decision 16): what to do instead, in this version.
 NOT_IN_V1 = {
-    'dashboard': 'The dashboard is not in this version of SiCoPR-Assist. Use the run summary (Show me the summary '
-                 'again) or the CSV summary that each run writes in its results folder.',
     'fetch': 'Downloading channels is not in this version of SiCoPR-Assist. Download the channel files from the IEEE '
              'P802.3dj tools page (https://www.ieee802.org/3/dj/public/tools/index.html), unpack them into the '
              'project folder, and name them in the phrase, for example Run COM on data\\thru.s4p with data\\config.xlsx.',
 }
 
-# The same, as one announced line when the rest of the phrase is planned (Decision 16, rows CB17 and C2). The tutor
-# and feedback export are built (Decision 11, Decision 10): asked for beside a run, they are named on their own.
+# The same, as one announced line when the rest of the phrase is planned (Decision 16). The tutor and feedback
+# export are built (Decision 11, Decision 10): asked for beside a run, they are named on their own. The dashboard is
+# built (Phase V2-2): asked for beside a run, it follows the run (rows CB17 and C2).
 NOT_IN_V1_PART = {
-    'dashboard': 'the dashboard is not in this version of SiCoPR-Assist (version 2 adds it); the run summary holds the '
-                 'results, and each run writes a CSV summary in its results folder',
     'fetch': 'downloading channels is not in this version of SiCoPR-Assist (version 2 adds it); the run uses the '
              'channel files in the project folder',
     'tutor': 'the tutor is asked for on its own: What can I say?',
@@ -330,7 +328,7 @@ class Context:
                     if err:
                         continue
                     out.append((rid, _fingerprint(fields, [c.get('sha256') for c in res.get('channels') or []],
-                                                  res.get('sicopr_sha256'))))
+                                                  res.get('sicopr_sha256'), res.get('export_mat'))))
             return out
         return self._get('runs', make)
 
@@ -350,16 +348,20 @@ def _sha(path):
         return hashlib.sha256(f.read()).hexdigest()
 
 
-def _fingerprint(fields, channel_shas, sicopr_sha):
-    """What decides reuse: the loaded fields (without where output goes), the channel files, the engine."""
+def _fingerprint(fields, channel_shas, sicopr_sha, export_mat=False):
+    """What decides reuse: the loaded fields (without where output goes), the channel files, the engine, and whether
+    the engine's .mat export was on (the dashboard needs it)."""
     keep = {k: v for k, v in fields.items() if not k.endswith('RESULT_DIR')}
-    return keep, sorted(s or '' for s in channel_shas), sicopr_sha
+    return keep, sorted(s or '' for s in channel_shas), sicopr_sha, bool(export_mat)
 
 
-def _same_fingerprint(a, b):
-    fa, ca, sa = a
-    fb, cb, sb = b
-    if ca != cb or sa != sb or set(fa) != set(fb):
+def _same_fingerprint(have, want):
+    """Whether a run made with the fingerprint have serves a run asked for with want: the same inputs and engine,
+    and a .mat export when want asks for one. A run with the export serves a run without it (its results are the
+    same); a run without it never serves an export."""
+    fa, ca, sa, ma = have
+    fb, cb, sb, mb = want
+    if ca != cb or sa != sb or set(fa) != set(fb) or (mb and not ma):
         return False
     return all(config_model.field_equal(fa[k], fb[k]) for k in fa)
 
@@ -563,20 +565,23 @@ def _plan(text, ctx, mods):
     if not _has_v1_action(req) and (send or 'feedback' in acts or
                                      ('save' in acts and re.search(r'\bhistory\b', low) and re.search(r'\bdevelopers?\b', low))):
         return _feedback_request(req, ctx, base, send)
+    # the dashboard on its own: the .mat export of the last run, SiCoPR's R report on it, the page (rows D1 to D3)
+    dash = 'dashboard' in acts
+    if dash and not _has_v1_action(req):
+        return _dashboard_request(req, ctx, base)
     # a version 2 feature not built yet alone is a STOP; asked for with a version 1 action, the version 1 part is
-    # planned and the rest is announced as not in this version (Decision 16, for the dashboard and channel download)
-    deferred = [f for f in ('dashboard', 'fetch', 'tutor', 'feedback') if f in acts]
-    if deferred:
-        if not _has_v1_action(req):
-            return _stop(NOT_IN_V1[deferred[0]], **base)
-        req = dict(req, actions=[a for a in acts if a not in deferred])
-        out, answers = _plan_v1(text, req, ctx, mods, base)
-        if out['type'] != 'STOP':
-            out['announce'] = list(out['announce']) + [NOT_IN_V1_PART[f] for f in deferred]
-        return out, answers
+    # planned and the rest is announced as not in this version (Decision 16, channel download until Phase V2-3)
+    deferred = [f for f in ('fetch', 'tutor', 'feedback') if f in acts]
+    if deferred and not _has_v1_action(req):
+        return _stop(NOT_IN_V1[deferred[0]], **base)
+    if deferred or dash:
+        req = dict(req, actions=[a for a in acts if a not in deferred and a != 'dashboard'])
     out, answers = _plan_v1(text, req, ctx, mods, base)
-    if out['type'] == 'PLAN' and any(s['op'] in ('run_com', 'run_batch') for s in out['steps']) and _after_dashboard(ctx):
-        out['announce'] = list(out['announce']) + [NOT_IN_V1_PART['dashboard']]
+    if deferred and out['type'] != 'STOP':
+        out['announce'] = list(out['announce']) + [NOT_IN_V1_PART[f] for f in deferred]
+    if out['type'] == 'PLAN' and (dash or _after_dashboard(ctx)):
+        # a run with the dashboard asked for beside it (row CB17), or a re-run right after a dashboard (row C2)
+        return _with_dashboard(out, ctx, base, asked=dash), answers
     return out, answers
 
 
@@ -647,13 +652,147 @@ def _feedback_request(req, ctx, base, send):
 
 
 def _after_dashboard(ctx):
-    """Whether the last command asked for the dashboard (row C2: a re-run after D1 would refresh it in version 2)."""
+    """Whether the last command asked for the dashboard (row C2: a re-run after D1 refreshes it)."""
     rec = ctx.history[-1] if ctx.history else None
     if not rec:
         return False
     if any(s.get('op') == 'render_dashboard' for s in (rec.get('plan') or {}).get('steps') or []):
         return True
     return 'dashboard' in parse.read(rec.get('phrase') or '')['actions']
+
+
+# ----------------------------------------------------------------------------- the dashboard (rows D1 to D3, CB17, C2)
+# words a request for the dashboard is made of besides its action word
+_DASHBOARD_WORDS = {'dynamic', 'open', 'build', 'make', 'show', 'me', 'page', 'view', 'see', 'get', 'create', 'draw',
+                    'render', 'html', 'web'}
+DASHBOARD_PHRASE = 'Now give me the results in a dynamic dashboard.'
+
+
+def csv_summary(project, rid):
+    """Where the results of a run can be read without R: the engine's CSV summaries (results.csv in each case folder
+    of the run folder), else the run folder itself, which holds result.json. Paths relative to the project."""
+    folder = project.run_dir(rid)
+    hits = sorted(glob.glob(os.path.join(folder, '**', 'results.csv'), recursive=True))
+    return [project.relative(h) for h in hits] or [project.relative(folder)]
+
+
+def dashboard_tools():
+    """(Rscript, SiCoPR's R\\com_analysis.R, None), or (None, None, why the dashboard cannot be built)."""
+    rs = engine.find_rscript()
+    if rs is None:
+        return None, None, ('Rscript was not found (it is not on PATH, and there is no R install in Program Files\\R), '
+                            'and the dashboard is built by R, from SiCoPR\'s R\\com_analysis.R. Install R with the '
+                            'packages R.matlab, plotly and htmltools, or add the folder of Rscript to PATH')
+    script = engine.com_analysis_script()
+    if script is None:
+        return None, None, 'the SiCoPR in use has no R\\com_analysis.R, the script that builds the dashboard'
+    return rs, script, None
+
+
+def _no_dashboard(ctx, why, base, **fields):
+    """Row D3: with no Rscript the dashboard is a STOP that says where the results can still be read."""
+    rid = ctx.last_run_id()
+    if rid:
+        where = csv_summary(ctx.project, rid)
+        tail = (' The results of %s can still be read: the CSV summary %s; Show me the summary again prints them.'
+                % (rid, ', '.join(where)) if where[0].endswith('.csv') else
+                ' The results of %s can still be read: the run folder %s holds result.json, and Show me the summary '
+                'again prints them.' % (rid, where[0]))
+    else:
+        tail = ' Each run writes a CSV summary (results.csv) in its own folder under .sicopr\\runs.'
+    return _stop('The dashboard cannot be built: %s. Nothing runs.%s' % (why, tail), **dict(base, **fields))
+
+
+def _exported_run(ctx, wc):
+    """The run made with the .mat export on that has the inputs of wc and the channels of the last run, or None."""
+    if not any(fp[3] for _, fp in ctx.runs):
+        return None
+    fields, err = config_model.loaded_fields(wc)
+    if err:
+        return None
+    want = _fingerprint(fields, [s for _, s, _ in ctx.channels()], engine.engine_sha256(), True)
+    return next((rid for rid, fp in ctx.runs if _same_fingerprint(fp, want)), None)
+
+
+def _dashboard_steps(ctx, rs, in_plan):
+    """The steps export_mat > render_dashboard > open_report and the lines that announce them. in_plan: a run_com
+    of the same plan runs with the .mat export on, and export_mat takes its .mat."""
+    if in_plan:
+        exp = _step('export_mat', run='run_com', reuse='run_com')
+        lines = ['run_com runs with the engine\'s .mat export on (--export-mat), so export_mat takes the .mat of that '
+                 'run and COM does not run twice']
+    else:
+        rid = ctx.last_run_id()
+        reuse = _exported_run(ctx, ctx.wc)
+        exp = _step('export_mat', run=rid, reuse=reuse)
+        if reuse:
+            lines = ['export_mat: %s was run with the .mat export on and the same inputs, so its .mat is reused and '
+                     'nothing runs' % reuse]
+        else:
+            lines = ['export_mat re-runs the working config of the last run%s with the engine\'s .mat export on '
+                     '(--export-mat): a full COM run, as long as that run took' % (' (%s)' % rid if rid else '')]
+    lines += ['render_dashboard: Rscript (%s) runs SiCoPR\'s R\\com_analysis.R on each .mat of that run, in the run\'s '
+              'own folder; the page (<run>_caseNN_report.html) and its lib folder are written beside the .mat' % rs,
+              'open_report: the page opens in the browser']
+    return [exp, _step('render_dashboard', script='com_analysis.R'), _step('open_report')], lines
+
+
+def _dashboard_request(req, ctx, base):
+    """The dashboard of the last run (row D1): its working config is run again with the engine's .mat export on (or
+    a run that had it is reused), Rscript runs SiCoPR's R\\com_analysis.R on the .mat, and the page is opened. No
+    Rscript is a STOP that names the CSV summary (row D3); no run yet asks (row D2)."""
+    left = _leftover(req, _DASHBOARD_WORDS)
+    if left:
+        return _unplaced_only(dict(req, unplaced=left), dict(base, unplaced=left))
+    base = dict(base, unplaced=[])
+    rs, _, why = dashboard_tools()
+    if why:
+        return _no_dashboard(ctx, why, base)
+    if ctx.last is None:
+        o1, o2 = 'run the example setup then build the dashboard', 'point to an existing results file'
+        return _ask('No results exist in this project yet, so there is nothing to build a dashboard from. The dashboard '
+                    'shows a run of this project folder: run a config first, then ask for it.', [o1, o2],
+                    {o1: {'stop': 'Run the example setup and build its dashboard with: Run SiCoPR on the example setup '
+                                  'and show the dashboard.'},
+                     o2: {'stop': 'The dashboard is built from the runs of this project folder (.sicopr\\runs). Start '
+                                  'SiCoPR-Assist in the project folder that holds them, then: %s' % DASHBOARD_PHRASE}},
+                    **base)
+    if ctx.wc is None:
+        return _stop('The dashboard cannot be built: %s.' % ctx.base[1], **base)
+    gone = [p for p, sha, _ in ctx.channels() if sha is None]
+    if gone:
+        return _stop('%s, a channel file of the last run, is not in the project folder any more, so the run cannot be '
+                     'repeated with the .mat export. Nothing runs.' % gone[0], **base)
+    steps, lines = _dashboard_steps(ctx, rs, in_plan=False)
+    return outcome('PLAN', steps=steps, announce=lines, **base), {}
+
+
+def _with_dashboard(out, ctx, base, asked):
+    """A PLAN with the dashboard after its run: asked for beside a run (row CB17), or a re-run right after a
+    dashboard, which builds it again (row C2). The run_com runs with the .mat export on. With no Rscript, CB17 is
+    D3's STOP and C2 runs without the dashboard and says so."""
+    ops = [s['op'] for s in out['steps']]
+    if 'export_mat' in ops:                      # a replayed dashboard plan holds its steps already
+        return out
+    if 'run_com' not in ops:
+        if asked:
+            out['announce'] = list(out['announce']) + [
+                'the dashboard shows one run: once this is done, ask for it on its own (%s) and it is built for the '
+                'last run' % DASHBOARD_PHRASE]
+        return out
+    rs, _, why = dashboard_tools()
+    if why:
+        if asked:
+            return _no_dashboard(ctx, why, base, changes=[dict(c, applied=False) for c in out['changes']])[0]
+        out['announce'] = list(out['announce']) + ['the last command built the dashboard, and it is not built again '
+                                                   'for this run: %s' % why]
+        return out
+    more, lines = _dashboard_steps(ctx, rs, in_plan=True)
+    out['steps'] = [dict(s, args=dict(s['args'], export_mat=True)) if s['op'] == 'run_com' else s
+                    for s in out['steps']] + more
+    out['announce'] = list(out['announce']) + ([] if asked else [
+        'the last command built the dashboard, so it is built again for this run']) + lines
+    return out
 
 
 def _plan_v1(text, req, ctx, mods, base):

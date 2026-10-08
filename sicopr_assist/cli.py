@@ -45,9 +45,10 @@ def show(outcome, as_json=False, out=None):
             out.write(line + '\n')
 
 
-def handle_and_run(phrase, project, as_json=False, out=None, quiet=False, child=None):
+def handle_and_run(phrase, project, as_json=False, out=None, quiet=False, child=None, **stand_ins):
     """One phrase: the outcome is shown; a PLAN is then carried out, its progress printed as it comes, then its
-    lines. child replaces the command that runs one case (a test gives a stand-in)."""
+    lines. child replaces the command that runs one case, and stand_ins the other outside pieces run.carry_out
+    takes (rscript, open_page, open_folder); a test gives stand-ins."""
     out = out or sys.stdout
     outcome = core.handle(phrase, project)
     show(outcome, as_json, out)
@@ -59,7 +60,7 @@ def handle_and_run(phrase, project, as_json=False, out=None, quiet=False, child=
             return
         out.write(run.line_text(kind, text) + '\n')
         out.flush()
-    done = run.carry_out(project, outcome, child=child, progress=progress)
+    done = run.carry_out(project, outcome, child=child, progress=progress, **stand_ins)
     for line in done['lines']:
         out.write(line + '\n')
     return outcome, done

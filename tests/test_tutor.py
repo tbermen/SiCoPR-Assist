@@ -11,6 +11,9 @@ the current value, twice it, or the value itself, and passes when one of them re
 Then the behaviour of rows TU01 to TU19 that L4 does not look at: whether the tutor text is shown, the nearest
 form of a missed phrase, the feedback line and its gap, and what the history records as shown.
 
+The dashboard example (TU01) is taught only where it works, so it needs an Rscript: the whole test runs with the
+stand-in Rscript of fixtures.r_env found, and one check hides it and sees the example left out (row D3).
+
     python tests\\test_tutor.py
 """
 # Copyright 2026 Todd Bermensolo
@@ -30,7 +33,7 @@ import fixtures  # noqa: E402
 # phrases a user gets wrong, whose nearest form the tutor prints (rows TU02, PH22, C3, PH08)
 MISSES = ('halve the baud rate and rerun', 'Re-run with DER_0 = 1e-4 pronto.', 'Re-run with zp select 2',
           'rerun with fb = 53.125', 'rn it agian with DER_0 1e-4')
-KINDS = 6                 # the examples of row TU01 (the dashboard waits for Phase V2-2) and the package of TU07
+KINDS = 7                 # the six examples of row TU01 (the dashboard among them) and the package of TU07
 
 
 def fills(phrase, wc):
@@ -194,6 +197,28 @@ def row_checks(fx):
           o['type'] == 'QUESTION' and 'Re-run with f_b = <value>' in lines(o) and
           (o.get('tutor') or {}).get('phrases') == ['Re-run with f_b = <value>'], (o['type'], lines(o)))
     fx.remove_project(ctx.root)
+    o, ctx, _ = handle('TU01', 'What can I say?')
+    from sicopr_assist import tutor
+    kinds = [k for k, _ in tutor.examples(core.Context(ctx.project))]
+    check('TU01: the six kinds of example, the dashboard among them, and the package example of TU07',
+          kinds == ['re-run with one change', 're-run with another package', 'sweep a range', 'sweep a choice',
+                    'show the dashboard', 'what did you change', 'go back to the original']
+          and '  %s' % core.DASHBOARD_PHRASE in lines(o).splitlines(), (kinds, lines(o)))
+    old = {k: os.environ.get(k) for k in ('PATH', 'ProgramFiles')}
+    os.environ.update(fx.r_env(found=False))
+    try:
+        o2 = core.handle('What can I say?', ctx.project)
+        hidden = [k for k, _ in tutor.examples(core.Context(ctx.project))]
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    check('TU01 with Rscript hidden: the dashboard example is left out (it would be a STOP, row D3) and the rest stay',
+          hidden == [k for k in kinds if k != 'show the dashboard'] and core.DASHBOARD_PHRASE not in lines(o2),
+          (hidden, lines(o2)))
+    fx.remove_project(ctx.root)
     o, ctx, _ = handle('TU07', label='V07')
     check('TU07: the package example uses this sheet\'s names (Re-run with package PkgB)',
           'Re-run with package PkgB' in lines(o) and 'PKG_HiR_CLASSB' not in lines(o), lines(o))
@@ -282,6 +307,7 @@ def main():
     if 'unit' in parts:
         unit_checks()
     with fixtures.Fixtures() as fx:
+        os.environ.update(fx.r_env())               # Rscript found (the stand-in) on every machine
         if 'rows' in parts:
             row_checks(fx)
         if 'v13' in parts:

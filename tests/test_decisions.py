@@ -4,9 +4,9 @@ Decision 7: a sweep with points that a rule asks about asks once for the batch, 
 run all points anyway, run only the points that pass, cancel. Each answer leads to its plan: every point; only
 the points no rule asks about; nothing. A point a rule stops is never run, whatever the answer.
 
-Decision 16: a phrase that asks for a version 1 action and a version 2 feature runs the version 1 part and
-announces that the rest is not in this version (CB17, and C2 after a dashboard). A phrase that asks only for a
-version 2 feature is a STOP.
+Decision 16, for the version 2 feature not built yet (channel download, until Phase V2-3): asked for on its own it
+is a STOP that says so. The dashboard is built (Phase V2-2): CB17 and C2 plan it after the run here, and
+tests/test_dashboard.py checks the rest.
 
 Also row RS28: the question about two package blocks carries the change asked for, and each option leads to it.
 
@@ -89,7 +89,6 @@ def main():
         print('SKIP: the four starting workbooks (by SHA-256, in tests\\configs or SICOPR_ASSIST_CONFIGS) are absent '
               'or hidden; these checks need them')
         return 0
-    from sicopr_assist import core
     with fixtures.Fixtures() as fx:
         t = Rows(fx)
         for rid, (asked, good) in sorted(SWEEPS.items()):
@@ -137,25 +136,23 @@ def main():
         check('run only the points that pass leaves out both the asked and the stopped points',
               b['type'] == 'PLAN' and labels(b) == ['0.85, 1e-4'], (b['type'], labels(b)))
 
-        # Decision 16
+        # Decision 16 for channel download; the dashboard after a run (CB17, C2)
+        dash = ['set_param', 'validate_config', 'run_com', 'summarize', 'export_mat', 'render_dashboard', 'open_report']
         for label in ('Case1', 'Case3'):
             o, = t.talk('CB17', [None], label)
-            check('CB17 %s: the version 1 part is planned' % label,
-                  o['type'] == 'PLAN' and steps(o) == ['set_param', 'validate_config', 'run_com', 'summarize']
+            check('CB17 %s: the change, the run and then the dashboard are planned' % label,
+                  o['type'] == 'PLAN' and steps(o) == dash
                   and [c['json_path'] for c in o['changes']] == ['/main/DER_0'], (o['type'], steps(o), o.get('reason')))
-            check('CB17 %s: and the dashboard is announced as not in this version' % label,
-                  any(l == core.NOT_IN_V1_PART['dashboard'] for l in o['announce']), o['announce'])
         o, = t.talk('C2', [None])
-        check('C2: a re-run after a dashboard plans the run and announces that the dashboard is not in this version',
-              o['type'] == 'PLAN' and steps(o) == ['set_param', 'validate_config', 'run_com', 'summarize']
-              and core.NOT_IN_V1_PART['dashboard'] in o['announce'], (o['type'], steps(o), o['announce']))
+        check('C2: a re-run after a dashboard plans the run and builds the dashboard again, and says so',
+              o['type'] == 'PLAN' and steps(o) == dash and any('built again' in l for l in o['announce']),
+              (o['type'], steps(o), o['announce']))
         o, = t.talk('CB17', ['Re-run with DER_0 = 1e-4.'])
-        check('the same change without the dashboard announces nothing about it',
-              o['type'] == 'PLAN' and core.NOT_IN_V1_PART['dashboard'] not in o['announce'], o['announce'])
-        for rid, ph in (('D1', None), ('CB17', 'Show the dashboard.'), ('CB17', 'Download the channels.')):
-            o, = t.talk(rid, [ph])
-            check('%s: a phrase that asks only for a version 2 feature is a STOP that says so' % (ph or rid),
-                  o['type'] == 'STOP' and 'not in this version' in o['reason'], (o['type'], o.get('reason')))
+        check('the same change without the dashboard plans no dashboard step',
+              o['type'] == 'PLAN' and steps(o) == dash[:4], steps(o))
+        o, = t.talk('CB17', ['Download the channels.'])
+        check('Download the channels.: a phrase that asks only for a version 2 feature not built yet is a STOP that '
+              'says so', o['type'] == 'STOP' and 'not in this version' in o['reason'], (o['type'], o.get('reason')))
 
         # CB12 and its paraphrase: four package blocks, each run with every z_p select case
         for ph in (None, 'sweep all packages and all z_p select cases'):

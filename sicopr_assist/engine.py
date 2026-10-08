@@ -1,4 +1,5 @@
-"""The package's view of SiCoPR: load a config, the releases, which keywords the loader reads.
+"""The package's view of SiCoPR: load a config, the releases, which keywords the loader reads, and what its R
+dashboard needs (R/com_analysis.R and an Rscript to run it).
 
 This is one of the three modules that import sicopr or read its folder (with run_case.py and
 schema_check.py). SiCoPR is found by schema_check.find_sicopr: the folder named by SICOPR_REPO, else
@@ -14,6 +15,8 @@ import hashlib
 import io
 import json
 import os
+import re
+import shutil
 import sys
 from types import SimpleNamespace
 
@@ -160,6 +163,42 @@ def flatten(param, OP):
     walk(param, 'param.')
     walk(OP, 'OP.')
     return out
+
+
+def com_analysis_script():
+    """SiCoPR's R report, R/com_analysis.R, which turns a run's .mat export into the dashboard page; None when this
+    SiCoPR has none."""
+    p = os.path.join(folder(), 'R', 'com_analysis.R')
+    return p if os.path.isfile(p) else None
+
+
+def r_version(path):
+    """The version of the R install that holds an Rscript, from its folder name (R-4.10.0 -> (4, 10, 0)), compared as
+    numbers so that R-4.10 is newer than R-4.9; () when the name holds none."""
+    for part in reversed(os.path.normpath(path).split(os.sep)):
+        m = re.match(r'R-(\d+(?:\.\d+)*)$', part)
+        if m:
+            return tuple(int(x) for x in m.group(1).split('.'))
+    return ()
+
+
+def find_rscript():
+    """Rscript, found as SiCoPR's gui/app.py (_rscript) finds it: on PATH first, else in a default Windows install,
+    <Program Files>\\R\\R-*\\bin (or bin\\x64), where the newest version wins by number, not by text. Program Files
+    is the folder named by the ProgramFiles environment variable (C:\\Program Files on Windows when it is not set).
+    None when there is no Rscript."""
+    for name in ('Rscript', 'Rscript.exe'):
+        p = shutil.which(name)
+        if p:
+            return p
+    root = os.environ.get('ProgramFiles') or (r'C:\Program Files' if os.name == 'nt' else None)
+    if not root:
+        return None
+    hits = []
+    for sub in (('bin',), ('bin', 'x64')):
+        for p in glob.glob(os.path.join(root, 'R', 'R-*', *sub, 'Rscript.exe')):
+            hits.append((r_version(p), len(sub) == 1, p))
+    return max(hits)[2] if hits else None
 
 
 def load_fields(path):

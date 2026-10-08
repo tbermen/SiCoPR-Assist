@@ -59,7 +59,7 @@ HISTORY_KEYS = (
 STATUSES = ('ok', 'question', 'cancelled', 'stopped', 'failed')
 
 RESULT_KEYS = ('format', 'run_id', 'status', 'release', 'sicopr_sha256', 'config_csv', 'channels',
-               'fingerprint', 'cases', 'message')
+               'fingerprint', 'cases', 'message', 'export_mat')     # export_mat: the engine's .mat export was on
 RESULT_STATUSES = ('complete', 'failed')
 
 

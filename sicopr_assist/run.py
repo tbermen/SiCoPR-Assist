@@ -25,6 +25,7 @@ folder holds the same lines in that form, whatever the caller shows.
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
 import copy
+import glob
 import hashlib
 import json
 import os
@@ -86,13 +87,13 @@ def _record_of(project, out):
 def fingerprint_hash(fp):
     """A short text form of a run's fingerprint (loaded fields without RESULT_DIR, channel files, engine), kept in
     result.json for the record. Reuse compares the fingerprints themselves (core._same_fingerprint)."""
-    fields, chans, sic = fp
+    fields, chans, sic, mat = fp
     h = hashlib.sha256()
     for k in sorted(fields):
         v = fields[k]
         h.update(k.encode('utf-8'))
         h.update(repr(v.tolist() if hasattr(v, 'tolist') else v).encode('utf-8'))
-    h.update(repr((chans, sic)).encode('utf-8'))
+    h.update(repr((chans, sic) + ((True,) if mat else ())).encode('utf-8'))
     return h.hexdigest()
 
 
@@ -134,16 +135,17 @@ class _Runner:
                 f.write(''.join(line + '\n' for line in self.held))
         self.held = []
 
-    def fingerprint(self, wc, channels):
+    def fingerprint(self, wc, channels, export=False):
         fields, err = config_model.loaded_fields(wc)
         if err:
             return None, err
         shas = [_sha(self.ctx.path(p)) for p, _ in channels]
-        return core._fingerprint(fields, shas, self.sic), None
+        return core._fingerprint(fields, shas, self.sic, export), None
 
-    def run_point(self, wc, channels, head, notes=()):
+    def run_point(self, wc, channels, head, notes=(), export=False):
         """One point: reuse an equal earlier run, or run it. head starts its status line (the step, and for a batch
-        the point n of N). Returns {'run_id', 'new', 'reused_from', 'skipped', 'status', 'message'}."""
+        the point n of N). export: the engine's .mat export is on (the dashboard needs it), and only a run that had it
+        is reused. Returns {'run_id', 'new', 'reused_from', 'skipped', 'status', 'message'}."""
         res = validate.validate_config(wc)
         if res['status'] == 'stop':
             self.say('status', '%s: skipped, validate_config fails: %s' % (head, res['text']))
@@ -154,15 +156,15 @@ class _Runner:
             self.say('status', '%s: skipped, validate_inputs fails: %s' % (head, stops[0]))
             return {'run_id': None, 'new': False, 'reused_from': None, 'status': 'skipped',
                     'skipped': 'validate_inputs fails: %s' % stops[0], 'message': stops[0]}
-        fp, err = self.fingerprint(wc, channels)
+        fp, err = self.fingerprint(wc, channels, export)
         if fp is None:
             self.say('status', '%s: skipped, validate_config fails: %s' % (head, err))
             return {'run_id': None, 'new': False, 'reused_from': None, 'status': 'skipped',
                     'skipped': 'validate_config fails: %s' % err, 'message': err}
         same = next((rid for rid, f in self.known if core._same_fingerprint(f, fp)), None)
         if same is not None:
-            self.say('status', '%s: the inputs equal those of %s, so its results are reused and nothing runs'
-                     % (head, same))
+            self.say('status', '%s: the inputs equal those of %s%s, so its results are reused and nothing runs'
+                     % (head, same, ', which has the .mat export' if export else ''))
             return {'run_id': same, 'new': False, 'reused_from': same, 'skipped': None, 'status': 'reused',
                     'message': None}
         rid = self.project.next_run_id()
@@ -171,13 +173,14 @@ class _Runner:
         run_wc = _with_result_dir(wc, folder)
         self.project.write_working_config(rid, run_wc)
         csv_path = config_model.write_run_csv(run_wc, self.project.run_csv_path(rid))
-        status, message = self._child(rid, csv_path, channels, fingerprint_hash(fp), list(notes) + list(more), head)
+        status, message = self._child(rid, csv_path, channels, fingerprint_hash(fp), list(notes) + list(more), head,
+                                      export)
         if status == 'complete':
             self.known.append((rid, fp))
         return {'run_id': rid, 'new': True, 'reused_from': None, 'skipped': None, 'status': status,
                 'message': message}
 
-    def _child(self, rid, csv_path, channels, fp_hash, notes, head):
+    def _child(self, rid, csv_path, channels, fp_hash, notes, head, export=False):
         p = self.project
         result = p.result_path(rid)
         paths = [(os.path.abspath(self.ctx.path(c)), r) for c, r in channels]
@@ -189,6 +192,8 @@ class _Runner:
         cmd += ['--fingerprint', fp_hash]
         for n in notes:
             cmd += ['--note', n]
+        if export:
+            cmd.append('--export-mat')
         # the child writes UTF-8, so the engine's lines reach run.log and the screen unchanged
         env = dict(os.environ, PYTHONUNBUFFERED='1', PYTHONDONTWRITEBYTECODE='1', PYTHONIOENCODING='utf-8')
         log = os.path.join(p.run_dir(rid), 'run.log')
@@ -215,7 +220,7 @@ class _Runner:
                 if rec is None:
                     msg = 'the run stopped with exit code %s and wrote no result: %s' % (code, ' / '.join(said[-3:]))
                     p.write_result(rid, result_record(run_id=rid, status='failed', message=msg, sicopr_sha256=self.sic,
-                                                      config_csv=csv_path, fingerprint=fp_hash))
+                                                      config_csv=csv_path, fingerprint=fp_hash, export_mat=export))
                     rec = {'status': 'failed', 'message': msg}
                 if rec['status'] == 'complete':
                     self.say('status', '%s finished in %s: %s' % (rid, took, _headline(rec)))
@@ -337,11 +342,23 @@ def set_project_setting(project, name, value):
     return path
 
 
-def carry_out(project, out, child=None, progress=None, open_folder=open_folder):
+def open_page(path):
+    """Open the dashboard page in the browser (row D1). Returns a line to show when that fails, else None."""
+    import pathlib
+    import webbrowser
+    try:
+        ok = webbrowser.open(pathlib.Path(os.path.abspath(path)).as_uri())
+    except Exception as e:                       # noqa: BLE001 - the page is written; say where it is
+        return 'the page could not be opened (%s); it is %s' % (e, path)
+    return None if ok else 'no browser could be started; the page is %s' % path
+
+
+def carry_out(project, out, child=None, progress=None, open_folder=open_folder, rscript=None, open_page=open_page):
     """Carry out a PLAN that core.handle returned and recorded. child replaces the command that runs one case
     (a test gives a stand-in that writes a seeded result.json). progress, when given, is called with (kind, text)
     for every line said while the plan is carried out (Decision 17; see line_text for the form shown).
-    open_folder opens a folder for Send feedback (a test gives a stand-in).
+    open_folder opens a folder for Send feedback, rscript replaces the Rscript command of the dashboard (a list;
+    default: the Rscript engine.find_rscript finds), and open_page opens the dashboard page (tests give stand-ins).
     Returns {'status', 'run_ids', 'points', 'lines'} and fills in the history record."""
     if out.get('type') != 'PLAN':
         raise ValueError('only a PLAN is carried out')
@@ -360,7 +377,8 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder):
                 'wrote %s = %s' % (a['name'], a['value'])
             lines.append('%s in %s' % (done, project.relative(path)))
     tutor_lines = list((out.get('tutor') or {}).get('lines') or [])      # shown after the plan (Decision 11)
-    if not out.get('points') and not any(op in ops for op in ('run_com', 'run_batch', 'build_matrix', 'export_xlsx')):
+    if not out.get('points') and not any(op in ops for op in ('run_com', 'run_batch', 'build_matrix', 'export_xlsx',
+                                                              'export_mat')):
         return {'status': 'ok', 'run_ids': [], 'points': [], 'lines': lines + tutor_lines}   # shown already (Decision 8)
     said = set()
 
@@ -369,7 +387,7 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder):
         detail = _step_detail(op, a)
         R.say('status', 'step %d of %d: %s%s%s' % (k + 1, len(steps), op, ': ' + detail if detail else '', more))
         said.add(k)
-    first_run = next((k for k, op in enumerate(ops) if op in ('run_com', 'run_batch')), len(ops))
+    first_run = next((k for k, op in enumerate(ops) if op in ('run_com', 'run_batch', 'export_mat')), len(ops))
 
     last = ctx.last or {}
     source = dict(last.get('source') or {}) or None
@@ -416,7 +434,7 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder):
     run_com = next((a for op, a in steps if op == 'run_com'), None)
     if run_com and run_com.get('thru_only'):
         channels = channels[:1]
-    if not channels and any(op in ops for op in ('run_com', 'run_batch')):
+    if not channels and any(op in ops for op in ('run_com', 'run_batch', 'export_mat')):
         return _failed(project, rec, 'no channel file is known for this run')
     chan_recs = [{'path': _native(p), 'sha256': _sha(ctx.path(p)), 'role': r} for p, r in channels]
     fields = dict(source=source, channels=chan_recs, overrides=overrides)
@@ -425,7 +443,8 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder):
         if k not in said:
             say_step(k)
     head = 'step %d of %d: %s' % (first_run + 1, len(steps), ops[first_run]) if first_run < len(ops) else 'run'
-    said.add(first_run)
+    if first_run < len(ops) and ops[first_run] != 'export_mat':     # export_mat says its own line, below
+        said.add(first_run)
 
     if 'build_matrix' in ops or 'run_batch' in ops or out.get('points'):
         pts = out.get('points') or []
@@ -449,7 +468,7 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder):
             points.append(rec_pt)
         fields.update(working_config=None, run_ids=run_ids, points=points)
     elif run_com is not None:
-        got = R.run_point(wc, channels, head)
+        got = R.run_point(wc, channels, head, export=bool(run_com.get('export_mat')))
         if got['run_id']:
             run_ids.append(got['run_id'])
             fields.update(working_config=project.relative(project.working_config_path(got['run_id'])),
@@ -466,10 +485,50 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder):
     fields['sicopr'] = {'sha256': R.sic, 'release': release or validate.emulated_release(wc)}
     project.update_history(rec['seq'], **fields)
 
-    # what is shown once the plan is carried out
+    # what is shown once the plan is carried out, and the dashboard after the run (rows D1, CB17, C2)
+    mat_run, pages, no_page = None, [], None
     for k, (op, a) in enumerate(steps):
         if k not in said and op in ('summarize', 'batch_summary', 'diff_results', 'export_xlsx', 'show_tutor'):
             say_step(k)
+        at = 'step %d of %d: %s' % (k + 1, len(steps), op)
+        if op == 'export_mat':
+            said.add(k)
+            if status != 'ok':
+                no_page = 'the run did not happen, so there is no .mat export'
+                R.say('status', '%s: skipped, %s' % (at, no_page))
+                continue
+            got = R.run_point(wc, channels, at, export=True)
+            if got['run_id'] and got['status'] in ('complete', 'reused'):
+                mat_run = got['run_id']
+                if mat_run not in run_ids:
+                    run_ids.append(mat_run)
+                    project.update_history(rec['seq'], run_ids=run_ids, working_config=project.relative(
+                        project.working_config_path(mat_run)))
+            else:
+                no_page = 'the run with the .mat export did not complete: %s' % got['message']
+        elif op == 'render_dashboard':
+            said.add(k)
+            if mat_run is None:
+                R.say('status', '%s: skipped, %s' % (at, no_page))
+                continue
+            pages, problems = _render(R, project, mat_run, rscript, at)
+            if problems:
+                no_page = '; '.join(problems)
+        elif op == 'open_report':
+            said.add(k)
+            if not pages:
+                R.say('status', '%s: skipped, no page was written' % at)
+                lines.append('the dashboard was not built: %s' % (no_page or 'no page was written'))
+                status = 'failed'
+                project.update_history(rec['seq'], status='failed', reason='the dashboard was not built: %s' % no_page)
+                continue
+            for page in pages:
+                R.say('status', '%s: %s' % (at, project.relative(page)))
+                lines.append('dashboard: %s (%s), with its lib folder beside it' % (project.relative(page),
+                                                                                   _size_text(os.path.getsize(page))))
+                problem = open_page(page) if open_page else None
+                if problem:
+                    lines.append(problem)
         if op == 'show_tutor':
             lines += tutor_lines
         if op == 'summarize' and run_com is not None:
@@ -493,6 +552,57 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder):
                 lines += got['warnings']
     R.close()
     return {'status': status, 'run_ids': run_ids, 'points': points, 'lines': lines}
+
+
+def _size_text(n):
+    return '%.1f MB' % (n / 1e6) if n >= 1e5 else '%d bytes' % n
+
+
+def _render(R, project, rid, rscript, head):
+    """Rscript on SiCoPR's R/com_analysis.R for each .mat export in the folder of run rid (row D1), started from an
+    argument list with that run folder as its working folder, never SiCoPR's (Rule 1): the page
+    (<run>_caseNN_report.html) and its lib folder land beside the .mat. Every line Rscript prints is passed on as a
+    child line (Decision 17). Returns ([pages written], [problems])."""
+    folder = project.run_dir(rid)
+    mats = sorted(glob.glob(os.path.join(folder, '*_case[0-9]*.mat')))
+    if not mats:
+        R.say('status', '%s: no .mat export in %s' % (head, project.relative(folder)))
+        return [], ['no .mat export in %s' % project.relative(folder)]
+    script = engine.com_analysis_script()
+    if rscript is None:
+        found = engine.find_rscript()
+        rscript = [found] if found else None
+    if rscript is None or script is None:
+        why = 'Rscript was not found' if rscript is None else 'the SiCoPR in use has no R/com_analysis.R'
+        R.say('status', '%s: %s' % (head, why))
+        return [], [why]
+    pages, problems = [], []
+    for mat in mats:
+        name = os.path.basename(mat)
+        R.say('status', '%s: Rscript com_analysis.R %s, in %s' % (head, name, project.relative(folder)))
+        t0 = time.time()
+        try:
+            proc = subprocess.Popen(list(rscript) + [script, name], cwd=folder, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True, encoding='utf-8',
+                                    errors='replace', bufsize=1)
+        except OSError as e:
+            R.say('status', '%s: Rscript could not be started: %s' % (head, e))
+            problems.append('Rscript could not be started: %s' % e)
+            continue
+        for line in proc.stdout:
+            R.say('engine', line.rstrip(chr(10)))
+        code = proc.wait()
+        page = mat[:-len('.mat')] + '_report.html'
+        took = elapsed_text(time.time() - t0)
+        if code == 0 and os.path.isfile(page):
+            R.say('status', '%s: written in %s: %s (%s)' % (head, took, project.relative(page),
+                                                            _size_text(os.path.getsize(page))))
+            pages.append(page)
+        else:
+            R.say('status', '%s: Rscript stopped after %s with exit code %s and wrote no page for %s'
+                  % (head, took, code, name))
+            problems.append('Rscript stopped with exit code %s on %s' % (code, name))
+    return pages, problems
 
 
 def _failed(project, rec, message):

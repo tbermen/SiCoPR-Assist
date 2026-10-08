@@ -175,6 +175,7 @@ Everything goes into `.sicopr\` in the project folder:
 | `configs\run_NNNN.json` | the working config of run NNNN |
 | `configs\run_NNNN.csv` | the config SiCoPR read for run NNNN (the Reference Code's format) |
 | `runs\run_NNNN\` | that run's own results folder: SiCoPR's report, `run.log` (the lines shown while it ran), and `result.json` with every result field at full precision |
+| `runs\run_NNNN\run_NNNN_caseNN.mat` | the engine's `.mat` export of a run made for the dashboard, and beside it `run_NNNN_caseNN_report.html` and its `lib\` folder |
 | `runs\batch_summary.csv` | one row per point of every sweep or batch |
 | `assist.ini` | settings for this project (optional) |
 
@@ -202,11 +203,32 @@ force and where each one came from. The example file
 | `mask_names`, `mask_numbers` | on, off | what Export feedback masks |
 | `max_download_mb`, `download_retries` | 500, 1 | version 2 (channel download); read and kept, no effect yet |
 
+## The dashboard
+
+`Now give me the results in a dynamic dashboard.` (or `Show the dashboard.`, `plot the results`) builds
+SiCoPR's interactive R report on the last run, in three steps:
+
+1. `export_mat` runs the working config of the last run again with the engine's `.mat` export on (the
+   command line's `--export-mat`). That is a full COM run, as long as the run it repeats, and the plan
+   says so before anything runs. A run that already had the export, with the same inputs, is reused
+   instead; a run without it never is.
+2. `render_dashboard` runs Rscript on SiCoPR's `R\com_analysis.R` with the `.mat`, from the run's own
+   folder. The page `run_NNNN_case01_report.html` and its `lib\` folder are written beside the `.mat`.
+3. `open_report` opens the page in the browser, and its path is printed.
+
+`Re-run with DER_0 = 1e-4 and show the dashboard.` runs the change once, with the export on, and builds
+the dashboard of that run. A re-run right after a dashboard builds it again.
+
+Rscript is found as SiCoPR's GUI finds it: on PATH, else the newest R in `C:\Program Files\R` (by
+version number). R needs the packages R.matlab, plotly and htmltools. With no Rscript the dashboard is a
+STOP that names the CSV summary of the last run, so the results can still be read.
+
 ## The tutor
 
 `What can I say?` (or `help`) lists phrases that work on the config in front of the tool, filled with
 its own names: a re-run with one change, a re-run with another package block, a sweep over a range, a
-sweep over a choice, what changed, and the original config again. Every phrase is first resolved by the
+sweep over a choice, the dashboard (when Rscript is found), what changed, and the original config
+again. Every phrase is first resolved by the
 tool itself, as if that config had just been run, and a phrase that would not work is never shown. With
 no run yet, the first phrase is the run of the config and the channel file in the folder.
 
@@ -274,24 +296,25 @@ at the first failure. It takes 15 minutes or more, most of it in `test_use_cases
 | `SICOPR_REPO` | the SiCoPR checkout to use |
 | `SICOPR_ASSIST_FULL=1` | L3 on every pair (default: Case1 and the twelve variants only) |
 | `SICOPR_ASSIST_HIDE_CONFIGS=1` | hide the four workbooks: tests that need them print `SKIP:` and exit 0 |
-| `SICOPR_ASSIST_E2E=1` | also run real COM end to end on synthetic THRU files: one case with eight changes, then a run and a re-run with a THRU of another length (three runs, about 4 minutes each) |
+| `SICOPR_ASSIST_E2E=1` | also run real COM end to end on synthetic THRU files: one case with eight changes, then a run and a re-run with a THRU of another length (three runs, about 4 minutes each); and in `test_dashboard.py` a run, then the dashboard phrase with the real Rscript (about 10 minutes) |
 | `SICOPR_ASSIST_INPUTS` | where the harness writes `score_use_cases.csv` (default: the temporary folder) |
 
-`python tests\test_use_cases.py --gate G7` prints the scoreboard by group and level, and `--gate V1.1`
-the tutor and feedback rows. The tutor text and the feedback file, which the four levels do not read,
-are checked by `tests\test_tutor.py` and `tests\test_feedback.py`. The build scores are in
+`python tests\test_use_cases.py --gate G7` prints the scoreboard by group and level, `--gate V1.1`
+the tutor and feedback rows, and `--gate V2.1` the dashboard rows. The tutor text and the feedback
+file, which the four levels do not read, are checked by `tests\test_tutor.py` and
+`tests\test_feedback.py`. `tests\test_dashboard.py` carries out dashboard plans with a stand-in COM
+child and a stand-in Rscript, so it needs no R. The build scores are in
 `CHANGELOG.md`.
 
 ## What version 2 adds
 
-Version 2 is being built in phases. The tutor and feedback export (above) are in 0.4.0. Until their
-phase, the rest are answered with a STOP that says they are not in this version and what to do
-instead.
+Version 2 is being built in phases. The tutor and feedback export (above) are in 0.4.0, the dashboard
+in 0.5.0. Until their phase, the rest are answered with a STOP that says they are not in this version
+and what to do instead.
 
 - **A GUI**, in this repository: a command box that takes the same phrases, with views of the project
   folder, the history, run results and summaries, the pending question as buttons, and the settings.
   It calls the same functions as the command line.
-- **A dashboard**: SiCoPR's R report on the last run. The tutor shows a dashboard phrase once it works.
 - **Channel download** from the IEEE P802.3dj tools page, with the FEXT and NEXT files paired to their
   THRU.
 
@@ -317,6 +340,9 @@ instead.
 - Full-precision results come from `sicopr._run_com`, whose name marks it as internal to SiCoPR. A
   change to it in SiCoPR would show up in the tests.
 - The CI workflow (`.github\workflows\ci.yml`) is untested until the first push.
+- The dashboard re-runs COM to get the `.mat` export, because a run made without it has none. Whether
+  R has the packages `com_analysis.R` needs is found out only when it runs; a failure is reported and
+  the run's results stay.
 
 The build also found:
 

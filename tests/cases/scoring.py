@@ -27,7 +27,7 @@ from sicopr_assist.project import Project
 
 # the groups not gated yet: version 2 builds the tutor and feedback in Phase V2-1, the dashboard (report) in V2-2
 # and channel download (fetch) in V2-3, and each group is gated from the phase that builds it
-DEFERRED = ('report', 'fetch')
+DEFERRED = ('fetch',)
 FROZEN = os.path.join(fixtures.HERE, 'l4_rows.csv')
 FROZEN_COLUMNS = ['id', 'starting_config', 'group', 'priority', 'expected_type', 'kind', 'expected']
 REVIEW = os.path.join(fixtures.HERE, 'l4_review.csv')

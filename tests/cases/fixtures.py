@@ -5,6 +5,7 @@
         fx.thru                 the synthetic 400 mm THRU (make_s4p.py)
         fx.project('Case1')     a new project folder: data\\config.xlsx and data\\thru.s4p
         fx.home                 the user settings folder; SICOPR_ASSIST_HOME points here
+        fx.r_env(found)         environment variables that make Rscript found (a stand-in) or not, on any machine
 
 Everything is made in two temporary folders (one for the projects, one standing in for the user
 profile), and both are removed on exit. The four starting workbooks are found by SHA-256, first in
@@ -38,6 +39,8 @@ if ROOT not in sys.path:
 from sicopr_assist import engine  # noqa: E402
 
 STARTING = os.path.join(HERE, 'sicopr_starting_configs.csv')
+# the Rscript command a test gives run.carry_out for the dashboard: the stand-in, so no test needs R
+STANDIN_RSCRIPT = [sys.executable, os.path.join(HERE, 'standin_rscript.py')]
 CASES = ('Case1', 'Case2', 'Case3', 'Case4')
 VARIANTS = tuple('V%02d' % i for i in range(1, 13))
 WC_KEYS = ('schema', 'source', 'main', 'packages', 'links')
@@ -156,6 +159,25 @@ class Fixtures:
     @property
     def available(self):
         return bool(self.configs)
+
+    def r_env(self, found=True):
+        """Environment variables that make the Rscript the core finds (engine.find_rscript) the same on every machine:
+        PATH without any folder that holds an Rscript, plus a stand-in folder whose Rscript is an empty file when
+        found is True, and ProgramFiles pointing at an empty folder, so that no R install is found there either (row
+        D3 hides both). The stand-in is only found, never run: a test that carries out a dashboard plan passes
+        STANDIN_RSCRIPT to run.carry_out."""
+        bin_dir = os.path.join(self.base, 'standin_r', 'bin')
+        empty = os.path.join(self.base, 'no_program_files')
+        if not os.path.isdir(bin_dir):
+            os.makedirs(bin_dir)
+            os.makedirs(empty)
+            for name in ('Rscript', 'Rscript.exe'):
+                path = os.path.join(bin_dir, name)
+                open(path, 'w').close()
+                os.chmod(path, 0o755)
+        keep = [d for d in os.environ.get('PATH', '').split(os.pathsep)
+                if d and not any(os.path.exists(os.path.join(d, n)) for n in ('Rscript', 'Rscript.exe'))]
+        return {'PATH': os.pathsep.join(([bin_dir] if found else []) + keep), 'ProgramFiles': empty}
 
     def thru_of(self, length_mm):
         """A synthetic THRU of another length (make_s4p.py), made once and kept with the fixtures."""

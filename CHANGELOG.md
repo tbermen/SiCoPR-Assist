@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.5.0 (8 October 2026)
+
+Version 2, Phase V2-2: the dashboard (rows D1 to D4, CB17 and C2). Tested with SiCoPR 1.1.1 (commit
+`55c3f71`).
+
+- **The dashboard.** `Now give me the results in a dynamic dashboard.` plans `export_mat >
+  render_dashboard > open_report`. `export_mat` runs the working config of the last run again with the
+  engine's `.mat` export on (`run_case.py --export-mat`), announced as a full COM run; a run that had
+  the export, with the same inputs, is reused instead. Whether a run had the export is now part of the
+  fingerprint that decides reuse: a run with it serves a plain run, and a run without it never serves an
+  export. `render_dashboard` runs Rscript on SiCoPR's `R\com_analysis.R` with the run's own folder as
+  its working folder, so the page and its `lib\` folder land beside the `.mat`. `open_report` opens the
+  page and prints its path. Each step has its status lines, and Rscript's own lines are passed on
+  indented, as the engine's are (Decision 17).
+- **With a run.** `Re-run with DER_0 = 1e-4 and show the dashboard.` (row CB17) runs once, with the
+  export on, and builds the dashboard of that run; a re-run right after a dashboard builds it again
+  (row C2). These two rows have their dashboard chains back.
+- **Finding Rscript** (`engine.find_rscript`): on PATH, else the newest R under Program Files, compared
+  as version numbers, so R-4.10 is newer than R-4.9. With no Rscript the dashboard is a STOP that names
+  the CSV summary of the last run (row D3); with no run yet it asks (row D2). `report` is now a word for
+  the dashboard (`open the report`).
+- **The tutor** shows the dashboard phrase among its examples (row TU01) when Rscript is found; it is
+  resolved like every other example first.
+- **Tests.** The group report is gated (`--gate V2.1`). New: `tests\test_dashboard.py` (gate V2.2: the
+  finder; the plans of D1 to D3, CB17 and C2; a dashboard plan carried out with the stand-in child and
+  the new stand-in Rscript, `tests\cases\standin_rscript.py`; gate V2.3 end to end with
+  `SICOPR_ASSIST_E2E=1`). The harness finds a stand-in Rscript for every pair and hides it, from PATH
+  and from Program Files, for row D3, so the scores are the same on a machine with or without R. The
+  table copy has CB17 and C2 with their dashboard chains; the frozen L4 list moved for those two rows
+  only.
+
 ## 0.4.0 (7 October 2026)
 
 Version 2, Phase V2-1: the tutor, trouble detection and feedback export (Decisions 10 and 11). Tested with

@@ -2,12 +2,13 @@
 reuse and run-folder checks (gate G6.3) run no COM.
 
     python standin_child.py CONFIG.csv RESULT.json --thru T [--fext F ...] [--next N ...]
-                            [--fingerprint HEX] [--note TEXT ...]
+                            [--fingerprint HEX] [--note TEXT ...] [--export-mat]
 
 The numbers are made up but fixed by the run CSV (without its RESULT_DIR row), so the same config gives the
 same numbers. The release is the one the config loads to (param.matlab_version), as the engine reports it.
 SICOPR_ASSIST_STANDIN_NAN=1 makes COM not a number. SICOPR_ASSIST_STANDIN_ARGV=<file> appends the arguments, as
-one JSON list per run, to that file.
+one JSON list per run, to that file. --export-mat writes a small stand-in <run>_case01.mat beside RESULT.json, where
+the engine writes its .mat export (<RESULT_DIR>/<config file name>_caseNN.mat), and says so in the result.
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
@@ -36,6 +37,7 @@ def main(argv=None):
     ap.add_argument('--next', nargs='*', default=[])
     ap.add_argument('--fingerprint')
     ap.add_argument('--note', action='append', default=[])
+    ap.add_argument('--export-mat', action='store_true')
     a = ap.parse_args(argv)
     keep = os.environ.get('SICOPR_ASSIST_STANDIN_ARGV')
     if keep:                                     # a test reads back the arguments the runner gave (gate N3)
@@ -57,7 +59,13 @@ def main(argv=None):
     rec = result_record(run_id=os.path.basename(os.path.dirname(os.path.abspath(a.result))), status='complete',
                         release=fields['param.matlab_version'], sicopr_sha256=engine.engine_sha256(),
                         config_csv=a.config, channels=chans, fingerprint=a.fingerprint, cases=[case],
-                        message='\n'.join(a.note) or None)
+                        message='\n'.join(a.note) or None, export_mat=a.export_mat)
+    if a.export_mat:
+        stem = os.path.splitext(os.path.basename(a.config))[0]
+        mat = os.path.join(os.path.dirname(os.path.abspath(a.result)), '%s_case01.mat' % stem)
+        with open(mat, 'wb') as f:
+            f.write(b'MATLAB 5.0 MAT-file, stand-in')
+        print('    [export-mat] 1 variables -> %s' % mat)
     with open(a.result, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(rec, f, indent=1)
     print('--- case 1: channel_operating_margin_dB = %r (stand-in)' % com)

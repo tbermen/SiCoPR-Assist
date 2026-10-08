@@ -5,6 +5,7 @@
     python tests\\test_use_cases.py --gate G7 --gate M1 --gate M2     several gates on one scoring run
     python tests\\test_use_cases.py --gate N1 --gate N2                the gates of the second session
     python tests\\test_use_cases.py --gate V1.1                         version 2, Phase V2-1: tutor and feedback
+    python tests\\test_use_cases.py --gate V2.1                         version 2, Phase V2-2: the dashboard
     $env:SICOPR_ASSIST_FULL = "1"                   L3 on every pair (default: Case1 and the variants)
 
 It fails on a defect of the harness itself: a prior state with no builder, a builder that does not
@@ -34,7 +35,7 @@ import fixtures  # noqa: E402
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2', 'V1.1'], action='append',
+    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2', 'V1.1', 'V2.1'], action='append',
                     default=[],
                     help='check a gate condition as well (may be given more than once)')
     ap.add_argument('--review', help='with --gate G4: write the rows of the Phase 4 groups that L4 cannot check by '
@@ -106,6 +107,8 @@ def main(argv=None):
         gate_n2(rows)
     if 'V1.1' in args.gate:
         gate_v11(rows, results, full)
+    if 'V2.1' in args.gate:
+        gate_v21(rows, results, full)
     if 'G1.3' in args.gate:
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
@@ -362,6 +365,36 @@ def gate_v11(rows, results, full):
     print('V1.1: %d pairs; L4 on %d of them (the others are on the review list)'
           % (len(got), sum(1 for r in got if r['L4'] in ('PASS', 'FAIL'))))
     check('V1.1: no row is excused by an open dispute', not open_disputes(), sorted(open_disputes()))
+
+
+V2_ROWS = ('CB17', 'C2')                         # restored to their dashboard chains in Phase V2-2
+
+
+def gate_v21(rows, results, full):
+    """Gate V2.1 (version 2, Phase V2-2): every must row in the group report, and CB17 and C2, pass all levels that
+    apply (L1, and L2, L3 and L4 where they apply; L4: the rows in the frozen list); no row is excused. CB17 and C2
+    are frozen with their dashboard chains."""
+    import csv
+    import scoring
+
+    def mine(r):
+        return r['priority'] == 'must' and (r['group'] == 'report' or r['id'] in V2_ROWS)
+    want = sum(len(scoring.labels_of(r)) for r in rows if mine(r))
+    got = [r for r in results if r['applies'] == 'yes' and mine(r)]
+    check('V2.1: the must rows of report, CB17 and C2 were scored (%d pairs)' % want, want > 0 and len(got) == want,
+          len(got))
+    check('V2.1: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
+    board(got, 'V2.1: must rows of report, CB17 and C2')
+    bad = [r for r in got if r['L1'] != 'PASS' or 'FAIL' in (r['L2'], r['L3'], r['L4'])]
+    check('V2.1: every must pair of report, CB17 and C2 passes L1, and L2, L3 and L4 where they apply', not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad])
+    print('V2.1: %d pairs; L4 on %d of them (the others are on the review list)'
+          % (len(got), sum(1 for r in got if r['L4'] in ('PASS', 'FAIL'))))
+    check('V2.1: no row is excused by an open dispute', not open_disputes(), sorted(open_disputes()))
+    frozen = {r['id']: r['expected'] for r in csv.DictReader(open(scoring.FROZEN, newline='', encoding='utf-8'))}
+    tail = 'run_com > summarize > export_mat > render_dashboard > open_report'
+    check('V2.1: CB17 and C2 are frozen with their dashboard chains',
+          all(frozen.get(i, '').endswith(tail) for i in V2_ROWS), {i: frozen.get(i) for i in V2_ROWS})
 
 
 MAINTAINER_XT = ('Re-run last config, but include the matching xtalk files in the simulation.',

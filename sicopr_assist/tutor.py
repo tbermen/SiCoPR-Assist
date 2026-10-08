@@ -212,21 +212,24 @@ def _example_candidates(wc):
     sweep += ['Sweep %s from %s in 3 steps' % (main[n.lower()], r) for n, r in
               (('DER_0', '1e-5 to 1e-4'), ('SNR_TX', '30 to 34')) if n.lower() in main]
     choice = ['Sweep %s' % n for n in _choice_names(wc)[:4]]
+    from sicopr_assist import core
     return [('re-run with one change', change), ('re-run with another package', package),
             ('sweep a range', sweep), ('sweep a choice', choice),
+            ('show the dashboard', [core.DASHBOARD_PHRASE, 'Show the dashboard.']),
             ('what did you change', ['What did you change?']),
             ('go back to the original', ['Re-run with the original config.', 'Reset and re-run.'])]
 
 
 def examples(ctx):
-    """[(kind, phrase)]: one phrase per kind that resolves to a PLAN on the config in front of the tool. The
-    dashboard example waits for the dashboard (Phase V2-2): a phrase that gives a STOP is never taught."""
+    """[(kind, phrase)]: one phrase per kind that resolves to a PLAN on the config in front of the tool. A phrase
+    that gives a STOP is never taught: with no Rscript on this machine the dashboard example is left out (row D3)."""
     scratch = _scratch(ctx)
     if scratch is None:
         return []
     wc = scratch.wc
+    from sicopr_assist import engine
     key = ('examples', json.dumps(wc, sort_keys=True, default=str), json.dumps(scratch.last.get('channels'),
-                                                                              sort_keys=True))
+                                                                              sort_keys=True), engine.find_rscript())
     if key not in _CACHE:
         got = []
         for kind, cands in _example_candidates(wc):

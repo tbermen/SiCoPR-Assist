@@ -7,7 +7,7 @@ R8,any,run,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
 D1,any,report,must,PLAN,chain,export_mat > render_dashboard > open_report
 D2,any,report,must,QUESTION,options,run the example setup then build the dashboard | point to an existing results file
 D4,any,report,stretch,PLAN,chain,summarize
-C2,Case1,change,must,PLAN,chain,set_param > validate_config > run_com > summarize
+C2,Case1,change,must,PLAN,chain,set_param > validate_config > run_com > summarize > export_mat > render_dashboard > open_report
 C3,Case1,change,must,QUESTION,options,z_p select | none of these
 C4,Case1; Case2; Case3; Case4,change,must,QUESTION,options,bmaxg | n_tail_start | c(0) | ffe_pre_tap_len | ffe_post_tap_len | n_bx | n_b | b_max(1) | none of these
 C5,Case1,change,must,QUESTION,options,z_p (tx) | z_p (next) | z_p (fext) | z_p (rx) | z_p select | board_tl_gamma0_a1_a2 | tdr_w_txpkg | package_tl_gamma0_a1_a2 | none of these
@@ -470,7 +470,7 @@ CB11,Case1,combo,must,PLAN,chain,build_matrix > validate_config > run_batch > ba
 CB12,Case1,combo,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary
 CB13,any,combo,must,QUESTION,options,run all | edit the sweep | cancel
 CB15,any,combo,must,PLAN,chain,clear_overrides > run_com > summarize
-CB17,Case1; Case2; Case3; Case4,combo,must,PLAN,chain,set_param > validate_config > run_com > summarize
+CB17,Case1; Case2; Case3; Case4,combo,must,PLAN,chain,set_param > validate_config > run_com > summarize > export_mat > render_dashboard > open_report
 CB18,Case1,combo,stretch,PLAN,chain,set_param > recompute_linked > validate_config > run_com > summarize
 CB19,Case1,combo,must,PLAN,chain,import_config > set_param > validate_config > validate_inputs > run_com > summarize
 RS01,Case1; Case2; Case3; Case4,resolve,must,QUESTION,options,f_b | f_v | f_f | f_n | none of these
