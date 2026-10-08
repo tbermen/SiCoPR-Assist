@@ -181,12 +181,22 @@ def seed_batch(ctx, phrase, points, skipped=(), reuse_first=False):
 
 
 def seed_commands(ctx, sequence, version=None):
-    """History records only, no runs: sequence of 'ok', 'miss', 'cancelled', 'failed', 'answered' or
-    'shown' (an ok command after which the tutor and the feedback line were shown)."""
+    """History records: sequence of 'ok', 'miss', 'cancelled', 'failed', 'answered' or 'shown' (an ok command
+    after which the tutor and the feedback line were shown).
+
+    The first 'ok' is a seeded run of the starting config on data\\thru.s4p (a working config, a result file and
+    its history record), and the rest are history records only. Successful commands in a project folder that
+    holds both files include a run, and the phrases that follow these states (Re-run with ..., rows TU14 to TU19)
+    need one: without it they would be read as a re-run with no run to start from (Phase V2-0 finding)."""
     phrases = ['Re-run with DER_0 = 1e-4.', 'Show settings.', 'What did I run last?',
                'Re-run with SNR_TX = 32.5.', 'Show me the summary again.']
+    ran = False
     for i, kind in enumerate(sequence):
         ph = phrases[i % len(phrases)]
+        if kind == 'ok' and not ran:
+            seed_run(ctx)
+            ran = True
+            continue
         if kind == 'ok':
             rec = history_record(phrase=ph, pattern='seeded', outcome='PLAN', status='ok')
         elif kind == 'shown':
@@ -477,9 +487,12 @@ def zp_select_all(ctx):
 
 # ----------------------------------------------------------------------------- fetch environment (version 2)
 def fetch_env(ctx, confirmed=True, network='up', cached=False, superseded=False, unpaired=False,
-              invalid=False, no_touchstone=False, interrupted=False, thru_only=False):
+              invalid=False, no_touchstone=False, interrupted=False, thru_only=False, multi=False, tie=False):
     """A local stand-in for the IEEE P802.3dj tools page and its zips. Tests never touch the network:
-    the page is a file, and FETCH_INDEX_ENV points at it while the core is called."""
+    the page is a file, and FETCH_INDEX_ENV points at it while the core is called.
+
+    A minimal stand-in until Phase V2-3 writes the page in the recorded markup: multi gives the newest
+    entry a second zip under the same date (row F11), tie gives a second entry the newest date (row F12)."""
     import contextlib
     import io
     replace_file(ctx.data('config.xls'), open(ctx.fx.configs[ctx.label], 'rb').read())   # an .xlsx named .xls
@@ -514,6 +527,9 @@ def fetch_env(ctx, confirmed=True, network='up', cached=False, superseded=False,
     older = zip_of('dj_kr_channels_2026_06.zip', {'ch1_thru.s4p': good, 'ch1_fext1.s4p': good, 'ch1_next1.s4p': good})
     rows = [('2026-09-20', os.path.basename(newest), 'superseded' if superseded else 'current', 'KR'),
             ('2026-06-11', os.path.basename(older), 'current', 'KR')]
+    if multi or tie:
+        second = zip_of('dj_kr_channels_2026_09_b.zip', files)
+        rows.insert(1, ('2026-09-20', os.path.basename(second), 'same entry' if multi else 'current', 'KR'))
     size = os.path.getsize(newest)
     html = ['<html><body><table>']
     for date, name, status, iface in rows:
@@ -593,6 +609,9 @@ BUILDERS = {
     'as F1 but the zip contains no Touchstone files': lambda c: fetch_env(c, no_touchstone=True),
     'as F1 but the download is interrupted': lambda c: fetch_env(c, interrupted=True),
     'as F1 but the zip holds THRU files only': lambda c: fetch_env(c, thru_only=True),
+    # rows F11 and F12 (7 October, from the page itself): minimal stand-ins until Phase V2-3
+    'as F1 but the newest entry for the interface holds several zips under one date': lambda c: fetch_env(c, multi=True),
+    'as F1 but two entries for the interface share the newest date': lambda c: fetch_env(c, tie=True),
     'new terminal; history file from an earlier session exists': r2_complete,
     'history exists': r2_complete,
     'project folder with no history': base_layout,

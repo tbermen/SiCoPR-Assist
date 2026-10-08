@@ -4,6 +4,7 @@
     python tests\\test_use_cases.py --gate G1.3     also check gate G1.3 (the Phase 1 STOP stub)
     python tests\\test_use_cases.py --gate G7 --gate M1 --gate M2     several gates on one scoring run
     python tests\\test_use_cases.py --gate N1 --gate N2                the gates of the second session
+    python tests\\test_use_cases.py --gate V1.1                         version 2, Phase V2-1: tutor and feedback
     $env:SICOPR_ASSIST_FULL = "1"                   L3 on every pair (default: Case1 and the variants)
 
 It fails on a defect of the harness itself: a prior state with no builder, a builder that does not
@@ -33,7 +34,8 @@ import fixtures  # noqa: E402
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2'], action='append', default=[],
+    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2', 'V1.1'], action='append',
+                    default=[],
                     help='check a gate condition as well (may be given more than once)')
     ap.add_argument('--review', help='with --gate G4: write the rows of the Phase 4 groups that L4 cannot check by '
                                      'machine, with the outcome given, to this CSV')
@@ -83,6 +85,9 @@ def main(argv=None):
     check('every row and config pair was scored (%d)' % expected_pairs,
           len(results) == expected_pairs and not harness_errors, '; '.join(harness_errors[:5]))
     check('every applicable pair has an L1 score', all(r['L1'] in ('PASS', 'FAIL') for r in applicable))
+    failed = ['%s %s' % (r['id'], r['config']) for r in applicable if (r.get('_outcome') or {}).get('tutor_error')]
+    check('the tutor never failed (it never stops a command, so a failure would otherwise pass unseen)', not failed,
+          failed[:10])
 
     if 'G4' in args.gate:
         gate_g4(rows, results, full, args.review)
@@ -99,6 +104,8 @@ def main(argv=None):
     if 'N2' in args.gate:
         gate_m2(results)
         gate_n2(rows)
+    if 'V1.1' in args.gate:
+        gate_v11(rows, results, full)
     if 'G1.3' in args.gate:
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
@@ -333,6 +340,28 @@ def gate_n1(rows, results, full):
           len(frozen) == 645 and sorted(i for i in frozen if i in NEW_ROWS_N) ==
           ['SM16', 'XT01', 'XT02', 'XT03', 'XT05', 'XT06'] and frozen[-6:] ==
           ['XT01', 'XT02', 'XT03', 'XT05', 'XT06', 'SM16'], (len(frozen), frozen[-8:]))
+
+
+V1_GROUPS = ('tutor', 'feedback')
+
+
+def gate_v11(rows, results, full):
+    """Gate V1.1 (version 2, Phase V2-1): every must row in the groups tutor and feedback passes L1, and L2, L3 and
+    L4 where they apply (L4: the rows in the frozen list); no row is excused. The tutor text that L4 does not read
+    is checked by tests/test_tutor.py, and the feedback file by tests/test_feedback.py."""
+    import scoring
+    want = sum(len(scoring.labels_of(r)) for r in rows if r['group'] in V1_GROUPS and r['priority'] == 'must')
+    got = [r for r in results if r['applies'] == 'yes' and r['group'] in V1_GROUPS and r['priority'] == 'must']
+    check('V1.1: the must rows of tutor and feedback were scored (%d pairs)' % want, want > 0 and len(got) == want,
+          len(got))
+    check('V1.1: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
+    board(got, 'V1.1: must rows of tutor and feedback')
+    bad = [r for r in got if r['L1'] != 'PASS' or 'FAIL' in (r['L2'], r['L3'], r['L4'])]
+    check('V1.1: every must pair of tutor and feedback passes L1, and L2, L3 and L4 where they apply', not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad])
+    print('V1.1: %d pairs; L4 on %d of them (the others are on the review list)'
+          % (len(got), sum(1 for r in got if r['L4'] in ('PASS', 'FAIL'))))
+    check('V1.1: no row is excused by an open dispute', not open_disputes(), sorted(open_disputes()))
 
 
 MAINTAINER_XT = ('Re-run last config, but include the matching xtalk files in the simulation.',

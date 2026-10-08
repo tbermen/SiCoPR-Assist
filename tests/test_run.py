@@ -365,7 +365,8 @@ def decision13(fx):
     check('Decision 13: a summary runs nothing', done is not None and done['run_ids'] == [] and len(p.run_numbers()) == 9)
     d4 = core.handle('Show me the summary again.', p)
     check('D4: the summary of the last run, with its release, and no run',
-          d4['type'] == 'PLAN' and [s['op'] for s in d4['steps']] == ['summarize']
+          d4['type'] == 'PLAN' and [s['op'] for s in d4['steps'] if (s.get('args') or {}).get('why') not in
+                                    ('new', 'trouble')] == ['summarize']
           and d4['announce'] == summary.run_summary(p, core.Context(p).last_run_id())['lines'], d4['announce'][:2])
 
 

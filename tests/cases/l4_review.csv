@@ -16,6 +16,8 @@ F7,any,fetch,must,PLAN,review,no step chain in the detail
 F8,any,fetch,stretch,QUESTION,review,"options described, not named: the next candidate zips for that interface"
 F9,any,fetch,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 F10,any,fetch,must,PLAN,review,no step chain in the detail
+F11,any,fetch,must,QUESTION,review,"options described, not named: each zip by name, cancel"
+F12,any,fetch,must,QUESTION,review,"options described, not named: each entry by name, cancel"
 S1,any,session,must,PLAN,review,no step chain in the detail
 X1,any,scope,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 X2,any,scope,must,STOP,review,STOP: whether the reason names the same cause is read by a person

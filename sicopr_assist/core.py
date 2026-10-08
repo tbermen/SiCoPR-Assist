@@ -10,6 +10,7 @@ The outcome is one plain dictionary that can be written as JSON (prompt section 
     announce   every line shown before anything runs
     points, new_runs, reused_runs             batches only
     pattern, unplaced                         how the phrase was read; goes to history
+    tutor      {"lines", "phrases", "why"}    what the tutor adds, when it comes up (Decision 11; tutor.py)
 
 The principle is resolve exactly, or ask. A phrase is read by parse.py against the names of the config in
 front of the tool; names are resolved by Rule 4 (COM keywords only, case and spaces ignored); every value is
@@ -64,20 +65,17 @@ NOT_IN_V1 = {
     'fetch': 'Downloading channels is not in this version of SiCoPR-Assist. Download the channel files from the IEEE '
              'P802.3dj tools page (https://www.ieee802.org/3/dj/public/tools/index.html), unpack them into the '
              'project folder, and name them in the phrase, for example Run COM on data\\thru.s4p with data\\config.xlsx.',
-    'tutor': 'The tutor is not in this version of SiCoPR-Assist. What can I change? lists the parameters of the '
-             'config, and a phrase such as Re-run with DER_0 = 1e-4 changes one of them.',
-    'feedback': 'Feedback export is not in this version of SiCoPR-Assist.',
 }
 
-# The same, as one announced line when the rest of the phrase is planned (Decision 16, rows CB17 and C2).
+# The same, as one announced line when the rest of the phrase is planned (Decision 16, rows CB17 and C2). The tutor
+# and feedback export are built (Decision 11, Decision 10): asked for beside a run, they are named on their own.
 NOT_IN_V1_PART = {
     'dashboard': 'the dashboard is not in this version of SiCoPR-Assist (version 2 adds it); the run summary holds the '
                  'results, and each run writes a CSV summary in its results folder',
     'fetch': 'downloading channels is not in this version of SiCoPR-Assist (version 2 adds it); the run uses the '
              'channel files in the project folder',
-    'tutor': 'the tutor is not in this version of SiCoPR-Assist (version 2 adds it); What can I change? lists the '
-             'parameters',
-    'feedback': 'feedback export is not in this version of SiCoPR-Assist (version 2 adds it)',
+    'tutor': 'the tutor is asked for on its own: What can I say?',
+    'feedback': 'feedback is exported on its own: Export feedback',
 }
 
 # Decision 10: feedback leaves the machine only as an email the user writes. The address is kept here, once.
@@ -86,14 +84,8 @@ FEEDBACK_SUBJECT = 'SiCoPR-Assist feedback'
 
 
 def feedback_contact():
-    """Where feedback goes (Decision 10, version 1: the address and the subject, and nothing else)."""
+    """Where feedback goes (Decision 10): the address and the subject. The user emails the file; nothing is sent."""
     return {'address': FEEDBACK_ADDRESS, 'subject': FEEDBACK_SUBJECT}
-
-
-def _send_feedback_text():
-    c = feedback_contact()
-    return 'Send feedback by email to %s with the subject %s. SiCoPR-Assist sends nothing itself.' % (
-        c['address'], c['subject'])
 
 
 def settings_lines(settings):
@@ -393,7 +385,8 @@ def handle(phrase, project):
     warn = [w for w in ctx.settings['warnings'] if w not in out['announce']]
     if warn:                                     # a settings problem is shown first and never stops anything
         out['announce'] = warn + list(out['announce'])
-    seq = _record(project, phrase, out, pending, answered=got is not None)
+    shown = _with_tutor(phrase, out, ctx)
+    seq = _record(project, phrase, out, pending, answered=got is not None, shown=shown)
     if out['type'] == 'QUESTION' and resume is not None:
         stored = dict(out, resume=dict(resume, answers=answers))
         project.write_pending(resume['phrase'], stored, seq)
@@ -402,7 +395,33 @@ def handle(phrase, project):
     return out
 
 
-def _record(project, phrase, out, pending, answered):
+def _with_tutor(phrase, out, ctx):
+    """Add what the tutor shows to the outcome (Decision 11): its lines under "tutor", and for a PLAN a show_tutor
+    step at the end. Returns what was shown, for the history ('tutor', 'feedback_notice'). The tutor never stops
+    a command: if it fails, the outcome says so and is otherwise unchanged."""
+    from sicopr_assist import tutor
+    asked = out['type'] == 'PLAN' and [s['op'] for s in out['steps']] == ['show_tutor']
+    if out['type'] == 'PLAN' and any(s['op'] == 'set_setting' for s in out['steps']):
+        return []                                # a settings change (Tutor off) is shown as it is
+    try:
+        info = tutor.after(phrase, out, ctx, asked=asked)
+    except Exception as e:                       # noqa: BLE001 - the command goes on without the tutor
+        out['tutor'] = {'lines': ['the tutor could not be shown: %s: %s' % (type(e).__name__, e)], 'phrases': [],
+                        'why': 'error'}
+        return []
+    if info is None:
+        return []
+    out['tutor'] = {'lines': list(info['lines']), 'phrases': list(info['phrases']), 'why': info['why']}
+    if out['type'] == 'PLAN':
+        args = {'why': info['why'], 'phrases': list(info['phrases'])}
+        if asked:
+            out['steps'][0]['args'].update(args)
+        else:
+            out['steps'] = list(out['steps']) + [_step('show_tutor', **args)]
+    return list(info['shown'])
+
+
+def _record(project, phrase, out, pending, answered, shown=()):
     """Append the history line of Decision 9: the phrase, how it was read, the options offered, the option chosen
     when it answers a question, and the resolved outcome (replay uses it). Returns its seq, or None when the
     history cannot be written (then the outcome says so)."""
@@ -413,12 +432,25 @@ def _record(project, phrase, out, pending, answered):
     status = {'PLAN': 'ok', 'QUESTION': 'question'}.get(out['type'], 'stopped')
     if out['type'] == 'STOP' and (chosen == CANCEL or out.get('reason', '').startswith('Cancelled')):
         status = 'cancelled'
+    rephrase_of = (pending or {}).get('seq') if pending and not answered else None
+    if rephrase_of is None and not answered and out['type'] == 'PLAN':
+        # a phrase that works right after one that was cancelled or not understood rephrases it (row FB02): the
+        # link is what shows a candidate new pattern in the feedback file
+        from sicopr_assist import tutor
+        try:
+            prev = (project.read_history() or [None])[-1]
+        except (OSError, ValueError):
+            prev = None
+        if prev and prev.get('status') == 'cancelled':
+            rephrase_of = prev.get('answers') or prev.get('seq')
+        elif prev and tutor.is_miss(prev):
+            rephrase_of = prev.get('seq')
     rec = history_record(
         phrase=phrase, pattern=out.get('pattern'), unplaced=list(out.get('unplaced') or []),
         options=list((out.get('question') or {}).get('options') or []), chosen=chosen,
         answers=(pending or {}).get('seq') if answered else None,
-        rephrase_of=(pending or {}).get('seq') if pending and not answered else None,
-        outcome=out['type'], status=status, reason=out.get('reason'), plan=out)
+        rephrase_of=rephrase_of,
+        outcome=out['type'], status=status, reason=out.get('reason'), plan=out, shown=list(shown))
     try:
         return project.append_history(rec)['seq']
     except (OSError, ValueError) as e:
@@ -521,16 +553,22 @@ def _plan(text, ctx, mods):
         return _stop('SiCoPR-Assist reports results and does not diagnose them. It can show the summary of the last '
                      'run (Show me the summary again), statistics of a result over the last set of runs, and how a '
                      'parameter relates to a result.', **base)
-    # a version 2 feature alone is a STOP; asked for with a version 1 action, the version 1 part is planned and
-    # the rest is announced as not in this version (Decision 16)
     low = text.lower()
-    if re.search(r'\b(send|e-?mail|mail)\b', low) and ('feedback' in acts or re.search(r'\bdevelopers?\b', low)):
-        return _stop(_send_feedback_text(), **base)           # Decision 10, version 1: address and subject only
+    # the tutor on request, and turning it off or on (Decision 11, rows TU03, TU06)
+    if not _has_v1_action(req) and ('tutor' in acts or re.search(r'\bwhat can i (say|type)\b|\bexample commands\b', low)):
+        return _tutor_request(req, low, ctx, base)
+    # feedback export (Decision 10, rows FB04 to FB07, FB15 to FB17)
+    send = bool(re.search(r'\b(send|e-?mail|mail)\b', low)) and \
+        ('feedback' in acts or bool(re.search(r'\bdevelopers?\b', low)))
+    if not _has_v1_action(req) and (send or 'feedback' in acts or
+                                     ('save' in acts and re.search(r'\bhistory\b', low) and re.search(r'\bdevelopers?\b', low))):
+        return _feedback_request(req, ctx, base, send)
+    # a version 2 feature not built yet alone is a STOP; asked for with a version 1 action, the version 1 part is
+    # planned and the rest is announced as not in this version (Decision 16, for the dashboard and channel download)
     deferred = [f for f in ('dashboard', 'fetch', 'tutor', 'feedback') if f in acts]
     if deferred:
         if not _has_v1_action(req):
-            return _stop(NOT_IN_V1[deferred[0]] + (' ' + _send_feedback_text() if deferred[0] == 'feedback' else ''),
-                         **base)
+            return _stop(NOT_IN_V1[deferred[0]], **base)
         req = dict(req, actions=[a for a in acts if a not in deferred])
         out, answers = _plan_v1(text, req, ctx, mods, base)
         if out['type'] != 'STOP':
@@ -549,6 +587,65 @@ def _has_v1_action(req):
                 or any(a in req['actions'] for a in ('rerun', 'run')) or 'again' in req['flags'])
 
 
+# words that a request for the tutor or for feedback is made of besides its action word
+_TUTOR_WORDS = {'say', 'type', 'commands', 'command', 'example', 'examples', 'what', 'can', 'i', 'show', 'me', 'on',
+                'off'}
+_FEEDBACK_WORDS = {'send', 'email', 'e-mail', 'mail', 'make', 'write', 'history', 'developer', 'developers', 'how',
+                   'export', 'my', 'file', 'do', 'i'}
+
+
+def _leftover(req, words):
+    return [w for w in req['unplaced'] if w.lower() not in words]
+
+
+def _tutor_request(req, low, ctx, base):
+    """What can I say? shows the tutor (row TU03); Tutor off writes tutor_until_commands = 0 to the project settings
+    file and Tutor on removes that line (row TU06). The tutor's lines are added by handle (Decision 11)."""
+    left = _leftover(req, _TUTOR_WORDS)
+    if left:
+        return _unplaced_only(dict(req, unplaced=left), dict(base, unplaced=left))
+    base = dict(base, unplaced=[])
+    m = re.search(r'\b(?:tutor|hints?)\s+(off|on)\b', low)
+    if m:
+        off = m.group(1) == 'off'
+        where = ctx.project.relative(ctx.project.settings_path)
+        return outcome('PLAN', steps=[_step('set_setting', name='tutor_until_commands', value=0 if off else None,
+                                            file='project')],
+                       announce=['tutor_until_commands = 0 is written to %s: the tutor no longer comes up on its own in '
+                                 'this project; What can I say? still works; nothing runs' % where if off else
+                                 'the tutor_until_commands line is removed from %s: the tutor comes up on its own again '
+                                 'while the history holds few successful commands; nothing runs' % where], **base), {}
+    return outcome('PLAN', steps=[_step('show_tutor', why='asked')], **base), {}
+
+
+def feedback_path(project, day=None):
+    """Where Export feedback writes its file: .sicopr\\feedback_<date>.txt (row FB04)."""
+    import datetime
+    day = day or datetime.date.today().isoformat()
+    return os.path.join(project.dir, 'feedback_%s.txt' % day)
+
+
+def _feedback_request(req, ctx, base, send):
+    """Export feedback writes the history as a plain-text file for the user to read and email (Decision 10). Send
+    feedback does the same, then gives the address and subject and opens the folder. Nothing is ever sent."""
+    left = _leftover(req, _FEEDBACK_WORDS)
+    if left:
+        return _unplaced_only(dict(req, unplaced=left), dict(base, unplaced=left))
+    base = dict(base, unplaced=[])
+    if not ctx.history:
+        return _stop('There is no history in this project folder, so there is nothing to export.', **base)
+    from sicopr_assist import feedback
+    path = ctx.project.relative(feedback_path(ctx.project))
+    lines = ['writes %s: the command history of this project as plain text, %s; no results, no config values beyond '
+             'what was typed, no channel data' % (path, feedback.masks_text(ctx.settings['values']))]
+    if send:
+        lines.append('then shows the address and the subject to email it to, and opens its folder; SiCoPR-Assist sends '
+                     'nothing itself')
+    else:
+        lines.append('nothing is sent; Send feedback gives the address to email it to')
+    return outcome('PLAN', steps=[_step('export_feedback', path=path, send=send)], announce=lines, **base), {}
+
+
 def _after_dashboard(ctx):
     """Whether the last command asked for the dashboard (row C2: a re-run after D1 would refresh it in version 2)."""
     rec = ctx.history[-1] if ctx.history else None
@@ -563,8 +660,6 @@ def _plan_v1(text, req, ctx, mods, base):
     wc = ctx.wc
     acts = req['actions']
     low = text.lower()
-    if re.search(r'\bwhat can i (say|type)\b|\bexample commands\b', low):
-        return _stop(NOT_IN_V1['tutor'], **base)
     if re.search(r'\bemail\b|\bsend\b', low) and not req['sets'] and not req['sweeps']:
         return _stop('SiCoPR-Assist does not send anything. Each run leaves its results in its own folder under '
                      '.sicopr\\runs, which you can attach yourself.', **base)
@@ -622,6 +717,16 @@ def _plan_v1(text, req, ctx, mods, base):
             return _no_history(ctx, base)
         if wc is not None:
             return _change(req, ctx, mods, base, wc)
+        # no run yet, a run or a change asked for, and a name that is not a COM keyword: it is asked about against
+        # the one config in the folder, as it is after a run (row TU02, as PH12), so nothing runs unchanged
+        from sicopr_assist import tutor
+        src = ctx.source_path
+        asks_run = any(a in acts for a in ('rerun', 'run', 'change')) or 'again' in req['flags']
+        folder_wc = tutor._imported(src) if src and asks_run else None
+        if folder_wc is not None:
+            q = _attempt_question(req, ctx, folder_wc, mods, base)
+            if q is not None:
+                return q
     if 'thru_only' in req['flags'] and wc is not None and any(r in ('fext', 'next') for _, _, r in ctx.channels()):
         return _replay(req, ctx, base, thru_only=True)        # the last run had crosstalk: run its THRU alone
     if 'thru_only' in req['flags'] and wc is not None:
@@ -2235,8 +2340,10 @@ def _replay(req, ctx, base, thru_only=False):
     rec = ctx.last
     if rec is None:
         return _no_history(ctx, base)
+    # the tutor's step is what was shown then, not part of the command (Decision 11)
     steps = [_step(s['op'], **(s.get('args') or {})) for s in ((rec.get('plan') or {}).get('steps') or [])
-             if s.get('op') in STEPS] or [_step('validate_config'), _step('run_com'), _step('summarize')]
+             if s.get('op') in STEPS and s.get('op') != 'show_tutor'] or \
+        [_step('validate_config'), _step('run_com'), _step('summarize')]
     gone = [path for path, sha, _ in ctx.channels() if sha is None]
     if gone:                                     # row S1 fallback: an input of the last run is missing
         import difflib

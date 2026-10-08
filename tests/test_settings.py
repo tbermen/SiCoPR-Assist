@@ -147,7 +147,8 @@ def main():
         o = core.handle('Show settings.', pl.project)
         want = ['%s = %s (default)' % (k, d) for k, (d, _, _, _) in CASES.items()]
         check('Show settings with no file: every setting, as the file writes it, reads default (SE01)',
-              o['type'] == 'PLAN' and [s['op'] for s in o['steps']] == ['show_settings']
+              o['type'] == 'PLAN' and [s['op'] for s in o['steps'] if (s.get('args') or {}).get('why') not in
+                                       ('new', 'trouble')] == ['show_settings']      # the tutor's own step aside
               and sorted(o['announce']) == sorted(want), o['announce'])
     with Place() as pl:
         up = pl.write('user', '[limits]\nmax_new_runs = 100\ntutor_until_commands = 0\n')

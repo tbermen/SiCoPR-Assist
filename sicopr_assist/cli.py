@@ -40,6 +40,9 @@ def show(outcome, as_json=False, out=None):
         out.write('PLAN:\n')
         for i, step in enumerate(outcome.get('steps') or [], 1):
             out.write('  %d. %s\n' % (i, step.get('op')))
+    if t != 'PLAN':                              # what the tutor adds (Decision 11); after a PLAN, run.py hands
+        for line in (outcome.get('tutor') or {}).get('lines') or []:      # its lines over once the plan is done
+            out.write(line + '\n')
 
 
 def handle_and_run(phrase, project, as_json=False, out=None, quiet=False, child=None):

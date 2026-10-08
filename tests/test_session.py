@@ -1,4 +1,4 @@
-"""Project state: the history of Decision 9 and replay, the version 1 send-feedback text of Decision 10, and
+"""Project state: the history of Decision 9 and replay, Send feedback (Decision 10), and
 gate G5.3 (no network import anywhere in the package). No workbook is needed: the working
 config of a seeded run is the shipped example.
 
@@ -9,7 +9,8 @@ config of a seeded run is the shipped example.
   - Re-run the last one replays the stored plan of the last run, not a new reading of its phrase (row S1); a
     channel file of that run that is gone asks, with the files there as options; with no history it asks (S3)
   - What did I run last? shows the last command, its inputs, its overrides and its result folders (S2)
-  - Send feedback prints the address and the subject, and nothing else; the address is one constant
+  - Send feedback (version 2, Decision 10): with no history a STOP; otherwise the export plan, which writes
+    nothing at plan time and gives the address and subject when carried out; the address is one constant
   - no module under sicopr_assist imports urllib, http, socket, smtplib, ftplib or requests
 
     python tests\\test_session.py
@@ -63,6 +64,14 @@ def network_imports(folder=PACKAGE):
                     if m.split('.')[0] in NETWORK:
                         out.append((os.path.relpath(path, ROOT), node.lineno, m))
     return out
+
+
+def ops(o):
+    """The steps of a plan without the show_tutor step the tutor adds on its own at the end (Decision 11)."""
+    st = list(o['steps'])
+    if st and st[-1]['op'] == 'show_tutor' and (st[-1].get('args') or {}).get('why') in ('new', 'trouble'):
+        st = st[:-1]
+    return [x['op'] for x in st]
 
 
 def sha(path):
@@ -156,9 +165,9 @@ def main():
         for ph in ('Re-run the last one.', 'do the last run again', 'repeat my last analysis'):
             o = core.handle(ph, pl.project)
             check('S1 (%s): replays the stored plan of the last run' % ph,
-                  o['type'] == 'PLAN' and [s['op'] for s in o['steps']] == STORED_STEPS
+                  o['type'] == 'PLAN' and ops(o) == STORED_STEPS
                   and any('replays the last command: Re-run with DER_0 = 1e-4.' in l for l in o['announce']),
-                  (o['type'], [s['op'] for s in o['steps']], o['announce']))
+                  (o['type'], ops(o), o['announce']))
         rec = pl.history()[0]
         rec['plan']['steps'] = [{'op': 'validate_config', 'args': {}}, {'op': 'run_com', 'args': {}},
                                 {'op': 'summarize', 'args': {}}]
@@ -166,11 +175,11 @@ def main():
             f.write(json.dumps(rec) + '\n')
         o = core.handle('Re-run the last one.', pl.project)
         check('replay uses the stored plan, not a new reading of the stored phrase',
-              [s['op'] for s in o['steps']] == ['validate_config', 'run_com', 'summarize'], [s['op'] for s in o['steps']])
+              ops(o) == ['validate_config', 'run_com', 'summarize'], ops(o))
         o = core.handle('What did I run last?', pl.project)
         text = '\n'.join(o['announce'])
         check('S2: What did I run last? shows the last command, its inputs, overrides and result folder',
-              o['type'] == 'PLAN' and [s['op'] for s in o['steps']] == ['show_history']
+              o['type'] == 'PLAN' and ops(o) == ['show_history']
               and 'Re-run with DER_0 = 1e-4.' in text and os.path.join('data', 'thru.s4p') in text
               and 'DER_0' in text and os.path.join('.sicopr', 'runs', rid) in text, o['announce'])
         os.rename(os.path.join(pl.root, 'data', 'thru.s4p'), os.path.join(pl.root, 'data', 'thru_v2.s4p'))
@@ -181,20 +190,20 @@ def main():
               and o['question']['options'][-1] == 'cancel', o.get('question'))
 
     with Place() as pl:
+        o = core.handle('Send feedback.', pl.project)
+        check('Send feedback with no history: a STOP, nothing to export (row FB07)',
+              o['type'] == 'STOP' and 'nothing to export' in o['reason'], o.get('reason'))
+        pl.seed_run()
         for ph in ('Send feedback.', 'how do I send feedback', 'email my history to the developer'):
             o = core.handle(ph, pl.project)
-            text = o.get('reason', '')
-            check('%s: prints the address and the subject, and nothing else' % ph,
-                  o['type'] == 'STOP' and core.FEEDBACK_ADDRESS in text and core.FEEDBACK_SUBJECT in text
-                  and not o['steps'] and not o['announce'], o)
+            check('%s: the export plan, sent by nobody (Decision 10, version 2)' % ph,
+                  o['type'] == 'PLAN' and ops(o) == ['export_feedback'] and o['steps'][0]['args']['send'] is True
+                  and not o['unplaced'], o)
         check('the address and subject are the ones Decision 10 names',
               (core.FEEDBACK_ADDRESS, core.FEEDBACK_SUBJECT) == ('sicopr_assist.showman405@simplelogin.com',
                                                                  'SiCoPR-Assist feedback'))
-        check('send feedback writes no file but the history line', os.listdir(pl.project.dir) == ['history.jsonl'],
-              os.listdir(pl.project.dir))
-        o = core.handle('Export feedback.', pl.project)
-        check('Export feedback is version 2: a STOP that says what to do instead',
-              o['type'] == 'STOP' and 'not in this version' in o['reason'] and core.FEEDBACK_ADDRESS in o['reason'], o)
+        check('at plan time, send feedback writes no file but the history line',
+              not [n for n in os.listdir(pl.project.dir) if n.startswith('feedback_')], os.listdir(pl.project.dir))
         n = 0
         for dirpath, _, files in os.walk(PACKAGE):
             for f in files:

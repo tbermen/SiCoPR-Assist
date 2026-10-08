@@ -76,7 +76,12 @@ def labels(o):
 
 
 def steps(o):
-    return [s['op'] for s in o['steps']]
+    """The steps of a plan, without the show_tutor step that the tutor adds on its own at the end (Decision 11):
+    these rows are outside the tutor group, and the harness reads them the same way (scoring.without_own_tutor)."""
+    out = list(o['steps'])
+    if out and out[-1]['op'] == 'show_tutor' and (out[-1].get('args') or {}).get('why') in ('new', 'trouble'):
+        out = out[:-1]
+    return [s['op'] for s in out]
 
 
 def main():

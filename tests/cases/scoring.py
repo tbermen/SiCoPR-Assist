@@ -25,7 +25,9 @@ import prior_states
 from sicopr_assist import engine
 from sicopr_assist.project import Project
 
-DEFERRED = ('tutor', 'feedback', 'report', 'fetch')
+# the groups not gated yet: version 2 builds the tutor and feedback in Phase V2-1, the dashboard (report) in V2-2
+# and channel download (fetch) in V2-3, and each group is gated from the phase that builds it
+DEFERRED = ('report', 'fetch')
 FROZEN = os.path.join(fixtures.HERE, 'l4_rows.csv')
 FROZEN_COLUMNS = ['id', 'starting_config', 'group', 'priority', 'expected_type', 'kind', 'expected']
 REVIEW = os.path.join(fixtures.HERE, 'l4_review.csv')
@@ -134,6 +136,25 @@ def option_naming(outcome, target):
         if t in l4.option_text(opt):
             return opt
     return None
+
+
+TUTOR_GROUP = 'tutor'
+TUTOR_ON_ITS_OWN = ('new', 'trouble')       # why a show_tutor step was added by Decision 11, not asked for
+
+
+def without_own_tutor(row, o):
+    """The outcome as a row outside the tutor group specifies it. Decision 11 adds a show_tutor step at the end of
+    a PLAN on its own account (a new user, or trouble); the rows of the other groups were written while the tutor
+    was deferred and do not speak of it, so that one step is left out before their chain is compared. A
+    show_tutor step that was asked for, or one anywhere but last, stays and is compared. The tutor group's own
+    rows (TU01, TU09, TU11, TU13 expect the step; TU05, TU10, TU12 expect none) are compared as they are."""
+    steps = o.get('steps') or []
+    if row['group'] == TUTOR_GROUP or o.get('type') != 'PLAN' or not steps:
+        return o
+    last = steps[-1]
+    if last.get('op') == 'show_tutor' and (last.get('args') or {}).get('why') in TUTOR_ON_ITS_OWN:
+        return dict(o, steps=steps[:-1])
+    return o
 
 
 def well_formed(o):
@@ -333,7 +354,7 @@ class Scorer:
             key = l4.row_key(row)
             if key in self.frozen:
                 kind, exp = self.frozen[key]
-                res['L4'] = 'PASS' if l4.score(kind, exp, o) else 'FAIL'
+                res['L4'] = 'PASS' if l4.score(kind, exp, without_own_tutor(row, o)) else 'FAIL'
                 if res['L4'] == 'FAIL':
                     notes.append('L4 expected %s, got %s' % (exp, l4.outcome_steps(o) if kind == 'chain' else l4.outcome_options(o)))
             else:
@@ -343,7 +364,8 @@ class Scorer:
                                'detail': (' > '.join(l4.outcome_steps(o)) if o['type'] == 'PLAN' else
                                           ' | '.join((o.get('question') or {}).get('options') or [])
                                           if o['type'] == 'QUESTION' else o.get('reason', '')),
-                               'text': (o.get('question') or {}).get('text', '') if o['type'] == 'QUESTION' else ''}
+                               'text': (o.get('question') or {}).get('text', '') if o['type'] == 'QUESTION' else '',
+                               'tutor_error': (o.get('tutor') or {}).get('why') == 'error'}
         finally:
             self.fx.remove_project(ctx.root)
         if paraphrases and row['paraphrases'].strip():

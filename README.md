@@ -196,23 +196,61 @@ force and where each one came from. The example file
 | `name_match_cutoff` | 0.8 | how close a mistyped name must be to a keyword to be offered |
 | `max_options` | 8 | the most options in one question |
 | `min_correlation_points` | 3 | fewer results than this give the pairs and the difference, not a coefficient |
-| `tutor_until_commands`, `trouble_misses`, `trouble_window`, `feedback_notice_gap`, `feedback_notice` | 5, 3, 5, 20, on | version 2 (tutor and trouble detection); read and kept, no effect yet |
+| `tutor_until_commands` | 5 | the tutor shows on its own while the history holds fewer successful commands than this; 0 = never on its own |
+| `trouble_misses`, `trouble_window` | 3, 5 | that many misses in the last commands bring the tutor up; `trouble_misses = 0` turns this off |
+| `feedback_notice_gap`, `feedback_notice` | 20, on | the line about Export feedback that comes with trouble: at most once in this many commands; off = never |
+| `mask_names`, `mask_numbers` | on, off | what Export feedback masks |
 | `max_download_mb`, `download_retries` | 500, 1 | version 2 (channel download); read and kept, no effect yet |
-| `mask_names`, `mask_numbers` | on, off | version 2 (feedback export); read and kept, no effect yet |
+
+## The tutor
+
+`What can I say?` (or `help`) lists phrases that work on the config in front of the tool, filled with
+its own names: a re-run with one change, a re-run with another package block, a sweep over a range, a
+sweep over a choice, what changed, and the original config again. Every phrase is first resolved by the
+tool itself, as if that config had just been run, and a phrase that would not work is never shown. With
+no run yet, the first phrase is the run of the config and the channel file in the folder.
+
+The tutor also comes up on its own:
+
+- after each command while the project history holds fewer than `tutor_until_commands` (5) successful
+  commands; a phrase that was not understood then gets the nearest phrase that works, such as
+  `Re-run with f_b = <value>` for `halve the baud rate and rerun`;
+- when 3 of the last 5 commands were misses (`trouble_misses`, `trouble_window`): a word that could not
+  be placed, a phrase that matched nothing, or a question that was cancelled. It shows the nearest
+  phrase that works for each one, and at most once in 20 commands a line about Export feedback.
+  Misses counted for one showing are not counted again.
+
+`Tutor off.` writes `tutor_until_commands = 0` to the project settings file, and `Tutor on.` removes
+that line. Put the line in the user file to keep the tutor away in every new project folder.
 
 ## Feedback
 
-`Send feedback` prints the address and the subject line. Nothing is ever sent by the tool. To tell us
-about a phrase it did not understand, email `sicopr_assist.showman405@simplelogin.com` with the subject
-`SiCoPR-Assist feedback`, or open an issue (see `CONTRIBUTING.md`).
+`Export feedback.` writes `.sicopr\feedback_<date>.txt`: plain text for you to read and then email
+yourself, if you choose. It holds the tool version, counts by outcome and by pattern, every question
+with its options and the answer chosen, the phrases that rephrased one that did not work, the words
+that could not be placed, the settings that differ from the defaults, and every phrase. It holds no
+results, no config values beyond what you typed, and no channel data. Its first lines say what was
+masked:
+
+- `mask_names = on` (the default): paths and file names read `<file1>.s4p`, package block names
+  `<block1>`, and other names that are not COM keywords `<name1>`. COM keywords and the words the tool
+  could not place are kept, because they are what the file is for; read it before sending, since one of
+  those words could be a product name.
+- `mask_numbers = on`: every number reads `<num>`, with its unit kept.
+
+`Send feedback.` does the same, then prints the address `sicopr_assist.showman405@simplelogin.com`
+and the subject `SiCoPR-Assist feedback`, and opens the folder with the file selected. The tool sends
+nothing itself and makes no network connection for feedback. You can also open an issue (see
+`CONTRIBUTING.md`).
 
 ## How it is tested
 
-The behaviour is specified by a table of 850 use cases (`tests\cases\sicopr_use_cases.csv`), written
-and checked against SiCoPR before any code; rows CH01 to CH08 were added on 6 October 2026, after the
-maintainer's first use. Each row gives a phrase, the state of the project before it, and the expected
-outcome. The harness runs every row on each starting workbook it applies to (2419 row and config
-pairs) and scores four levels:
+The behaviour is specified by a table of 859 use cases (`tests\cases\sicopr_use_cases.csv`), written
+and checked against SiCoPR before any code; rows were added after the maintainer's first use (CH01 to
+CH08, 6 October 2026), his second session (XT01 to XT06 and SM16) and the reading of the IEEE tools
+page (F11 and F12, 7 October). Each row gives a phrase, the state of the project before it, and the
+expected outcome. The harness runs every row on each starting workbook it applies to (2447 row and
+config pairs) and scores four levels:
 
 | level | what is compared |
 |---|---|
@@ -239,22 +277,21 @@ at the first failure. It takes 15 minutes or more, most of it in `test_use_cases
 | `SICOPR_ASSIST_E2E=1` | also run real COM end to end on synthetic THRU files: one case with eight changes, then a run and a re-run with a THRU of another length (three runs, about 4 minutes each) |
 | `SICOPR_ASSIST_INPUTS` | where the harness writes `score_use_cases.csv` (default: the temporary folder) |
 
-`python tests\test_use_cases.py --gate G7` prints the scoreboard by group and level. The final build
-scores are in `CHANGELOG.md`.
+`python tests\test_use_cases.py --gate G7` prints the scoreboard by group and level, and `--gate V1.1`
+the tutor and feedback rows. The tutor text and the feedback file, which the four levels do not read,
+are checked by `tests\test_tutor.py` and `tests\test_feedback.py`. The build scores are in
+`CHANGELOG.md`.
 
 ## What version 2 adds
 
-Version 1 answers each of these with a STOP that says it is not in this version and what to do
+Version 2 is being built in phases. The tutor and feedback export (above) are in 0.4.0. Until their
+phase, the rest are answered with a STOP that says they are not in this version and what to do
 instead.
 
 - **A GUI**, in this repository: a command box that takes the same phrases, with views of the project
   folder, the history, run results and summaries, the pending question as buttons, and the settings.
   It calls the same functions as the command line.
-- **A tutor and trouble detection**: shown while a project is new, or after several phrases in a row
-  that the tool could not place.
-- **Feedback export**: a plain-text file of your phrases for you to read and email yourself, with
-  names masked by default. Nothing is uploaded.
-- **A dashboard**: SiCoPR's R report on the last run.
+- **A dashboard**: SiCoPR's R report on the last run. The tutor shows a dashboard phrase once it works.
 - **Channel download** from the IEEE P802.3dj tools page, with the FEXT and NEXT files paired to their
   THRU.
 
@@ -265,11 +302,11 @@ instead.
 - A re-run with another channel file replaces one THRU, or one FEXT or NEXT file. When the last run
   had several FEXT (or NEXT) files, naming one of them stops and asks for the whole set with its
   config.
-- 218 of the 850 rows have an expected detail that is a sentence, not a list of steps or options.
+- 214 of the 859 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
   They are scored at L1 (and L2 and L3 where those apply) and listed for a person to review.
 - Four behaviours are assumptions not yet confirmed by the maintainer: matching a typo in an action
   or filler word (`agian` read as `again`, never for a parameter name); the trouble thresholds of
-  the version 2 tutor; what a summary prints (count, minimum, maximum, mean, median, standard
+  the tutor (3 misses in the last 5 commands, the feedback line at most once in 20); what a summary prints (count, minimum, maximum, mean, median, standard
   deviation, pass count); and Pearson as the coefficient.
 - A THRU whose highest frequency is below `f_b` is run with a warning, as the Reference Code and
   SiCoPR run it (zero-padded with `ZERO_PAD = 1`, else extrapolated).
@@ -285,8 +322,11 @@ The build also found:
 
 - A control run of a plain 2-port THRU (`TDR_W_TXPKG = 0`), started while checking rule EN09, did not
   finish within 15 minutes. It was not investigated.
-- The channel-download rows of the table were written from a description of the IEEE tools page;
-  its markup has not been looked at.
+- The channel-download rows of the table were written from a description of the IEEE tools page.
+  The page was read on 7 October 2026, and rows F1 and F5 were rewritten and F11 and F12 added from it.
+- Feedback masking recognises a package block name by the package clause it is typed in, by the
+  working configs of the project, or by a name written like an identifier. A block name typed where
+  the tool cannot place it, and never named anywhere else, is kept as an unplaced word.
 
 ## Licence
 

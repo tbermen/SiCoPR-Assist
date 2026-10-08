@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.0 (7 October 2026)
+
+Version 2, Phase V2-1: the tutor, trouble detection and feedback export (Decisions 10 and 11). Tested with
+SiCoPR 1.1.1 (commit `55c3f71`).
+
+- **The tutor** (`sicopr_assist\tutor.py`). `What can I say?` (or `help`) lists phrases that work on the
+  config in front of the tool, with its own names: a re-run with one change, a re-run with another
+  package block, a sweep over a range, a sweep over a choice, what changed, and the original config
+  again. Each phrase is resolved by the core before it is shown, as if that config had just been run,
+  and a phrase that would not work is left out. The dashboard phrase waits for the dashboard.
+- **On its own**: after each command while the history holds fewer than `tutor_until_commands` (5)
+  successful commands, as a `show_tutor` step at the end of a plan; after a phrase that was not
+  understood, the nearest phrase that works (`Re-run with f_b = <value>` for `halve the baud rate and
+  rerun`). With no run yet, a name that is not a COM keyword is now asked about against the one config
+  in the folder, as it is after a run.
+- **Trouble detection**: 3 misses in the last 5 commands (a word that could not be placed, a phrase
+  that matched nothing, a cancelled question) bring up the nearest phrase that works for each one, and
+  at most once in 20 commands a line about Export feedback. Misses counted for one showing are not
+  counted again. These thresholds are still an assumption (open decision TU14).
+- `Tutor off.` and `Tutor on.` write and remove `tutor_until_commands = 0` in the project settings file.
+- **Feedback export** (`sicopr_assist\feedback.py`). `Export feedback.` writes
+  `.sicopr\feedback_<date>.txt` from the history: counts by outcome and pattern, questions with their
+  options and answers, rephrase pairs, words that could not be placed, settings that differ, and every
+  phrase. Names are masked by default (`<file1>.s4p`, `<block1>`, `<name1>`), numbers with
+  `mask_numbers = on` (`<num>`, units kept), and the first lines say which. Option remarks that show
+  current config values are left out. `Send feedback.` also prints the address and subject and opens
+  the folder. Nothing is ever sent. A phrase that works right after a cancelled or missed one is
+  recorded as its rephrase.
+- **Tests.** The table is 859 rows (F1 and F5 rewritten from the IEEE page, F11 and F12 added), with
+  two more prior states; the frozen L4 list is unchanged and F11 and F12 go to the review list. The
+  groups tutor and feedback are gated (`--gate V1.1`). New: `tests\test_tutor.py` (gate V1.3: every
+  phrase the tutor prints resolves, on the four starting configs and the twelve variants, before and
+  after a run; and the tutor text of rows TU01 to TU19) and `tests\test_feedback.py` (gate V1.2:
+  masking; and rows FB02 to FB07, FB15 to FB17). The prior states "history holds N successful commands"
+  now include a seeded run, so the re-runs of rows TU14 to TU19 have one to start from. A `show_tutor`
+  step that the tutor adds on its own is left out when the harness compares the chain of a row outside
+  the tutor group, since those rows were written while the tutor was deferred.
+
 ## 0.3.1 (7 October 2026)
 
 - **A path written with `/` is read as a path.** `Run COM on ch/a_thru1.s4p with data/config.xlsx` kept only the

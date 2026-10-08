@@ -283,10 +283,65 @@ def _apply_channel(channels, a):
     return out
 
 
-def carry_out(project, out, child=None, progress=None):
+def open_folder(path):
+    """Open the folder that holds path in the file manager, with the file selected where the system can (row FB06).
+    Returns a line to show, or None. Started from an argument list, no shell; a failure is reported, not raised."""
+    try:
+        if sys.platform.startswith('win'):
+            subprocess.Popen(['explorer', '/select,' + os.path.abspath(path)])
+        elif sys.platform == 'darwin':
+            subprocess.Popen(['open', '-R', os.path.abspath(path)])
+        else:
+            subprocess.Popen(['xdg-open', os.path.dirname(os.path.abspath(path))], stdout=subprocess.DEVNULL,
+                             stderr=subprocess.DEVNULL)
+    except OSError as e:
+        return 'the folder could not be opened (%s); the file is %s' % (e, path)
+    return None
+
+
+def _export_feedback(project, a, opener):
+    """Write the feedback file (Decision 10). For Send feedback, give the address and subject and open the folder.
+    Nothing is sent."""
+    from sicopr_assist import feedback
+    path = feedback.write(project, os.path.join(project.root, _native(a['path'])))
+    lines = ['feedback written to %s (%d bytes); read it before you send it' % (project.relative(path),
+                                                                              os.path.getsize(path))]
+    if a.get('send'):
+        c = core.feedback_contact()
+        lines += ['email that file to %s' % c['address'], 'subject: %s' % c['subject'],
+                  'SiCoPR-Assist sends nothing itself and makes no network connection for feedback']
+        said = opener(path) if opener else None
+        if said:
+            lines.append(said)
+    return lines
+
+
+def set_project_setting(project, name, value):
+    """Write name = value into the project settings file, replacing any line that sets name; value None removes
+    that line (rows TU06, Decision 4). Returns the file's path."""
+    import re
+    path = project.settings_path
+    try:
+        with open(path, encoding='utf-8') as f:
+            text = f.read().splitlines()
+    except OSError:
+        text = []
+    keep = [ln for ln in text if not re.match(r'\s*%s\s*[=:]' % re.escape(name), ln, re.I)]
+    if value is not None:
+        if not any(ln.strip().startswith('[') for ln in keep):
+            keep = ['[limits]'] + keep
+        keep.append('%s = %s' % (name, value))
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('\n'.join(keep) + ('\n' if keep else ''))
+    return path
+
+
+def carry_out(project, out, child=None, progress=None, open_folder=open_folder):
     """Carry out a PLAN that core.handle returned and recorded. child replaces the command that runs one case
     (a test gives a stand-in that writes a seeded result.json). progress, when given, is called with (kind, text)
     for every line said while the plan is carried out (Decision 17; see line_text for the form shown).
+    open_folder opens a folder for Send feedback (a test gives a stand-in).
     Returns {'status', 'run_ids', 'points', 'lines'} and fills in the history record."""
     if out.get('type') != 'PLAN':
         raise ValueError('only a PLAN is carried out')
@@ -296,8 +351,17 @@ def carry_out(project, out, child=None, progress=None):
     R = _Runner(project, child, progress)
     ctx = R.ctx
     lines = []
+    for op, a in steps:                          # steps that write a file and run nothing (Decisions 10 and 11)
+        if op == 'export_feedback':
+            lines += _export_feedback(project, a, open_folder)
+        elif op == 'set_setting':
+            path = set_project_setting(project, a['name'], a.get('value'))
+            done = 'removed the %s line' % a['name'] if a.get('value') is None else \
+                'wrote %s = %s' % (a['name'], a['value'])
+            lines.append('%s in %s' % (done, project.relative(path)))
+    tutor_lines = list((out.get('tutor') or {}).get('lines') or [])      # shown after the plan (Decision 11)
     if not out.get('points') and not any(op in ops for op in ('run_com', 'run_batch', 'build_matrix', 'export_xlsx')):
-        return {'status': 'ok', 'run_ids': [], 'points': [], 'lines': lines}      # shown already (Decision 8)
+        return {'status': 'ok', 'run_ids': [], 'points': [], 'lines': lines + tutor_lines}   # shown already (Decision 8)
     said = set()
 
     def say_step(k, more=''):
@@ -404,8 +468,10 @@ def carry_out(project, out, child=None, progress=None):
 
     # what is shown once the plan is carried out
     for k, (op, a) in enumerate(steps):
-        if k not in said and op in ('summarize', 'batch_summary', 'diff_results', 'export_xlsx'):
+        if k not in said and op in ('summarize', 'batch_summary', 'diff_results', 'export_xlsx', 'show_tutor'):
             say_step(k)
+        if op == 'show_tutor':
+            lines += tutor_lines
         if op == 'summarize' and run_com is not None:
             for rid in run_ids:
                 lines += summary.run_summary(project, rid)['lines']
