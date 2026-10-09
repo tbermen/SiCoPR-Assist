@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SiCoPR-Assist GUI mock-up</title>
+<!--
+  Copyright 2026 Todd Bermensolo
+  SPDX-License-Identifier: BSD-3-Clause
+
+  Static mock-up for docs/GUI_DESIGN.md (Phase V2-4). Opens from the file system: no server, no network,
+  no external scripts or fonts. The SiCoPR look is copied from SiCoPR's gui/static/style.css (same licence and
+  author); nothing is linked from a SiCoPR checkout. Values in the Config view are those of the Case1 starting
+  workbook; phrases, plans and questions are rows PA010, RS02 and S1 of the use-case table; every COM value,
+  engine line and run time is SAMPLE DATA, not a computed result.
+-->
+<style>
+/* ---- copied from SiCoPR gui/static/style.css (the parts this page uses) ---- */
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #6a737d; --line: #d8dde3;
+  --accent: #1e5fbf; --accent-soft: #e8f0fd; --warn: #9a6100; --warn-soft: #fdf3e0;
+  --sweep: #6a3fb5; --sweep-soft: #f0eafb; --dirty: #0d7a4a; --dirty-soft: #e6f5ed;
+  /* added for the Assist overlay */
+  --ov: #0e7490; --ov-soft: #e3f4f8; --bad: #a3261f; --bad-soft: #fbeaea;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171b; --panel: #1c2026; --ink: #e6e9ee; --muted: #9aa4b0;
+    --line: #2c333c; --accent: #6ea8ff; --accent-soft: #1d2b44;
+    --warn: #e0a850; --warn-soft: #34291a; --sweep: #b79bec; --sweep-soft: #2a2340;
+    --dirty: #56c78f; --dirty-soft: #17301f;
+    --ov: #5ccbe0; --ov-soft: #13303a; --bad: #f08a80; --bad-soft: #3a1d1b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.45 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel);
+  border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+.brand strong { font-size: 17px; letter-spacing: .2px; }
+.spacer { flex: 1; }
+.counts { color: var(--muted); font-size: 12px; }
+select, input[type=text] { background: var(--bg); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 8px; font: inherit; max-width: 46ch; }
+button { background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 6px 12px;
+  font: inherit; cursor: pointer; }
+button:disabled { opacity: .45; cursor: default; }
+button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+#tabs { display: flex; gap: 2px; margin-left: 10px; }
+.tab { background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent;
+  border-radius: 0; padding: 8px 14px; font-size: 13px; }
+.tab.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.view { display: block; }
+.view[hidden] { display: none; }
+.rhead { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+#configView .rhead { padding: 12px 16px 0; }
+#configView .cfgGrid { display: grid; grid-template-columns: minmax(0,1fr) 380px; align-items: start; }
+#schematic { padding: 14px 16px 0; min-width: 0; }
+#svg { width: 100%; height: auto; display: block; }
+.hint { color: var(--muted); font-size: 12px; margin: 4px 2px 16px; }
+.blk rect { fill: var(--panel); stroke: var(--line); stroke-width: 1.5; rx: 8; cursor: pointer; }
+.blk.sel rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.blk text { fill: var(--ink); font-size: 12px; text-anchor: middle; pointer-events: none; }
+.blk .n { fill: var(--muted); font-size: 10.5px; }
+.wire { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+.wire.dash { stroke-dasharray: 5 4; opacity: .8; }
+.lane { fill: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+#panel { border-left: 1px solid var(--line); background: var(--panel); min-height: calc(100vh - 100px);
+  padding: 14px 16px 40px; }
+#panelHead h2 { margin: 0 0 2px; font-size: 15px; }
+.muted { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
+.cell { border-top: 1px solid var(--line); padding: 9px 0; }
+.cell:first-child { border-top: 0; }
+.cell .top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.cell .nm { font-weight: 600; font-family: ui-monospace, "Cascadia Code", monospace; }
+.cell .un { color: var(--muted); font-size: 12px; }
+.cell input { width: 100%; margin-top: 5px; padding: 5px 8px; font: inherit;
+  font-family: ui-monospace, "Cascadia Code", monospace; background: var(--bg); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 6px; }
+.cell .info { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.cell .coord { color: var(--muted); font-size: 11px; font-family: ui-monospace, monospace; }
+.tag { font-size: 10.5px; padding: 1px 6px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+.tag.sweep { background: var(--sweep-soft); color: var(--sweep); }
+.tag.formula { background: var(--warn-soft); color: var(--warn); }
+.tag.dirty { background: var(--dirty-soft); color: var(--dirty); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.card h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.term { background: #10131a; color: #d6dae3; border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; margin: 0; overflow: auto; font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 11.5px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+.problem { color: var(--warn); background: var(--warn-soft); font-size: 12px; border-radius: 6px;
+  padding: 5px 9px; margin-bottom: 5px; }
+#resultsView { padding: 14px 16px 60px; }
+.case { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.case h3 { margin: 0 0 12px; font-size: 15px; font-family: ui-monospace, "Cascadia Code", monospace; }
+.case h4 { margin: 18px 0 8px; font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }
+.metrics { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px;
+  overflow: hidden; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.metric { background: var(--panel); padding: 8px 10px; }
+.metric .ml { color: var(--muted); font-size: 11px; }
+.metric .mv { font-size: 15px; font-family: ui-monospace, "Cascadia Code", monospace; margin-top: 2px; }
+.figs { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.figs figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.figs .ph { height: 110px; display: flex; align-items: center; justify-content: center; color: var(--muted);
+  font-size: 11px; background: var(--bg); }
+.figs figcaption { font-size: 11px; color: var(--muted); padding: 5px 8px; font-family: ui-monospace, monospace; }
+
+/* ---- the panel slot (the SiCoPR change of GUI_DESIGN.md section 4) ---- */
+.shell { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; padding-bottom: 46px; }
+.panelslot { position: sticky; top: 53px; height: calc(100vh - 53px - 46px); border-left: 1px solid var(--line);
+  background: var(--panel); display: flex; flex-direction: column; min-width: 0; }
+.panelslot[hidden] { display: none; }
+@media (max-width: 1250px) {
+  .shell { grid-template-columns: 1fr; }
+  .panelslot { position: static; height: auto; border-left: 0; border-top: 1px solid var(--line); }
+  #configView .cfgGrid { grid-template-columns: 1fr; }
+}
+
+/* ---- the overlay in SiCoPR's Config view ---- */
+.tag.ov { background: var(--ov-soft); color: var(--ov); border-color: var(--ov); }
+.tag.opt { background: var(--warn-soft); color: var(--warn); border: 1px dashed var(--warn); }
+.cell.ov input { border-color: var(--ov); background: var(--ov-soft); outline: 2px solid var(--ov); outline-offset: -1px; }
+.cell.opt input { border: 1px dashed var(--warn); background: var(--warn-soft); }
+.blk.ov rect { stroke: var(--ov); stroke-width: 2.5; }
+.blk.opt rect { stroke: var(--warn); stroke-width: 2; stroke-dasharray: 5 3; }
+.ovbar { display: flex; align-items: center; gap: 8px; margin: 0 16px; padding: 6px 10px; border-radius: 8px;
+  background: var(--ov-soft); color: var(--ov); font-size: 12px; border: 1px solid var(--ov); }
+.ovbar[hidden] { display: none; }
+
+/* ---- the Assist panel (SiCoPR-Assist's own bundle) ---- */
+.ap-head { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.ap-head h2 { margin: 0; font-size: 14px; display: flex; align-items: baseline; gap: 8px; }
+.ap-head .ver { color: var(--muted); font-weight: 400; font-size: 11px; }
+.ap-line { font-size: 12px; color: var(--muted); margin-top: 3px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.ap-line code { font-size: 11.5px; color: var(--ink); word-break: break-all; }
+button.link { background: transparent; color: var(--accent); border: 0; padding: 0 2px; font-size: 12px; text-decoration: underline; }
+.feed { flex: 1; overflow-y: auto; padding: 10px 14px; display: flex; flex-direction: column; gap: 10px; }
+.say { align-self: flex-end; max-width: 92%; background: var(--accent); color: #fff; border-radius: 10px 10px 2px 10px;
+  padding: 6px 10px; font-size: 13px; }
+.say.view { background: var(--ov); }
+.say .via { display: block; font-size: 10.5px; opacity: .85; }
+.oc { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; background: var(--bg); }
+.oc .kind { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; margin-bottom: 4px; }
+.oc.plan .kind { color: var(--accent); }
+.oc.q { border-color: var(--warn); background: var(--warn-soft); }
+.oc.q .kind { color: var(--warn); }
+.oc.stop { border-color: var(--bad); background: var(--bad-soft); }
+.oc.stop .kind { color: var(--bad); }
+.oc ul { margin: 2px 0 6px 0; padding-left: 16px; }
+.oc ol { margin: 4px 0 0 0; padding-left: 20px; font-family: ui-monospace, "Cascadia Code", monospace; font-size: 11.5px; }
+.oc .opts { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.oc .opts button { text-align: left; background: var(--panel); color: var(--accent); border: 1px solid var(--accent); }
+.oc .opts button.chosen { background: var(--accent); color: #fff; }
+.oc .tut { margin-top: 6px; color: var(--muted); font-size: 11.5px; }
+.res { border: 1px solid var(--dirty); background: var(--dirty-soft); border-radius: 10px; padding: 8px 10px; font-size: 12.5px; }
+.res .kind { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; color: var(--dirty); margin-bottom: 4px; }
+.res .big { font-family: ui-monospace, "Cascadia Code", monospace; font-size: 15px; }
+.res .btns { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.res .btns button { font-size: 12px; padding: 3px 9px; }
+.prog .state { font-size: 11.5px; color: var(--muted); margin: 4px 0 0; }
+.prog .term { max-height: 220px; }
+.prog .st { color: #ffffff; font-weight: 600; }
+.prog .en { color: #9aa4b0; }
+.ap-box { border-top: 1px solid var(--line); padding: 10px 14px; }
+.ap-box .row { display: flex; gap: 6px; }
+.ap-box input { flex: 1; max-width: none; font-family: ui-monospace, "Cascadia Code", monospace; font-size: 12.5px; }
+.ap-box input.typing { outline: 2px solid var(--accent); outline-offset: -1px; }
+.ap-box .hintl { font-size: 11px; color: var(--muted); margin-top: 4px; }
+.ap-more { border-top: 1px solid var(--line); padding: 6px 14px 10px; font-size: 12px; }
+.ap-more details { margin-top: 4px; }
+.ap-more summary { cursor: pointer; color: var(--muted); }
+.ap-more pre { margin: 6px 0 0; font-size: 11px; white-space: pre-wrap; color: var(--ink); }
+.ap-more .reserved { margin-top: 6px; padding: 6px 8px; border: 1px dashed var(--line); border-radius: 6px; color: var(--muted); }
+
+/* ---- the mock-up's own step bar (not part of either GUI) ---- */
+#steps { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; height: 46px; display: flex; align-items: center;
+  gap: 10px; padding: 0 14px; background: #10131a; color: #e6e9ee; font-size: 12.5px; }
+#steps .cap { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#steps .dots { display: flex; gap: 4px; }
+#steps .dots i { width: 8px; height: 8px; border-radius: 50%; background: #3a4350; display: block; }
+#steps .dots i.on { background: #6ea8ff; }
+#steps button { padding: 4px 12px; font-size: 12px; }
+#steps .tagm { color: #e0a850; font-weight: 600; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><strong>SiCoPR</strong></div>
+  <nav id="tabs" role="tablist">
+    <button class="tab" data-view="config">Config</button>
+    <button class="tab" data-view="sparam">S-parameters</button>
+    <button class="tab" data-view="run">Run</button>
+    <button class="tab" data-view="results">Results &middot; static</button>
+    <button class="tab" data-view="dynamic">Results &middot; dynamic</button>
+  </nav>
+  <span class="spacer"></span>
+  <span id="ctxConfig" class="counts"></span>
+</header>
+
+<div class="shell">
+  <main>
+    <!-- ======================================== SiCoPR Config view, unchanged but for the overlay -->
+    <section id="configView" class="view">
+      <div class="rhead">
+        <select title="configuration directory"><option>C:\com\project\data  (1)</option></select>
+        <button class="ghost">Browse&hellip;</button>
+        <select title="configuration workbook"><option>config_com_dj_200G_CAKR_178_PKGA_06_2_2025__Case1.xlsx</option></select>
+        <button class="ghost">New&hellip;</button>
+        <button id="btnSave" title="">Save as&hellip;</button>
+        <span class="counts">105 settings &middot; 21 annotations (18 shown in context) &middot; 4 package blocks</span>
+      </div>
+      <div id="ovbar" class="ovbar" hidden></div>
+      <div class="cfgGrid">
+        <section id="schematic">
+          <svg id="svg" viewBox="0 0 1000 460" preserveAspectRatio="xMidYMin meet" role="img" aria-label="channel schematic"></svg>
+          <p class="hint">Click a block to edit the settings it owns.</p>
+        </section>
+        <aside id="panel">
+          <div id="panelHead">
+            <h2 id="panelTitle">Detector and noise</h2>
+            <p id="panelSub" class="muted"></p>
+          </div>
+          <div id="cells"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ======================================== SiCoPR Results (static) view -->
+    <section id="resultsView" class="view" hidden>
+      <div class="rhead">
+        <select id="runPick" title="results directory"></select>
+        <button class="ghost">Browse&hellip;</button>
+        <button class="ghost">Refresh</button>
+        <span class="counts">1 case</span>
+      </div>
+      <div id="runBody"></div>
+    </section>
+
+    <section id="otherView" class="view" hidden>
+      <div style="padding:24px 16px" class="muted">This tab is unchanged by the design and is not part of the mock-up.</div>
+    </section>
+  </main>
+
+  <!-- ======================================== the panel slot, filled by SiCoPR-Assist -->
+  <aside id="panelSlot" class="panelslot">
+    <div class="ap-head">
+      <h2>SiCoPR-Assist <span class="ver">0.7.0 (design)</span></h2>
+      <div class="ap-line">project <code>C:\com\project</code> <button class="link">change</button></div>
+      <div class="ap-line" id="apWc"></div>
+    </div>
+    <div class="feed" id="feed"></div>
+    <div class="ap-box">
+      <div class="row">
+        <input id="cmd" type="text" spellcheck="false" placeholder="type a command, e.g. Re-run with DER_0 = 1e-4">
+        <button id="send">Send</button>
+        <button id="stop" class="ghost" hidden>Stop</button>
+      </div>
+      <div class="hintl" id="cmdHint">Enter sends &middot; Up and Down recall earlier commands from the project history</div>
+    </div>
+    <div class="ap-more">
+      <details>
+        <summary>Settings in force</summary>
+        <pre>max_new_runs = 30 (default)
+max_options = 6 (default)
+min_correlation_points = 3 (default)
+tutor_until_commands = 5 (default)
+mask_names = on (default)
+mask_numbers = off (default)
+Change one with a command, e.g. Tutor off.</pre>
+      </details>
+      <details>
+        <summary>Language model</summary>
+        <div class="reserved">none: this version is rules-based. Reserved for the language-model layer, which works
+          upstream of the core and never past it: it may turn your wording into a phrase or propose changes, and the
+          core checks them exactly as typed input.</div>
+      </details>
+    </div>
+  </aside>
+</div>
+
+<div id="steps">
+  <span class="tagm">MOCK-UP &middot; sample data</span>
+  <button id="back" class="ghost" style="color:#e6e9ee;border-color:#3a4350">Back</button>
+  <button id="next">Next</button>
+  <span class="dots" id="dots"></span>
+  <span class="cap" id="cap"></span>
+</div>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+
+/* The 16 blocks of SiCoPR's schematic for the Case1 workbook, with their field counts (from /api/config). */
+const BLOCKS = [
+  ['tx_die', 'Tx die', 'signal', 6], ['tx_pkg', 'Tx package', 'signal', 5], ['channel', 'Channel', 'signal', 18],
+  ['rx_pkg', 'Rx package', 'signal', 3], ['rx_die', 'Rx die', 'signal', 6],
+  ['fext', 'FEXT aggressors', 'agg', 3], ['next', 'NEXT aggressors', 'agg', 3],
+  ['txffe', 'Tx FFE', 'eq', 6], ['ctle', 'CTLE', 'eq', 6], ['rxffe', 'Rx FFE', 'eq', 7], ['dfe', 'DFE', 'eq', 10],
+  ['detect', 'Detector and noise', 'eq', 13],
+  ['search', 'Optimiser', 'ctl', 5], ['erl', 'ERL / TDR', 'ctl', 9], ['run', 'Run and output', 'ctl', 11],
+  ['other', 'Other settings', 'ctl', 1],
+].map(([id, label, row, n]) => ({ id, label, row, n }));
+
+/* Fields of two blocks, as the Case1 workbook holds them (value, units, coord, MATLAB name, default, info). */
+const CELLS = {
+  detect: [
+    ['DER_0', 0.0002, '', 'K4', 'param.specBER', '0.0001', 'Target detector error ratio'],
+    ['sigma_RJ', 0.01, 'UI', 'G26', 'param.sigma_RJ', '0.01', 'rms of of random jitter'],
+    ['A_DD', 0.02, 'V^2/GHz', 'G27', 'param.A_DD', '0.02', 'Normalized peak dual-Dirac noise'],
+    ['eta_0', 7.5e-9, 'dB', 'G28', 'param.eta_0', '4e-09', 'One-sided noise spectral density (V^2/GHz)'],
+    ['R_LM', 0.95, '', 'G30', 'param.R_LM', '0.95', 'Ratio of level separation mismatch'],
+    ['L', 4, '', 'B12', 'param.levels', '4', 'number of symbols levels (PAM-4 is 4, NRZ is 2)'],
+    ['M', 32, '', 'B13', 'param.samples_per_ui', '32', 'Samples per UI'],
+    ['N', 7000, 'logical', 'G16', 'OP.N', '0', 'duration time in UI which is used for ERL (PTDR)'],
+    ['Sigma BBN step', 0.005, 'V', 'P4', 'OP.sigma_bn_STEP', '0.005', 'BBN step for Rx Calibration in volts'],
+    ['MLSE', 1, 'logical', 'K9', 'OP.MLSE', '0', 'MLSE keyword'],
+    ['Clip Method', 'Slow', '"slow" or "Fast"', 'K30', '', '', ''],
+    ['N_qb', 6, '', 'G31', '', '', ''],
+    ['P_qc', 1e-7, '', 'G32', '', '', ''],
+  ],
+  run: [
+    ['COM Pass threshold', 3, 'db', 'K3', 'param.pass_threshold', '0', 'the pass fail threshold for COM in dB'],
+    ['RESULT_DIR', '.\\results\\CAKR_{date}\\', '', 'G5', 'OP.RESULT_DIR', '', 'directory where results will be written'],
+    ['RUNTAG', 'KR_pkgA_', '', 'G8', 'OP.RUNTAG', '-', 'appended to the begining of results files'],
+    ['SAVE_FIGURES', 0, 'logical', 'G6', 'OP.SAVE_FIGURES', '0', 'save displayed figures in the results directory'],
+    ['DIAGNOSTICS', 1, 'logical', 'G2', 'OP.DEBUG', '0', 'supresss some interim compuation value printouts'],
+    ['DISPLAY_WINDOW', 0, 'logical', 'G3', 'OP.DISPLAY_WINDOW', '1', 'controls if graph plots are displayed'],
+    ['CSV_REPORT', 1, 'logical', 'G4', 'OP.CSV_REPORT', '1', 'saves all the output parameters to a CSV file'],
+    ['SAVE_CONFIG2MAT', 0, '', 'P1', 'OP.SAVE_CONFIG2MAT', '0', 'saves parameters in mat file'],
+    ['COM_CONTRIBUTION', 1, 'logical', 'G9', 'OP.COM_CONTRIBUTION_CURVES', '0', 'bar graph of COM contributors'],
+    ['RX_CALIBRATION', 0, 'logical', 'P3', 'OP.RX_CALIBRATION', '0', 'Turn on RX_Calibration loop'],
+    ['EW', 1, '', 'K8', 'OP.EW', '0', 'RIM 3-18-2021 change defaults'],
+  ],
+  erl: [
+    ['ERL Pass threshold', 11, 'dB', 'K2', 'param.ERL_pass_threshold', '0', 'the pass fail threshold for ERL in dB'],
+  ],
+};
+
+/* Fixed sample lines, in the forms run.py and the engine print them. */
+const RUN2 = [
+  ['st', 'step 1 of 4: set_param: DER_0: 0.0002 -> 0.0001'],
+  ['st', 'step 2 of 4: validate_config'],
+  ['st', 'step 3 of 4: run_com: run_0002 started'],
+  ['en', 'processing COM PDF KR_pkgA_ thru'],
+  ['en', 'KR_pkgA_ thru\tTruncation ratio = -55.5 dB'],
+  ['en', '  optimize_fom: 1 gffe x 21 CTLE x 7 g_DC_HP x 1584 TXFFE x 49 itick'],
+  ['en', '    CTLE 1/21  g_dc=-20.00  best_FOM=-inf dB'],
+  ['en', '      ** new best FOM = 14.512 dB (CTLE 1, TXFFE 5, itick=-24)'],
+  ['en', '    CTLE 2/21  g_dc=-19.00  best_FOM=14.512 dB'],
+];
+const RUN2_END = [
+  ['en', '    CTLE 21/21  g_dc=0.00  best_FOM=15.207 dB'],
+  ['en', '--- case 1: channel_operating_margin_dB = 6.912'],
+  ['st', 'run_0002 finished in 4 min 21 s: COM 6.912 dB'],
+  ['st', 'step 4 of 4: summarize'],
+];
+
+/* The overlay entries: key -> [value, tag text, kind, note]. */
+const OV_DER = { DER_0: [0.0001, 'Assist #2', 'ov', 'workbook 0.0002'] };
+const OV_THR = { 'COM Pass threshold': [4, 'Assist #4', 'ov', 'workbook 3'] };
+const OV_RJ = { sigma_RJ: [0.012, 'edited here #5', 'ov', 'workbook 0.01'] };
+const OPTS = { 'ERL Pass threshold': [null, 'option 1', 'opt', ''], 'COM Pass threshold': [null, 'option 2', 'opt', ''] };
+
+/* The conversation, entry by entry. Each step shows the entries up to its `feed` count. */
+const FEED = [
+  { t: 'note', text: 'last command (1): Run COM on data\\thru.s4p with data\\config.xlsx. run_0001: COM 7.141 dB (pass; COM Pass threshold 3)' },
+  { t: 'say', text: 'Now try DER_0 = 1e-4.' },
+  { t: 'plan', announce: ['DER_0: 0.0002 -> 0.0001'],
+    steps: ['set_param  DER_0: 0.0002 -> 0.0001', 'validate_config', 'run_com', 'summarize'] },
+  { t: 'prog', id: 'p2' },
+  { t: 'res', run: 'run_0002', head: 'COM 6.912 dB', lines: ['run_0002: complete, emulating COM release 4p17p0',
+      'COM 6.912 dB (pass; COM Pass threshold 3), VEC_dB 9.84, VEO_mV 11.2, DER_thresh 0.0001',
+      'results: .sicopr\\runs\\run_0002'] },
+  { t: 'say', text: 'Raise the pass threshold to 4 and re-run.' },
+  { t: 'q', text: 'Strict mode: pass threshold is not a COM parameter name, so nothing runs. These keywords have it in '
+      + 'their description: ERL Pass threshold: the pass fail threshold for ERL in dB; COM Pass threshold: the pass '
+      + 'fail threshold for COM in dB',
+    options: ['ERL Pass threshold (now 11)', 'COM Pass threshold (now 3)', 'none of these'] },
+  { t: 'say', text: 'COM Pass threshold (now 3)', via: 'answer, chosen with a button' },
+  { t: 'plan', announce: ['COM Pass threshold: 3 -> 4', 'active overrides kept from earlier runs: DER_0 = 0.0001'],
+    steps: ['set_param  COM Pass threshold: 3 -> 4', 'validate_config', 'run_com', 'summarize'],
+    after: 'run_0003 finished in 4 min 18 s: COM 6.912 dB (pass; COM Pass threshold 4)' },
+  { t: 'say', text: 'Set sigma_RJ = 0.012.', via: 'edit in the Config view, Detector and noise', cls: 'view' },
+  { t: 'plan', kindText: 'PLAN (config view, record 5, no run)',
+    announce: ['sigma_RJ: 0.01 -> 0.012', 'checked with the engine\'s loader; taken into the working config',
+      'the next command builds on it'],
+    steps: ['set_param  sigma_RJ: 0.01 -> 0.012', 'validate_config'] },
+  { t: 'say', text: 'Re-run.' },
+  { t: 'plan', announce: ['runs the working config: DER_0 = 0.0001 (#2), COM Pass threshold = 4 (#4)',
+      'it includes 1 edit from the Config view: sigma_RJ = 0.012 (#5)'],
+    steps: ['validate_config', 'run_com', 'summarize'],
+    after: 'step 2 of 3: run_com: run_0004 started' },
+];
+
+/* The scripted steps. */
+const STEPS = [
+  { cap: 'The SiCoPR GUI with the Assist panel on the right. The Config view shows the working config of the last run (the Case1 workbook as imported).',
+    tab: 'config', sel: 'detect', ov: {}, feed: 1, cmd: '', wc: 'working config run_0001, no overrides' },
+  { cap: 'A phrase is typed in the panel (row PA010). Nothing has run yet.',
+    tab: 'config', sel: 'detect', ov: {}, feed: 1, cmd: 'Now try DER_0 = 1e-4.', typing: true, wc: 'working config run_0001, no overrides' },
+  { cap: 'Its plan, announced before anything runs. The changed keyword is highlighted in SiCoPR\'s Config view, with its origin (command 2) and the workbook value.',
+    tab: 'config', sel: 'detect', ov: OV_DER, feed: 3, cmd: '', wc: 'working config run_0002, 1 override' },
+  { cap: 'Live progress (Decision 17): a status line as each step starts, the engine\'s own lines indented, as the command line shows them.',
+    tab: 'config', sel: 'detect', ov: OV_DER, feed: 4, prog: 'run', cmd: '', wc: 'working config run_0002, 1 override' },
+  { cap: 'The result. Its run folder is an ordinary SiCoPR run directory, so it lands in Results, static (and Results, dynamic for a dashboard).',
+    tab: 'results', sel: 'detect', ov: OV_DER, feed: 5, prog: 'done', cmd: '', wc: 'working config run_0002, 1 override' },
+  { cap: 'A question (row RS02): one button per option. The two candidate keywords are marked in the Config view so they can be read before choosing.',
+    tab: 'config', sel: 'run', ov: Object.assign({}, OV_DER, OPTS), feed: 7, prog: 'done', cmd: '', question: true,
+    wc: 'working config run_0002, 1 override' },
+  { cap: 'A button sends the option as the answer. The new value shows in the Config view, tagged with the command that set it.',
+    tab: 'config', sel: 'run', ov: Object.assign({}, OV_DER, OV_THR), feed: 9, prog: 'done', cmd: '', chose: 1,
+    wc: 'working config run_0003, 2 overrides' },
+  { cap: 'The other way: sigma_RJ is edited in SiCoPR\'s Config view. The edit is checked by the core and taken into the working config (record 5); no run.',
+    tab: 'config', sel: 'detect', ov: Object.assign({}, OV_DER, OV_THR, OV_RJ), feed: 11, prog: 'done', cmd: '', chose: 1,
+    wc: 'working config edit_0005, 2 overrides, 1 edit from the Config view' },
+  { cap: 'The next command builds on the edit (Re-run., row S1): the run uses the working config, view edit included.',
+    tab: 'config', sel: 'detect', ov: Object.assign({}, OV_DER, OV_THR, OV_RJ), feed: 13, prog: 'done', cmd: '', chose: 1, busy: true,
+    wc: 'working config edit_0005, 2 overrides, 1 edit from the Config view' },
+];
+
+let AT = 0;
+
+function fmt(v) { return v === null || v === undefined ? '' : String(v); }
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+/* ------------------------------------------------ SiCoPR's schematic, laid out as drawSchematic does */
+function blockOf(name) {
+  for (const id of Object.keys(CELLS)) if (CELLS[id].some((c) => c[0] === name)) return id;
+  return null;
+}
+
+function drawSchematic(sel, ov) {
+  const svg = $('#svg');
+  svg.textContent = '';
+  const NS = 'http://www.w3.org/2000/svg';
+  const mk = (n, a, txt) => {
+    const e = document.createElementNS(NS, n);
+    for (const k in a) e.setAttribute(k, a[k]);
+    if (txt !== undefined) e.textContent = txt;
+    return e;
+  };
+  const kinds = {};
+  for (const [k, v] of Object.entries(ov)) {
+    const b = blockOf(k);
+    if (b) kinds[b] = kinds[b] === 'ov' ? 'ov' : v[2];
+  }
+  const LABEL = { signal: 'signal path', agg: 'aggressors', eq: 'receiver equalisation', ctl: 'analysis and run control' };
+  const W = 1000, PAD = 24, BH = 58, GAP = 46, TOP = 34;
+  let y = TOP;
+  const pos = {};
+  for (const row of ['signal', 'agg', 'eq', 'ctl']) {
+    const list = BLOCKS.filter((b) => b.row === row);
+    svg.appendChild(mk('text', { x: PAD, y: y - 12, class: 'lane' }, LABEL[row]));
+    const g = 14, n = list.length;
+    const bw = Math.min(168, (W - PAD * 2 - g * (n - 1)) / n);
+    let x = (W - (bw * n + g * (n - 1))) / 2;
+    list.forEach((b, i) => {
+      const grp = mk('g', { class: 'blk' + (b.id === sel ? ' sel' : '') + (kinds[b.id] ? ' ' + kinds[b.id] : '') });
+      grp.appendChild(mk('rect', { x, y, width: bw, height: BH }));
+      const words = b.label.split(' ');
+      const l1 = words.length > 2 ? words.slice(0, 2).join(' ') : b.label;
+      const l2 = words.length > 2 ? words.slice(2).join(' ') : '';
+      grp.appendChild(mk('text', { x: x + bw / 2, y: y + (l2 ? 21 : 26) }, l1));
+      if (l2) grp.appendChild(mk('text', { x: x + bw / 2, y: y + 35 }, l2));
+      grp.appendChild(mk('text', { x: x + bw / 2, y: y + BH - 8, class: 'n' }, b.n + (b.n === 1 ? ' setting' : ' settings')));
+      if (CELLS[b.id]) grp.addEventListener('click', () => { STEPS[AT].selUser = b.id; render(); });
+      svg.appendChild(grp);
+      if (i < n - 1) svg.appendChild(mk('path', { class: 'wire', d: `M${x + bw} ${y + BH / 2} H${x + bw + g}` }));
+      pos[b.id] = { x, y, w: bw };
+      x += bw + g;
+    });
+    y += BH + GAP;
+  }
+  svg.setAttribute('viewBox', `0 0 ${W} ${y - GAP + PAD}`);
+  const mid = (p) => p.x + p.w / 2;
+  const ch = pos.channel, fx = pos.fext, rx = pos.rx_die, eq = pos.txffe;
+  svg.appendChild(mk('path', { class: 'wire dash', d: `M${mid(fx)} ${fx.y} V${ch.y + BH + 12} H${mid(ch)} V${ch.y + BH}` }));
+  svg.appendChild(mk('path', { class: 'wire', d: `M${mid(rx)} ${rx.y + BH} V${eq.y - 14} H${mid(eq)} V${eq.y}` }));
+}
+
+/* ------------------------------------------------ SiCoPR's field list, with the overlay */
+function renderCells(sel, ov) {
+  const b = BLOCKS.find((x) => x.id === sel);
+  const cells = CELLS[sel] || [];
+  $('#panelTitle').textContent = b.label;
+  $('#panelSub').textContent = b.n + ' fields from config_com_dj_200G_CAKR_178_PKGA_06_2_2025__Case1.xlsx'
+    + (cells.length < b.n ? '  (the mock-up shows ' + cells.length + ')' : '');
+  const host = $('#cells');
+  host.textContent = '';
+  for (const [name, value, units, coord, matlab, dflt, info] of cells) {
+    const o = ov[name];
+    const wrap = el('div', 'cell' + (o ? ' ' + o[2] : ''));
+    const top = el('div', 'top');
+    top.appendChild(el('span', 'nm', name));
+    if (units) top.appendChild(el('span', 'un', units));
+    if (o) top.appendChild(el('span', 'tag ' + o[2], o[1]));
+    wrap.appendChild(top);
+    const inp = el('input');
+    inp.type = 'text';
+    inp.value = fmt(o && o[0] !== null ? o[0] : value);
+    wrap.appendChild(inp);
+    const bits = [];
+    if (o && o[3]) bits.push(o[3]);
+    if (info) bits.push(info);
+    if (dflt !== '') bits.push('default ' + dflt);
+    if (bits.length) wrap.appendChild(el('div', 'info', bits.join(' \u00b7 ')));
+    wrap.appendChild(el('div', 'coord', coord + (matlab ? '  \u00b7  ' + matlab : '')));
+    host.appendChild(wrap);
+  }
+}
+
+/* ------------------------------------------------ SiCoPR's Results (static) view */
+function renderResults() {
+  const pick = $('#runPick');
+  pick.textContent = '';
+  for (const r of ['C:\\com\\project\\.sicopr\\runs\\run_0002  (1 case, 16 figures)',
+    'C:\\com\\project\\.sicopr\\runs\\run_0001  (1 case, 16 figures)']) pick.appendChild(el('option', '', r));
+  const host = $('#runBody');
+  host.textContent = '';
+  const sec = el('section', 'case');
+  sec.appendChild(el('h3', '', 'case_01'));
+  const grid = el('div', 'metrics');
+  for (const [l, v] of [['COM', '6.912 dB'], ['VEO', '11.2 mV'], ['VEC', '9.84 dB'], ['FOM', '15.207 dB'],
+    ['itick', '-23'], ['CTLE g_DC', '-9 dB'], ['g_DC_HP', '0 dB'], ['A_s', '24.1 mV']]) {
+    const m = el('div', 'metric');
+    m.appendChild(el('div', 'ml', l));
+    m.appendChild(el('div', 'mv', v));
+    grid.appendChild(m);
+  }
+  sec.appendChild(grid);
+  sec.appendChild(el('h4', '', 'Stage 1 \u00b7 Channel / FD'));
+  const figs = el('div', 'figs');
+  for (const f of ['s1_filters.png', 's1_insertion_loss.png', 's1_return_loss.png']) {
+    const fig = el('figure');
+    fig.appendChild(el('div', 'ph', 'figure (sample placeholder)'));
+    fig.appendChild(el('figcaption', '', f));
+    figs.appendChild(fig);
+  }
+  sec.appendChild(figs);
+  sec.appendChild(el('p', 'muted', 'Stages 2 to 7 follow, as SiCoPR shows them for any run directory.'));
+  host.appendChild(sec);
+}
+
+/* ------------------------------------------------ the Assist panel */
+function renderFeed(s) {
+  const feed = $('#feed');
+  feed.textContent = '';
+  FEED.slice(0, s.feed).forEach((e, i) => {
+    if (e.t === 'note') {
+      feed.appendChild(el('div', 'muted', e.text));
+    } else if (e.t === 'say') {
+      const d = el('div', 'say' + (e.cls ? ' ' + e.cls : ''));
+      if (e.via) d.appendChild(el('span', 'via', e.via));
+      d.appendChild(document.createTextNode(e.text));
+      feed.appendChild(d);
+    } else if (e.t === 'plan') {
+      const c = el('div', 'oc plan');
+      c.appendChild(el('div', 'kind', e.kindText || 'PLAN'));
+      const ul = el('ul');
+      for (const a of e.announce) ul.appendChild(el('li', '', a));
+      c.appendChild(ul);
+      const ol = el('ol');
+      for (const st of e.steps) ol.appendChild(el('li', '', st));
+      c.appendChild(ol);
+      if (e.after && i < s.feed) c.appendChild(el('div', 'tut', e.after));
+      feed.appendChild(c);
+    } else if (e.t === 'q') {
+      const c = el('div', 'oc q');
+      c.appendChild(el('div', 'kind', 'QUESTION'));
+      c.appendChild(el('div', '', e.text));
+      const box = el('div', 'opts');
+      e.options.forEach((o, k) => {
+        const b = el('button', s.chose === k ? 'chosen' : '', o);
+        b.disabled = s.chose !== undefined;
+        b.addEventListener('click', () => { if (k === 1 && AT === 5) go(6); });
+        box.appendChild(b);
+      });
+      c.appendChild(box);
+      feed.appendChild(c);
+    } else if (e.t === 'prog') {
+      const c = el('div', 'prog');
+      const pre = el('pre', 'term');
+      const lines = s.prog === 'run' ? RUN2 : RUN2.concat(RUN2_END);
+      for (const [k, t] of lines) {
+        pre.appendChild(el('span', k, (k === 'en' ? '    ' : '') + t));
+        pre.appendChild(document.createTextNode('\n'));
+      }
+      c.appendChild(pre);
+      c.appendChild(el('p', 'state', s.prog === 'run'
+        ? 'running: step 3 of 4, run_0002, 1 min 52 s \u00b7 no output for 24 s'
+        : 'finished in 4 min 23 s'));
+      feed.appendChild(c);
+      if (s.prog === 'run') setTimeout(() => { pre.scrollTop = pre.scrollHeight; }, 0);
+    } else if (e.t === 'res') {
+      const c = el('div', 'res');
+      c.appendChild(el('div', 'kind', 'RESULT \u00b7 ' + e.run));
+      c.appendChild(el('div', 'big', e.head));
+      for (const l of e.lines) c.appendChild(el('div', '', l));
+      const btns = el('div', 'btns');
+      const b1 = el('button', '', 'Show in Results \u00b7 static');
+      b1.addEventListener('click', () => go(4));
+      btns.appendChild(b1);
+      btns.appendChild(el('button', 'ghost', 'Results \u00b7 dynamic'));
+      c.appendChild(btns);
+      feed.appendChild(c);
+    }
+  });
+  setTimeout(() => { feed.scrollTop = feed.scrollHeight; }, 0);
+}
+
+function render() {
+  const s = STEPS[AT];
+  const sel = s.selUser || s.sel;
+  for (const b of document.querySelectorAll('#tabs .tab')) b.classList.toggle('on', b.dataset.view === s.tab);
+  $('#configView').hidden = s.tab !== 'config';
+  $('#resultsView').hidden = s.tab !== 'results';
+  $('#otherView').hidden = true;
+  drawSchematic(sel, s.ov);
+  renderCells(sel, s.ov);
+  renderResults();
+  const nov = Object.values(s.ov).filter((o) => o[2] === 'ov').length;
+  const bar = $('#ovbar');
+  bar.hidden = !Object.keys(s.ov).length;
+  bar.textContent = 'SiCoPR-Assist: this view shows the working config. ' + nov + ' value'
+    + (nov === 1 ? ' differs' : 's differ') + ' from the workbook'
+    + (s.question ? '; 2 fields are options of the pending question' : '') + '. The workbook is not written.';
+  $('#ctxConfig').textContent = 'Case1.xlsx \u00b7 SiCoPR-Assist: ' + s.wc;
+  $('#apWc').textContent = s.wc;
+  const save = $('#btnSave');
+  save.disabled = nov > 0;
+  save.title = nov ? 'Save the working config from the Assist panel: Save that config as data\\config_new.xlsx.' : '';
+  renderFeed(s);
+  const cmd = $('#cmd');
+  cmd.value = s.cmd;
+  cmd.classList.toggle('typing', !!s.typing);
+  const running = s.prog === 'run' || s.busy;
+  cmd.disabled = running;
+  $('#send').hidden = running;
+  $('#stop').hidden = !running;
+  $('#cmdHint').textContent = running ? 'a plan is running: the command box opens again when it ends'
+    : s.question ? 'answer the question, or type a new command'
+      : 'Enter sends \u00b7 Up and Down recall earlier commands from the project history';
+  $('#cap').textContent = 'Step ' + (AT + 1) + ' of ' + STEPS.length + ': ' + s.cap;
+  $('#back').disabled = AT === 0;
+  $('#next').disabled = AT === STEPS.length - 1;
+  const dots = $('#dots');
+  dots.textContent = '';
+  STEPS.forEach((_, i) => dots.appendChild(el('i', i === AT ? 'on' : '')));
+}
+
+function go(i) {
+  AT = Math.max(0, Math.min(STEPS.length - 1, i));
+  STEPS[AT].selUser = null;
+  render();
+}
+
+$('#next').addEventListener('click', () => go(AT + 1));
+$('#back').addEventListener('click', () => go(AT - 1));
+$('#send').addEventListener('click', () => { if (AT === 1) go(2); });
+$('#cmd').addEventListener('keydown', (e) => { if (e.key === 'Enter' && AT === 1) go(2); });
+document.addEventListener('keydown', (e) => {
+  if (e.target === $('#cmd')) return;
+  if (e.key === 'ArrowRight') go(AT + 1);
+  if (e.key === 'ArrowLeft') go(AT - 1);
+});
+for (const b of document.querySelectorAll('#tabs .tab')) {
+  b.addEventListener('click', () => {
+    const v = b.dataset.view;
+    for (const t of document.querySelectorAll('#tabs .tab')) t.classList.toggle('on', t === b);
+    $('#configView').hidden = v !== 'config';
+    $('#resultsView').hidden = v !== 'results';
+    $('#otherView').hidden = v === 'config' || v === 'results';
+  });
+}
+render();
+</script>
+</body>
+</html>
