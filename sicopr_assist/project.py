@@ -55,8 +55,27 @@ HISTORY_KEYS = (
     'points',          # for a batch: [{'values', 'run_id', 'new', 'reused_from', 'skipped'}]
     'sicopr',          # {'sha256', 'release'} of the engine the runs used, or None
     'shown',           # extra text shown after the outcome: 'tutor', 'feedback_notice' (version 2)
+    'origin',          # 'cli' or 'gui': where the record was written (version 2, the GUI); None in older records
+    'kind',            # what the record is (KINDS); None in older records, which are all phrases
+    'detail',          # what a GUI record holds besides the keys above (GUI_DESIGN.md section 7a), or None
 )
 STATUSES = ('ok', 'question', 'cancelled', 'stopped', 'failed')
+
+# Record kinds (GUI_DESIGN.md section 7a). A phrase typed or an option chosen is a command, as before. An edit or a
+# workbook opened in the GUI's Config view is a record with a working config and no run, which the next command builds
+# on. The log kinds record what else happened in the GUI, so that it can be reviewed later; they carry no plan and no
+# working config, and every reader of the history but the history view and the feedback export leaves them out
+# (Project.read_history).
+COMMAND_KINDS = ('phrase', 'answer')
+VIEW_KINDS = ('edit', 'open')
+LOG_KINDS = ('run', 'stop', 'view', 'error')
+KINDS = COMMAND_KINDS + VIEW_KINDS + LOG_KINDS
+ORIGINS = ('cli', 'gui')
+
+
+def is_command(rec):
+    """Whether a history record is a typed phrase or a chosen option (records older than 0.7.0 all are)."""
+    return rec.get('kind') in (None,) + COMMAND_KINDS
 
 RESULT_KEYS = ('format', 'run_id', 'status', 'release', 'sicopr_sha256', 'config_csv', 'channels',
                'fingerprint', 'cases', 'message', 'export_mat')     # export_mat: the engine's .mat export was on
@@ -203,6 +222,10 @@ def history_record(**fields):
     rec.update(fields)
     if rec['status'] is not None and rec['status'] not in STATUSES:
         raise ValueError('history status must be one of %s' % ', '.join(STATUSES))
+    if rec['kind'] is not None and rec['kind'] not in KINDS:
+        raise ValueError('history kind must be one of %s' % ', '.join(KINDS))
+    if rec['origin'] is not None and rec['origin'] not in ORIGINS:
+        raise ValueError('history origin must be one of %s' % ', '.join(ORIGINS))
     return rec
 
 
@@ -276,7 +299,9 @@ class Project:
         return os.path.relpath(path, self.root)
 
     # ---- history
-    def read_history(self):
+    def read_history(self, log=False):
+        """The history records, oldest first. The GUI's log records (LOG_KINDS) are left out unless log is set:
+        only the history view and the feedback export read them."""
         if not os.path.exists(self.history_path):
             return []
         out = []
@@ -286,13 +311,14 @@ class Project:
                     rec = json.loads(line)
                     if rec.get('format') != HISTORY_FORMAT:
                         raise ValueError('%s line %d: history format %r' % (self.history_path, n, rec.get('format')))
-                    out.append(rec)
+                    if log or rec.get('kind') not in LOG_KINDS:
+                        out.append(rec)
         return out
 
     def append_history(self, record):
         """Append one record; seq is given the next number when the record has none."""
         if record.get('seq') is None:
-            hist = self.read_history()
+            hist = self.read_history(log=True)
             record = dict(record, seq=(hist[-1]['seq'] + 1) if hist else 1)
         os.makedirs(self.dir, exist_ok=True)
         with open(self.history_path, 'a', encoding='utf-8', newline='\n') as f:
@@ -305,7 +331,7 @@ class Project:
         bad = sorted(set(fields) - set(HISTORY_KEYS))
         if bad:
             raise ValueError('not history keys: %s' % ', '.join(bad))
-        hist = self.read_history()
+        hist = self.read_history(log=True)
         rec = next((r for r in hist if r.get('seq') == seq), None)
         if rec is None:
             raise ValueError('no history record with seq %r' % seq)

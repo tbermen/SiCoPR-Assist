@@ -8,7 +8,8 @@ The numbers are made up but fixed by the run CSV (without its RESULT_DIR row), s
 same numbers. The release is the one the config loads to (param.matlab_version), as the engine reports it.
 SICOPR_ASSIST_STANDIN_NAN=1 makes COM not a number. SICOPR_ASSIST_STANDIN_ARGV=<file> appends the arguments, as
 one JSON list per run, to that file. --export-mat writes a small stand-in <run>_case01.mat beside RESULT.json, where
-the engine writes its .mat export (<RESULT_DIR>/<config file name>_caseNN.mat), and says so in the result.
+the engine writes its .mat export (<RESULT_DIR>/<config file name>_caseNN.mat), and says so in the result. Like the
+engine, it writes case_01\\results.csv in RESULT_DIR, so SiCoPR's GUI lists the run folder.
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
@@ -68,6 +69,11 @@ def main(argv=None):
         print('    [export-mat] 1 variables -> %s' % mat)
     with open(a.result, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(rec, f, indent=1)
+    # the engine's own report in RESULT_DIR, case_01\results.csv, by which SiCoPR's GUI finds a run folder
+    case_dir = os.path.join(os.path.dirname(os.path.abspath(a.result)), 'case_01')
+    os.makedirs(case_dir, exist_ok=True)
+    with open(os.path.join(case_dir, 'results.csv'), 'w', encoding='utf-8', newline='\n') as f:
+        f.write('COM_dB,FOM\n%r,%r\n' % (com, case['FOM']))
     print('--- case 1: channel_operating_margin_dB = %r (stand-in)' % com)
     return 0
 

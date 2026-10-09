@@ -25,11 +25,14 @@ import os
 import re
 
 from sicopr_assist import engine, parse, validate
-from sicopr_assist.project import read_settings, setting_defaults, setting_text
+from sicopr_assist.project import LOG_KINDS, VIEW_KINDS, read_settings, setting_defaults, setting_text
 
 _NUM_IN = re.compile(r'(?<![\w.<])[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?(?![\w>])')
 _EXT = re.compile(r'(\.s\d+p|\.xlsx|\.xls|\.csv|\.json|\.mat|\.txt|\.zip)$', re.I)
 _IDENTIFIER = re.compile(r'_|\d|[a-z][A-Z]|^[A-Z]{2,}[a-z]')
+# any path, with or without an extension the parser knows (a traceback names .py files and folders)
+_ANY_PATH = re.compile(r'(?:[A-Za-z]:)?[\\/]?(?:[\w.{}~$-]+[\\/])+[\w.{}~$-]*')
+_SEP = re.compile(r'[\\/]')
 
 
 def masks_text(values):
@@ -94,6 +97,20 @@ class Masker:
         if _IDENTIFIER.search(w):
             return self._placeholder('name', low)
         return w
+
+    def mask_record(self, value):
+        """A GUI record's detail (GUI_DESIGN.md section 7a) as one line, masked as a phrase is; every path in it,
+        whatever its extension, reads as a file."""
+        def flat(v):
+            if isinstance(v, dict):
+                return '; '.join('%s: %s' % (k, flat(x)) for k, x in v.items() if x not in (None, [], {}, ''))
+            if isinstance(v, (list, tuple)):
+                return '[%s]' % ', '.join(flat(x) for x in v)
+            return str(v)
+        text = ' '.join(flat(value).split())
+        if self.names:
+            text = _ANY_PATH.sub(lambda m: self._file(m.group(0)) if _SEP.search(m.group(0)) else m.group(0), text)
+        return self.mask(text)
 
     def mask(self, text, unplaced=()):
         """The text with the masks in force applied. unplaced: words of this phrase that could not be placed."""
@@ -190,7 +207,8 @@ def _missed_words(rec):
 def export_lines(project, day=None):
     """The feedback file of this project, as lines. Reads the history and the settings; writes nothing."""
     from sicopr_assist import __version__, core
-    history = project.read_history()
+    every = project.read_history(log=True)          # the GUI's log records too (GUI_DESIGN.md section 7a)
+    history = [r for r in every if r.get('kind') not in LOG_KINDS]
     st = read_settings(project)
     values = st['values']
     names = engine.keyword_names('main') + engine.keyword_names('package block')
@@ -244,10 +262,16 @@ def export_lines(project, day=None):
     defaults = setting_defaults()
     differ = ['%s = %s' % (k, setting_text(v)) for k, v in values.items() if v != defaults[k][0]]
     lines += ['', 'limits that differ from the defaults: %s' % (', '.join(differ) or 'none')]
-    lines += ['', 'commands (%d): seq, outcome, status, phrase' % len(history)]
+    lines += ['', 'commands (%d): seq, outcome, status, phrase; config view marks an edit or a workbook opened in the '
+              "GUI's Config view, which is not a typed command" % len(history)]
     for r in history:
-        lines.append('  %s  %s  %s  %s' % (r.get('seq'), r.get('outcome'), r.get('status'),
-                                           m.mask(r.get('phrase'), _unplaced(r, names))))
+        lines.append('  %s  %s  %s  %s%s' % (r.get('seq'), r.get('outcome'), r.get('status'),
+                                             m.mask(r.get('phrase'), _unplaced(r, names)),
+                                             '  (config view)' if r.get('kind') in VIEW_KINDS else ''))
+    gui = [r for r in every if r.get('kind') in VIEW_KINDS + LOG_KINDS]
+    lines += ['', 'GUI records (%d): seq, kind, what was recorded' % len(gui)]
+    for r in gui:
+        lines.append('  %s  %s  %s' % (r.get('seq'), r.get('kind'), m.mask_record(r.get('detail') or {})))
     return lines
 
 

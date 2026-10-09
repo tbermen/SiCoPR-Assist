@@ -1,8 +1,9 @@
 # SiCoPR-Assist GUI: design
 
-Phase V2-4, 9 October 2026. Design only: nothing here is built yet, and no code in SiCoPR or in
-SiCoPR-Assist changes with this document. The static mock-up is `docs\gui_mockup.html` (open it from the
-file system; it needs no server and no network).
+Phase V2-4, 9 October 2026; approved the same day with the maintainer's two changes (sections 6 and 7a), and
+built in Phase V2-5 (SiCoPR-Assist 0.7.0, and the slot of section 4 on SiCoPR's branch `gui-panel-slot`).
+Where the build differs from the text below, the text was changed to match and section 13 lists it. The
+static mock-up is `docs\gui_mockup.html` (open it from the file system; it needs no server and no network).
 
 Written against SiCoPR-Assist 0.6.0 (`f884c1f`) and SiCoPR `55c3f71` (1.1.1), whose GUI was read in full
 (`gui\app.py`, `config_io.py`, `runner.py`, `schematic.py`, `static\`, `README.md`) and run once from a
@@ -107,7 +108,7 @@ On the page, SiCoPR and a panel talk through `CustomEvent`s on `window`. SiCoPR 
 
 | event | detail | when |
 |---|---|---|
-| `sicopr:config` | `{path, name}` | a workbook was loaded in the Config tab |
+| `sicopr:config` | `{path, name, cause, keys}` | a workbook was loaded in the Config tab; `cause` is `user`, `boot` (the first load) or `panel` (an `sicopr:open-config`), and `keys` are the field keys the view shows (as built, section 13) |
 | `sicopr:edit` | `{key, name, half, value, before}` | a field's edit is committed (the input's `change` event: Enter or leaving the field) |
 | `sicopr:view` | `{view}` | the tab changed |
 | `sicopr:run` | `{returncode, command, cwd}` | a run started from the Run tab finished (once per run, under the existing `RUN_DONE` guard) |
@@ -118,7 +119,7 @@ and listens for:
 | event | detail | what SiCoPR does |
 |---|---|---|
 | `sicopr:open-config` | `{path}` | selects and loads that workbook (with the usual discard-edits confirm) |
-| `sicopr:overlay` | `{source, title, cells: {key: {value, tag, note}}, save_hint, run_note}` or `null` | shows each listed key with the overlay value in place of the workbook value, a tag (`tag` text), and the workbook value in the field's info line; marks the blocks that hold overlaid keys; shows `title` in the header; while an overlay is set, Save as is disabled with `save_hint` as its tooltip and the Run tab shows `run_note` under its config line. `null` removes it |
+| `sicopr:overlay` | `{source, title, cells: {key: {value, tag, note}}, save_hint, run_note, focus}` or `null` | shows each listed key with the overlay value in place of the workbook value, a tag (`tag` text), and the workbook value in the field's info line; marks the blocks that hold overlaid keys; shows `title` in the header; while an overlay is set, Save as is disabled with `save_hint` as its tooltip and the Run tab shows `run_note` under its config line. `focus` (a list of keys) selects their block when they all sit in one. `null` removes it |
 | `sicopr:clear-edits` | `{keys}` | drops those keys from `EDITS` (the panel took them) |
 | `sicopr:show` | `{view, run}` | switches tab; with `run`, selects that run folder in the Results tabs |
 | `sicopr:browse` | `{purpose, title}` | opens the Browse dialog; "Use this directory" opens the directory (`/api/open`, as today) and answers with `sicopr:browsed` |
@@ -230,7 +231,8 @@ outcome:
   sentence `Set DER_0 = 0.0001.`), with its own working config `configs\edit_NNNN.json` and the override list
   of the last record plus this change. Then the panel sends `sicopr:clear-edits` for the key and a new
   overlay: the field now shows `edited here #13`.
-- QUESTION (a rule's `ask_if`, a `[TX RX]` pair edited as one number, Decision 7 style asks): shown in the
+- QUESTION (a rule's `ask_if`, Decision 7 style asks; a `[TX RX]` pair edited as one number goes to both sides, as
+  row RS28 does for a typed number, section 13): shown in the
   panel with its buttons; the field keeps SiCoPR's green "changed" state and a `proposed` tag until the
   answer.
 - STOP (a value the loader or a `stop_if` refuses): shown in the panel and under the field; the edit stays in
@@ -316,7 +318,8 @@ include it`. The text is the panel's, sent as the overlay's `run_note` (section 
 
 Maintainer, 9 October 2026: every interaction in the GUI is captured in the history, so that anything that
 does not work can be reviewed later. The history (`history.jsonl`) is the one log; the GUI adds no second
-log of its own. Each record the GUI writes carries `source: "gui"` and a `kind`:
+log of its own. Each record the GUI writes carries `origin: "gui"` and a `kind` (as built: `source` already names
+the source config of a record, section 13):
 
 | kind | written when | holds |
 |---|---|---|
@@ -332,7 +335,8 @@ log of its own. Each record the GUI writes carries `source: "gui"` and a `kind`:
 - The page reports its own errors: a `window.onerror` and `unhandledrejection` handler posts them to
   `POST /panel/assist/api/log`, which records them (at most one record per distinct message per minute, so a
   loop cannot fill the file).
-- Records written by the CLI keep `source: "cli"`, so one history shows both, in order.
+- Records written by the CLI carry `origin: "cli"` (records written before 0.7.0 have none and are phrases), so
+  one history shows both, in order.
 - The feedback export (Decision 10) includes every record, with the masks applied to the new fields as to
   the old ones; `What did I run last?` and the tutor read only the kinds they read today.
 - `GET history` returns every kind, so the panel can show the whole session again after a reload.
@@ -350,8 +354,10 @@ folder and `host.roots()`.
 | `POST handle {phrase}` | resolve a phrase; carry out a PLAN in the worker | `core.handle`, then `run.carry_out` (and `core.fetch_followup` through `next`) |
 | `GET job?since=` | progress lines, running or done, the carry-out result | the worker's buffer, `run.line_text` |
 | `POST stop` | stop the plan in progress | the worker (new cancel hook, section 10) |
-| `GET overlay` | the source workbook path and the overlay cells | `core.Context`, `config_model.import_config` of the source (cached by SHA-256), `config_model.same_value`, history for the origin of each override |
+| `POST overlay {keys, changed}` | the source workbook path and the overlay cells, keyed as the view shows them (`keys` from `sicopr:config`), with `focus` for the keys of the last outcome | `core.Context`, `config_model.import_config` of the source (cached by SHA-256), `config_model.same_value`, history for the origin of each override |
 | `POST edit {edits}` | take committed Config-view edits into the working config | `core.edit` (new) |
+| `POST open {path}` | follow another workbook opened in the Config view | `core.edit` with a source |
+| `POST log {kind}` | a view shown (`view`) or a page error (`error`), recorded | `Project.append_history` |
 | `GET history?limit=` | phrases for recall, and the conversation on reload | `Project.read_history` |
 | `GET result?run=` | one run's summary card | `summary.run_summary` |
 | `GET batch?seq=` | a batch's table | `summary.batch_rows`, `summary.batch_lines` |
@@ -446,3 +452,41 @@ follows" (below and section 6); and every GUI interaction is recorded in the his
 10. **Gates for the build.** The use-case table has no GUI rows. *Recommendation:* gate the build on section
     11's tests, the frozen L4 list through the panel's API with the same outcomes as the core, and GX; the
     version after the build is 0.7.0.
+
+## 13. As built (Phase V2-5, 9 October 2026)
+
+Where the design was silent, or wrong once built, the least surprising reading was taken and the text above
+changed to match:
+
+1. **`origin`, not `source`, in the history (section 7a).** A history record already has `source`, the source
+   config of a run. The GUI's records carry `origin: "gui"` (the CLI's `origin: "cli"`), a `kind`, and a
+   `detail` with what each kind holds. Records written before 0.7.0 have none of the three and read as phrases.
+   The log kinds (`run`, `stop`, `view`, `error`) are left out of `Project.read_history()` unless asked for,
+   so no reader of the history other than the history view and the feedback export ever sees them; `edit`
+   and `open` are records with a working config, which the next command builds on.
+2. **`sicopr:config` carries `cause` and `keys` (section 4.1).** The panel follows a workbook the *user*
+   opened, not SiCoPR's first load or the panel's own `sicopr:open-config`, so the page says which it was. The
+   field keys the view shows let the overlay send exactly SiCoPR's keys (a `[TX RX]` value as its `#tx` and
+   `#rx` halves where the view shows halves) without the panel copying SiCoPR's schematic.
+3. **`sicopr:overlay` carries `focus`**, a list of keys: the page selects their block when they all sit in one
+   (section 6, "switches the Config view to that block when the command changed exactly one block").
+4. **`POST overlay {keys, changed}`** in place of `GET overlay`, because it takes the view's keys; **`POST
+   open {path}`** follows another workbook; **`POST log {kind}`** records a view shown or a page error.
+5. **A `[TX RX]` pair edited as one number** goes to both sides, as row RS28 does for a typed number (the edit
+   is validated exactly as the same value typed, section 10), rather than asking.
+6. **An edit made before Assist has a working config**: the workbook the view shows is imported as the source
+   first, and the edit applies to it (one `edit` record).
+7. **A refused edit** is shown in the panel only; under the field the value stays green and unsaved, as SiCoPR
+   shows any unsaved edit.
+8. **Package-block values** (`BLOCK/name`) are counted in the overlay title; SiCoPR's Config tab does not show
+   package fields, so they are not shown there.
+9. **`sicopr-assist gui`** with a SiCoPR whose GUI has no panel slot says so and stops (exit code 2); the
+   panel-only fallback page of section 3 is not built.
+10. **Following another workbook keeping the overrides** validates them together first, then one at a time for
+    those left: one override can need another beside it (`N_b = 0` needs `MLSE = 0`), which the walk-through
+    showed. **A plan's changes show in the overlay while its runs are under way** (section 6 says "before its runs
+    start"; the working config of a run is recorded only when the run ends, so the overlay reads the plan).
+    **`run` records** are written for a plan that runs something (COM, a batch, a download), not for every PLAN.
+11. **`core.edit(project, changes, source=None, origin='gui')`** is the entry point of section 6; `core.handle`
+    gains `origin` for the record only (the outcome does not depend on it), so the frozen L4 list gives the same
+    outcomes through the panel as through the core.

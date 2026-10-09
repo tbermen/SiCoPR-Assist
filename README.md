@@ -360,18 +360,54 @@ with small zips the tests write.
 the tutor and feedback rows, `--gate V2.1` the dashboard rows, and `--gate V3.1` the download rows. The tutor text and the feedback
 file, which the four levels do not read, are checked by `tests\test_tutor.py` and
 `tests\test_feedback.py`. `tests\test_dashboard.py` carries out dashboard plans with a stand-in COM
-child and a stand-in Rscript, so it needs no R. The build scores are in
+child and a stand-in Rscript, so it needs no R. `tests\test_gui_api.py` drives the GUI panel's API as
+SiCoPR's GUI does, with a stand-in child (the frozen L4 rows through the panel give what the core gives,
+the Config-view round trip on the four workbooks, runs, Stop, paths, the history, following another
+workbook), and `tests\test_gui_static.py` parses the panel's script and checks its ids, its `[hidden]`
+rules and its events; the checks of SiCoPR's real server routing to the panel print SKIP when the
+SiCoPR in use has no panel slot. The build scores are in
 `CHANGELOG.md`.
+
+## The GUI
+
+SiCoPR-Assist adds a panel on the right of SiCoPR's own GUI, where the same phrases are typed. Its
+design is `docs\GUI_DESIGN.md`. It needs a SiCoPR whose GUI has the panel slot (`gui\README.md` of
+SiCoPR, *Panels*); SiCoPR 1.1.1 does not have it yet, and `sicopr-assist gui` says so and stops.
+
+```powershell
+cd C:\my\project
+sicopr-assist gui                    # this folder; opens a browser on http://127.0.0.1:8765
+sicopr-assist gui D:\other\project --port 8790 --no-browser
+```
+
+It starts SiCoPR's `gui\app.py` with the project folder opened and made the run folder. Starting
+SiCoPR's GUI directly also shows the panel, which then asks for the project folder (Browse).
+
+- **The panel** shows the project, the working config, and the conversation: each phrase with its
+  PLAN, QUESTION or STOP as on the command line, a question's options as buttons, the tutor's lines with
+  their example phrases as links, live progress while a plan runs (Stop terminates it), and each run's
+  summary with buttons that show it in SiCoPR's Results tabs. Up and Down recall earlier phrases.
+- **The Config view shows the working config.** Every value that differs from the workbook is shown in
+  place with where it came from (`Assist #12`, `edited here #13`, `linked`, `proposed`, `option 2`) and
+  the workbook value beside it. SiCoPR's Save as is off while the panel is in use: save the working
+  config with `Save that config as data\config_new.xlsx.`
+- **An edit in the Config view is taken in** when it is committed (Enter or leaving the field): it is
+  checked as the same value typed in a phrase is (`core.edit`), recorded in the history, and the next
+  command builds on it. A refused edit stays unsaved in SiCoPR's view and never reaches the working
+  config. `Re-run.` after an edit runs the edited config.
+- **Another workbook opened in the Config view is followed:** SiCoPR-Assist imports it as the new
+  source, keeps the channel files of the last run, and asks once whether to keep your overrides.
+- **One COM run at a time** across both: SiCoPR's Run tab is refused while a plan from the panel runs,
+  and the panel waits for a Run-tab run. Runs started from the Run tab are not tracked by SiCoPR-Assist;
+  the panel offers the phrase that brings them in.
+- **Everything the GUI does is in the history** (`.sicopr\history.jsonl`), each record marked
+  `origin: gui` with its kind: phrases, answers, edits, workbooks opened, runs started and ended, Stop,
+  what was shown, and errors of the panel and the page. The feedback export lists them, masked.
 
 ## What version 2 adds
 
-Version 2 is being built in phases. The tutor and feedback export (above) are in 0.4.0, the dashboard
-in 0.5.0, and channel download in 0.6.0. Still to come:
-
-- **A GUI**, in this repository: a command box that takes the same phrases, with views of the project
-  folder, the history, run results and summaries, the pending question as buttons, and the settings.
-  It calls the same functions as the command line. Its design comes first, for the maintainer to
-  approve.
+Version 2 was built in phases: the tutor and feedback export (above) in 0.4.0, the dashboard in 0.5.0,
+channel download in 0.6.0, and the GUI in 0.7.0.
 
 ## What is known to be incomplete
 

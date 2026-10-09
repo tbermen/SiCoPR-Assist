@@ -36,6 +36,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 
 from sicopr_assist import config_model, core, engine, summary, validate, xlsx_io
@@ -110,9 +111,13 @@ def _with_result_dir(wc, folder):
     return new
 
 
+STOPPED = 'stopped by the user'
+
+
 class _Runner:
-    def __init__(self, project, child, progress):
+    def __init__(self, project, child, progress, cancel=None):
         self.project = project
+        self.cancel = cancel                        # a threading.Event: Stop in the GUI (GUI_DESIGN.md section 10)
         self.child = list(child or child_command())
         self.progress = progress
         self.ctx = core.Context(project)
@@ -151,6 +156,10 @@ class _Runner:
         """One point: reuse an equal earlier run, or run it. head starts its status line (the step, and for a batch
         the point n of N). export: the engine's .mat export is on (the dashboard needs it), and only a run that had it
         is reused. Returns {'run_id', 'new', 'reused_from', 'skipped', 'status', 'message'}."""
+        if self.cancel is not None and self.cancel.is_set():
+            self.say('status', '%s: skipped, %s' % (head, STOPPED))
+            return {'run_id': None, 'new': False, 'reused_from': None, 'status': 'skipped', 'skipped': STOPPED,
+                    'message': STOPPED}
         res = validate.validate_config(wc)
         if res['status'] == 'stop':
             self.say('status', '%s: skipped, validate_config fails: %s' % (head, res['text']))
@@ -213,6 +222,8 @@ class _Runner:
                 proc = subprocess.Popen(cmd, cwd=p.root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                         stdin=subprocess.DEVNULL, text=True, encoding='utf-8', errors='replace',
                                         bufsize=1)
+                if self.cancel is not None:      # Stop: the child is terminated, and its run is recorded failed
+                    threading.Thread(target=_terminate_on, args=(proc, self.cancel), daemon=True).start()
                 for line in proc.stdout:
                     said.append(line.rstrip('\n'))
                     self.say('engine', said[-1])
@@ -222,6 +233,11 @@ class _Runner:
                     rec = p.read_result(rid)
                 except (OSError, ValueError):
                     rec = None
+                if self.cancel is not None and self.cancel.is_set():
+                    msg = '%s after %s; no result of this run is kept' % (STOPPED, took)
+                    p.write_result(rid, result_record(run_id=rid, status='failed', message=msg, sicopr_sha256=self.sic,
+                                                      config_csv=csv_path, fingerprint=fp_hash, export_mat=export))
+                    rec = {'status': 'failed', 'message': msg}
                 if rec is None:
                     msg = 'the run stopped with exit code %s and wrote no result: %s' % (code, ' / '.join(said[-3:]))
                     p.write_result(rid, result_record(run_id=rid, status='failed', message=msg, sicopr_sha256=self.sic,
@@ -235,6 +251,15 @@ class _Runner:
                 self.log = None
         self.last_log = log
         return rec['status'], rec.get('message')
+
+
+def _terminate_on(proc, cancel):
+    """Terminate proc once cancel is set, unless it ends first."""
+    while proc.poll() is None:
+        if cancel.wait(0.2):
+            if proc.poll() is None:
+                proc.terminate()
+            return
 
 
 def _headline(rec):
@@ -354,6 +379,21 @@ def set_project_setting(project, name, value):
     return path
 
 
+def start_gui(app, folder, port=None, no_browser=False):
+    """SiCoPR's GUI (app, its gui/app.py) with the Assist panel, on the project folder: started from an argument list,
+    no shell, with the folder opened (--dir) and made the run directory (--run-dir), and the project named to the
+    panel by SICOPR_ASSIST_PROJECT. Bytecode writing is off, so SiCoPR's folder gets no .pyc (Rule 1). Waits for it
+    and returns its exit code."""
+    env = dict(os.environ, SICOPR_ASSIST_PROJECT=folder, PYTHONDONTWRITEBYTECODE='1')
+    if port:
+        env['SICOPR_GUI_PORT'] = str(port)
+    cmd = [sys.executable, app, '--dir', folder, '--run-dir', folder] + (['--no-browser'] if no_browser else [])
+    try:
+        return subprocess.call(cmd, env=env)
+    except KeyboardInterrupt:
+        return 0
+
+
 def open_page(path):
     """Open the dashboard page in the browser (row D1). Returns a line to show when that fails, else None."""
     import pathlib
@@ -452,7 +492,32 @@ def _fetch_stage(project, out, rec, progress):
     return {'status': 'ok', 'run_ids': [], 'points': [], 'lines': lines, 'next': nxt}
 
 
-def carry_out(project, out, child=None, progress=None, open_folder=open_folder, rscript=None, open_page=open_page):
+def follow(project, out, show=None, lines=None, **kw):
+    """Carry out a PLAN, then follow a channel download (rows F1 to F12) the same way wherever it is asked for
+    (Decision 13): the zip first, then the outcome the core plans from it, shown with show(outcome) and, if it is a
+    PLAN, carried out. lines(list) gets the lines of each part as it ends. kw goes to carry_out. Returns the last
+    outcome and what carrying it out gave."""
+    done = carry_out(project, out, **kw)
+    if lines:
+        lines(done['lines'])
+    while done.get('next') is not None:          # a channel download: what the core plans once the zip is unpacked
+        out = done['next']
+        if show:
+            show(out)
+        if out['type'] != 'PLAN':
+            break
+        if fetch_pending(out):                   # the zip should be in the cache now: never download in a loop
+            if lines:
+                lines(['the downloaded zip is not in the cache as planned, so nothing more is done'])
+            break
+        done = carry_out(project, out, **kw)
+        if lines:
+            lines(done['lines'])
+    return out, done
+
+
+def carry_out(project, out, child=None, progress=None, open_folder=open_folder, rscript=None, open_page=open_page,
+              cancel=None):
     """Carry out a PLAN that core.handle returned and recorded. child replaces the command that runs one case
     (a test gives a stand-in that writes a seeded result.json). progress, when given, is called with (kind, text)
     for every line said while the plan is carried out (Decision 17; see line_text for the form shown).
@@ -460,7 +525,8 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
     default: the Rscript engine.find_rscript finds), and open_page opens the dashboard page (tests give stand-ins).
     Returns {'status', 'run_ids', 'points', 'lines'} and fills in the history record. A channel-download plan whose
     zip is not yet downloaded or unpacked does only that part (_fetch_stage) and adds 'next', the outcome the core
-    plans from the cache."""
+    plans from the cache. cancel: a threading.Event that stops the plan (Stop in the GUI): no further point starts,
+    the child under way is terminated, and the record ends failed."""
     if out.get('type') != 'PLAN':
         raise ValueError('only a PLAN is carried out')
     rec = _record_of(project, out)
@@ -468,7 +534,7 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
         return _fetch_stage(project, out, rec, progress)
     steps = [(s['op'], s.get('args') or {}) for s in out['steps']]
     ops = [op for op, _ in steps]
-    R = _Runner(project, child, progress)
+    R = _Runner(project, child, progress, cancel)
     ctx = R.ctx
     lines = []
     for op, a in steps:                          # steps that write a file and run nothing (Decisions 10 and 11)
@@ -576,6 +642,10 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
                     run_ids.append(got['run_id'])
             points.append(rec_pt)
         fields.update(working_config=None, run_ids=run_ids, points=points)
+        if cancel is not None and cancel.is_set():
+            left = sum(1 for pt in points if pt.get('skipped') == STOPPED)
+            status = 'failed'
+            fields.update(status='failed', reason='%s; %d point%s left' % (STOPPED, left, '' if left == 1 else 's'))
     elif run_com is not None:
         got = R.run_point(wc, channels, head, export=bool(run_com.get('export_mat')))
         if got['run_id']:

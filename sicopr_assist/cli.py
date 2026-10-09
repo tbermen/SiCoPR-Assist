@@ -3,6 +3,7 @@
     sicopr-assist "Re-run with DER_0 = 1e-4"
     python -m sicopr_assist "Re-run with DER_0 = 1e-4"
     sicopr-assist                       (prompts until "quit" or end of input)
+    sicopr-assist gui [folder]          SiCoPR's GUI with the Assist panel (GUI_DESIGN.md)
 
 The project is the folder the tool is run from. --json prints the outcome as JSON. A PLAN is shown, then
 carried out (run.carry_out), and what it gives is printed; cli.py only formats and prints what the core and
@@ -62,24 +63,46 @@ def handle_and_run(phrase, project, as_json=False, out=None, quiet=False, child=
             return
         out.write(run.line_text(kind, text) + '\n')
         out.flush()
-    done = run.carry_out(project, outcome, child=child, progress=progress, **stand_ins)
-    for line in done['lines']:
-        out.write(line + '\n')
-    while done.get('next') is not None:          # a channel download: what the core plans once the zip is unpacked
-        outcome = done['next']
-        show(outcome, as_json, out)
-        if outcome['type'] != 'PLAN':
-            break
-        if run.fetch_pending(outcome):           # the zip should be in the cache now: never download in a loop
-            out.write('the downloaded zip is not in the cache as planned, so nothing more is done\n')
-            break
-        done = run.carry_out(project, outcome, child=child, progress=progress, **stand_ins)
-        for line in done['lines']:
+
+    def lines(ls):
+        for line in ls:
             out.write(line + '\n')
-    return outcome, done
+    return run.follow(project, outcome, show=lambda o: show(o, as_json, out), lines=lines, child=child,
+                      progress=progress, **stand_ins)
+
+
+def gui(argv):
+    """sicopr-assist gui [folder] [--port N] [--no-browser]: SiCoPR's GUI with the Assist panel, on the project
+    folder (GUI_DESIGN.md section 5). SiCoPR's gui/app.py is started from an argument list, no shell, with the
+    folder opened (--dir) and made the run directory (--run-dir); the panel finds the project through
+    SICOPR_ASSIST_PROJECT. Returns the GUI's exit code."""
+    from sicopr_assist import engine
+    ap = argparse.ArgumentParser(prog='sicopr-assist gui', description="SiCoPR's GUI with the SiCoPR-Assist panel.")
+    ap.add_argument('folder', nargs='?', default=os.getcwd(), help='the project folder (default: this folder)')
+    ap.add_argument('--port', type=int, default=None, help="the port (default: SiCoPR's, 8765)")
+    ap.add_argument('--no-browser', action='store_true', help='do not open a browser')
+    args = ap.parse_args(argv)
+    folder = os.path.abspath(args.folder)
+    if not os.path.isdir(folder):
+        print('not a folder: %s' % folder)
+        return 2
+    try:
+        app, has_slot = engine.gui_app()
+    except engine.EngineMissing as e:
+        print(e)
+        return 2
+    if not has_slot:
+        print("The SiCoPR at %s has no panel slot in its GUI (gui/app.py does not load sicopr.gui_panels), so the "
+              "Assist panel cannot be shown there. Use a SiCoPR with the slot, or the command line." % engine.folder())
+        return 2
+    print('SiCoPR-Assist %s: project %s' % (__version__, folder))
+    return run.start_gui(app, folder, args.port, args.no_browser)
 
 
 def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ['gui']:
+        return gui(argv[1:])
     ap = argparse.ArgumentParser(prog='sicopr-assist', description='Turn a phrase into a SiCoPR run.')
     ap.add_argument('phrase', nargs='*', help='the phrase; with none, an interactive prompt starts')
     ap.add_argument('--json', action='store_true', help='print the outcome as JSON')

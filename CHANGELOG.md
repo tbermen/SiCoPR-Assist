@@ -1,6 +1,38 @@
 # Changelog
 
-## 0.6.0 (8 October 2026)
+## 0.7.0 (9 October 2026)
+
+Version 2, Phase V2-5: the GUI, built to `docs\GUI_DESIGN.md` as approved on 9 October 2026 with the
+maintainer's two changes (Assist follows a workbook opened in the Config view; every GUI interaction is in the
+history). It needs SiCoPR's GUI with the panel slot (SiCoPR branch `gui-panel-slot`, for the maintainer to take
+or not); the version 1 gates still run against SiCoPR 1.1.1 (`55c3f71`), whose engine is the same.
+
+- **The Assist panel** in SiCoPR's GUI (`sicopr_assist\panel\`, registered under the entry-point group
+  `sicopr.gui_panels`): the project line, the conversation with each PLAN, QUESTION or STOP as on the command
+  line, option buttons, the tutor's example phrases as links, live progress with Stop, run summaries with
+  buttons to SiCoPR's Results tabs, recall of earlier phrases, the settings, and a reserved place for a
+  language model. `sicopr-assist gui [folder]` starts it.
+- **The round trip.** SiCoPR's Config view shows the working config laid over its workbook, each changed value
+  tagged with where it came from; a plan's changes show before its runs end. An edit committed in the view goes
+  through the new `core.edit`, which validates it as the same value typed in a phrase, and becomes one history
+  record with its own working config (`configs\edit_NNNN.json`); `Re-run.` after an edit runs the edited
+  config; the latest record wins, and says which one it replaced. Another workbook opened in the view is
+  followed, with the channel files kept and the overrides kept or not as the user answers.
+- **The history records every GUI interaction**, with `origin` (`gui` or `cli`), `kind` and `detail`: phrases,
+  answers, edits, opens, runs (start and end), Stop, views and errors (the panel's and the page's, at most one
+  a minute for one message). The log kinds are left out of every reader of the history but the history view
+  and the feedback export, which lists them masked.
+- `run.carry_out` takes a `cancel` event (Stop: no further point starts, the child is terminated, the record
+  and the result end failed); the CLI and the panel follow a channel download through one function,
+  `run.follow`.
+- Found in the walk-through on the real page and fixed, each with a check: a run's results hold `inf` and `nan`
+  (ERL when it is not computed), which a browser's JSON reader refuses, so the panel answers strict JSON; when a
+  workbook is followed, overrides that need each other (`N_b = 0` with `MLSE = 0`) are validated together before
+  one at a time; the view is not pulled back to the old workbook while a follow, or its question, is under way;
+  an edit finished by an answer button is tagged `edited here`.
+- Tests: `tests\test_gui_api.py` and `tests\test_gui_static.py` (new), `tests\test_tutor.py` (Config-view
+  records are not commands). The stand-in child writes `case_01\results.csv`, as the engine's report does.
+
 
 Version 2, Phase V2-3: channel download (rows F1 to F12). Tested with SiCoPR 1.1.1 (commit `55c3f71`).
 

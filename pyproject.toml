@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sicopr-assist"
-version = "0.6.0"
+version = "0.7.0"
 description = "A rules-based front end that turns phrases into SiCoPR runs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,8 +21,14 @@ dependencies = [
 [project.scripts]
 sicopr-assist = "sicopr_assist.cli:main"
 
+# The Assist panel in SiCoPR's GUI (its gui/README.md, "Panels"). A SiCoPR GUI without the panel slot
+# never reads this group, so it changes nothing there.
+[project.entry-points."sicopr.gui_panels"]
+assist = "sicopr_assist.panel"
+
 [tool.setuptools]
-packages = ["sicopr_assist"]
+packages = ["sicopr_assist", "sicopr_assist.panel"]
 
 [tool.setuptools.package-data]
 "sicopr_assist" = ["data/*"]
+"sicopr_assist.panel" = ["static/*"]

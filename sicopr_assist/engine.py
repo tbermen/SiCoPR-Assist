@@ -185,6 +185,20 @@ def com_analysis_script():
     return p if os.path.isfile(p) else None
 
 
+PANEL_GROUP = 'sicopr.gui_panels'       # the entry-point group SiCoPR's GUI loads panels from (its gui/README.md)
+
+
+def gui_app():
+    """(path of SiCoPR's gui/app.py, whether that GUI has the panel slot). A GUI without the slot never loads the
+    entry-point group, so the Assist panel cannot appear in it."""
+    p = os.path.join(folder(), 'gui', 'app.py')
+    try:
+        with open(p, encoding='utf-8') as f:
+            return p, PANEL_GROUP in f.read()
+    except OSError:
+        return p, False
+
+
 def r_version(path):
     """The version of the R install that holds an Rscript, from its folder name (R-4.10.0 -> (4, 10, 0)), compared as
     numbers so that R-4.10 is newer than R-4.9; () when the name holds none."""

@@ -33,9 +33,16 @@ NOTHING_MATCHED = 'Not a supported request'      # how the core's STOP for a phr
 _CACHE = {}                                       # examples by config, and imports by file, for this process
 
 
+def _commands(history):
+    """The typed phrases and chosen options of a history: an edit or a workbook opened in the GUI's Config view is
+    not a command, so the tutor does not count it (GUI_DESIGN.md section 10)."""
+    from sicopr_assist.project import is_command
+    return [r for r in history if is_command(r)]
+
+
 def successes(history):
     """How many commands in the history were successful (status ok)."""
-    return sum(1 for r in history if r.get('status') == 'ok')
+    return sum(1 for r in _commands(history) if r.get('status') == 'ok')
 
 
 def is_miss(rec):
@@ -58,7 +65,7 @@ def trouble(history, current, settings):
     need, window = settings['trouble_misses'], settings['trouble_window']
     if need <= 0:
         return []
-    recent = (list(_since_last_showing(history)) + [current])[-window:]
+    recent = (list(_since_last_showing(_commands(history))) + [current])[-window:]
     missed = [r for r in recent if is_miss(r)]
     return missed if len(missed) >= need else []
 
@@ -67,6 +74,7 @@ def feedback_notice_due(history, settings):
     """Whether the feedback line may be shown now: on, and not shown in the last feedback_notice_gap commands."""
     if not settings['feedback_notice']:
         return False
+    history = _commands(history)
     k = max((i for i, r in enumerate(history) if 'feedback_notice' in (r.get('shown') or [])), default=None)
     return k is None or len(history) - k >= settings['feedback_notice_gap']
 

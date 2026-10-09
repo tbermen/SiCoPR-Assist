@@ -1,0 +1,43 @@
+/* Copyright 2026 Todd Bermensolo
+ * SPDX-License-Identifier: BSD-3-Clause */
+/* The SiCoPR-Assist panel. Colours come from SiCoPR's own variables, so it follows the page's theme. */
+#panel-assist { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+#panel-assist .aline { display: flex; align-items: center; gap: 8px; }
+#panel-assist .apath { flex: 1; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
+#panel-assist .amuted { color: var(--muted); font-size: 12px; }
+#panel-assist .asmall { padding: 3px 8px; font-size: 12px; }
+#panel-assist .aconv { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto;
+  border-top: 1px solid var(--line); padding-top: 8px; }
+#panel-assist .aentry.aold { opacity: .7; }
+#panel-assist .asaid { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; }
+#panel-assist .asaid.aview { color: var(--dirty); }
+#panel-assist .acard { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; margin-top: 4px;
+  background: var(--bg); }
+#panel-assist .acard.tplan, #panel-assist .acard.aresult { border-color: var(--accent); }
+#panel-assist .acard.tquestion { border-color: var(--sweep); }
+#panel-assist .acard.tstop { border-color: var(--warn); }
+#panel-assist .aann { font-size: 12px; }
+#panel-assist .aplan, #panel-assist .aq { font-weight: 600; margin-top: 4px; }
+#panel-assist .astop { color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 4px 8px;
+  margin-top: 4px; }
+#panel-assist .asteps { margin: 4px 0 0; padding-left: 22px; font-family: ui-monospace, monospace; font-size: 12px; }
+#panel-assist .aopts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+#panel-assist .atutor { margin-top: 6px; color: var(--muted); font-size: 12px; }
+#panel-assist .alink { color: var(--accent); }
+#panel-assist .anote { font-size: 12px; }
+#panel-assist .anote.abad { color: var(--warn); }
+#panel-assist .anote.aout { font-family: ui-monospace, monospace; }
+#panel-assist .aprogress { display: flex; flex-direction: column; gap: 4px; }
+/* display:flex above beats the browser's [hidden] rule; each class that sets display has its own (SiCoPR's rule) */
+#panel-assist .aprogress[hidden] { display: none; }
+#panel-assist .arow { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+#panel-assist .alines { background: #10131a; color: #d6dae3; border-radius: 8px; padding: 8px; margin: 0;
+  height: 180px; overflow: auto; font-size: 11.5px; white-space: pre-wrap; word-break: break-word; }
+#panel-assist .apending { border-top: 1px solid var(--line); padding-top: 6px; }
+#panel-assist .abox { display: flex; gap: 6px; }
+#panel-assist .abox input { flex: 1; max-width: none; font-family: ui-monospace, monospace; }
+#panel-assist .afold > summary { cursor: pointer; color: var(--muted); font-size: 12px; text-transform: uppercase;
+  letter-spacing: .06em; }
+#panel-assist .aset { font-size: 11.5px; white-space: pre-wrap; max-height: 30vh; overflow: auto; }
+#panel-assist .ahrec { font-family: ui-monospace, monospace; font-size: 11px; border-bottom: 1px solid var(--line);
+  padding: 2px 0; }

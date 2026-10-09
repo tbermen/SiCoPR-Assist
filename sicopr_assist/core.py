@@ -40,7 +40,7 @@ import os
 import re
 
 from sicopr_assist import config_model, engine, fetch, parse, summary, validate, xlsx_io
-from sicopr_assist.project import history_record, read_settings, setting_text
+from sicopr_assist.project import history_record, is_command, read_settings, setting_text
 
 # The step vocabulary, frozen in Phase 1 from the expected_detail chains of the use-case table
 # (tests/cases/l4.py extracts it again and tests/test_l4_normaliser.py checks that the two agree).
@@ -102,7 +102,7 @@ def history_lines(project):
     """What the last run was (row S2): its command, its inputs, its overrides and its result folders. Falls back to
     the last command when no command has run anything yet. [] when the history is empty or cannot be read."""
     try:
-        hist = project.read_history()
+        hist = [r for r in project.read_history() if is_command(r)]       # a Config-view record is not a command
     except (OSError, ValueError):
         return []
     rec = next((r for r in reversed(hist) if r.get('run_ids')), None) or (hist[-1] if hist else None)
@@ -362,8 +362,9 @@ def _same_fingerprint(have, want):
 
 
 # ----------------------------------------------------------------------------- the entry point
-def handle(phrase, project):
-    """Turn one phrase and the project state into a PLAN, a QUESTION or a STOP. Never runs COM."""
+def handle(phrase, project, origin='cli'):
+    """Turn one phrase and the project state into a PLAN, a QUESTION or a STOP. Never runs COM. origin says where
+    the phrase came from ('cli' or 'gui'), for the history record only; the outcome does not depend on it."""
     ctx = Context(project)
     try:
         pending = project.read_pending()
@@ -382,8 +383,14 @@ def handle(phrase, project):
     warn = [w for w in ctx.settings['warnings'] if w not in out['announce']]
     if warn:                                     # a settings problem is shown first and never stops anything
         out['announce'] = warn + list(out['announce'])
-    shown = _with_tutor(phrase, out, ctx)
-    seq = _record(project, phrase, out, pending, answered=got is not None, shown=shown)
+    done = ctx._c.pop('edit_done', None)         # the answer to a question an edit in the Config view asked
+    view_edit = (resume or {}).get('edit') is not None
+    _note_writers(out, ctx, edit=view_edit)
+    shown = [] if view_edit else _with_tutor(phrase, out, ctx)
+    seq = _record(project, phrase, out, pending, answered=got is not None, shown=shown, origin=origin,
+                  **({'detail': ctx._c.get('edit_info')} if view_edit else {}))
+    if done is not None and out['type'] == 'PLAN' and seq is not None:
+        _commit_edit(project, seq, done)
     if out['type'] == 'QUESTION' and resume is not None:
         stored = dict(out, resume=dict(resume, answers=answers))
         project.write_pending(resume['phrase'], stored, seq)
@@ -418,10 +425,11 @@ def _with_tutor(phrase, out, ctx):
     return list(info['shown'])
 
 
-def _record(project, phrase, out, pending, answered, shown=()):
+def _record(project, phrase, out, pending, answered, shown=(), origin='cli', kind=None, **more):
     """Append the history line of Decision 9: the phrase, how it was read, the options offered, the option chosen
     when it answers a question, and the resolved outcome (replay uses it). Returns its seq, or None when the
-    history cannot be written (then the outcome says so)."""
+    history cannot be written (then the outcome says so). kind is 'answer' or 'phrase' unless given (an edit or an
+    open from the GUI's Config view); more holds the further keys such a record carries."""
     chosen = None
     m = re.match(r'answer: ([^;]*)', out.get('pattern') or '')
     if answered and m:
@@ -429,13 +437,14 @@ def _record(project, phrase, out, pending, answered, shown=()):
     status = {'PLAN': 'ok', 'QUESTION': 'question'}.get(out['type'], 'stopped')
     if out['type'] == 'STOP' and (chosen == CANCEL or out.get('reason', '').startswith('Cancelled')):
         status = 'cancelled'
-    rephrase_of = (pending or {}).get('seq') if pending and not answered else None
-    if rephrase_of is None and not answered and out['type'] == 'PLAN':
+    kind = kind or ('answer' if answered else 'phrase')
+    rephrase_of = (pending or {}).get('seq') if pending and not answered and kind == 'phrase' else None
+    if rephrase_of is None and not answered and out['type'] == 'PLAN' and kind == 'phrase':
         # a phrase that works right after one that was cancelled or not understood rephrases it (row FB02): the
         # link is what shows a candidate new pattern in the feedback file
         from sicopr_assist import tutor
         try:
-            prev = (project.read_history() or [None])[-1]
+            prev = next((r for r in reversed(project.read_history()) if is_command(r)), None)
         except (OSError, ValueError):
             prev = None
         if prev and prev.get('status') == 'cancelled':
@@ -447,7 +456,8 @@ def _record(project, phrase, out, pending, answered, shown=()):
         options=list((out.get('question') or {}).get('options') or []), chosen=chosen,
         answers=(pending or {}).get('seq') if answered else None,
         rephrase_of=rephrase_of,
-        outcome=out['type'], status=status, reason=out.get('reason'), plan=out, shown=list(shown))
+        outcome=out['type'], status=status, reason=out.get('reason'), plan=out, shown=list(shown), origin=origin,
+        kind=kind, **more)
     try:
         return project.append_history(rec)['seq']
     except (OSError, ValueError) as e:
@@ -485,7 +495,7 @@ def _answer(phrase, ctx, pending):
     answers = resume.get('answers')
     options = (stored.get('question') or {}).get('options') or []
     if answers is None:                         # a question stored without its answers: ask it again to get them
-        q, answers, _ = _resolve(resume['phrase'], ctx, resume.get('mods') or {})
+        q, answers, _ = _again(resume, ctx, resume.get('mods') or {})
         if q['type'] != 'QUESTION':
             return None
         options = q['question']['options']
@@ -512,7 +522,7 @@ def _answer(phrase, ctx, pending):
         if req and req['edits'] and not req['sets'] and not req['sweeps'] and not req['attempts']:
             mods.setdefault('sweep_edit', {}).update(req['edits'][-1])
             mods.pop('confirm_limit', None)
-            out, ans, res = _resolve(resume['phrase'], ctx, mods)
+            out, ans, res = _again(resume, ctx, mods)
             out['pattern'] = 'answer: edit the sweep; ' + out['pattern']
             return out, ans, res
         return None
@@ -531,9 +541,17 @@ def _answer(phrase, ctx, pending):
             mods.setdefault('set', {}).update(v)
         else:
             mods[k] = v
-    out, ans, res = _resolve(resume['phrase'], ctx, mods)
+    out, ans, res = _again(resume, ctx, mods)
     out['pattern'] = 'answer: %s; %s' % (chosen, out['pattern'])
     return out, ans, res
+
+
+def _again(resume, ctx, mods):
+    """Resolve a pending question's request again with the answers chosen so far: a phrase, or an edit made in the
+    GUI's Config view (edit)."""
+    if resume.get('edit') is not None:
+        return _edit_resolve(resume['edit'], ctx, mods)
+    return _resolve(resume['phrase'], ctx, mods)
 
 
 # ----------------------------------------------------------------------------- reading the phrase
@@ -2600,32 +2618,9 @@ def _first_run(req, ctx, mods, base):
         bad = touchstone_problem(ctx.path(c))
         if bad:
             return _stop('%s is not a valid Touchstone file: %s. Nothing runs.' % (c, bad), **base)
-    sel = None
-    if path.lower().endswith(('.xlsx', '.xls')):
-        try:
-            sel = xlsx_io.selection_lists(path)
-        except Exception:
-            sel = None
-    fix = mods.get('import_fix')
-    wc, res = validate.validate_import(path, sel, allow=mods.get('allow') or ())
-    if fix and wc is not None:
-        wc = copy.deepcopy(wc)
-        old, new = fix
-        wc['main'] = {(new if k == old else k): v for k, v in wc['main'].items()}
-        res = validate.validate_config(wc, sel, allow=mods.get('allow') or ())
-    announce += [f['text'] for f in res['findings'] if f['status'] == 'announce']
-    if res['status'] == 'stop':
-        return _stop(_sentence(res['text']), announce=announce, **base)
-    if res['status'] == 'ask':
-        lead = next(f for f in res['findings'] if f['status'] == 'ask')
-        issue = _import_issue(path, lead)
-        if issue is not None:
-            return _ask(_sentence(lead['text']), issue[0], issue[1], announce=announce, **base)
-        opts = list(res['options']) or [CANCEL]
-        answers = {o: (None if res['answers'].get(o) is None else
-                       ({'set': res['answers'][o]['set']} if 'set' in res['answers'][o] else {'allow': res['answers'][o].get('allow', [])}))
-                   for o in opts}
-        return _ask(_sentence(res['text']), opts, answers, announce=announce, **base)
+    wc, announce = _checked_import(path, mods, base, announce)
+    if wc is None:
+        return announce
     is_json = path.lower().endswith('.json') and not example
     steps = [] if is_json else [_step('import_config', path=cfg, example=example)]
     changes = []
@@ -2665,6 +2660,40 @@ def _first_run(req, ctx, mods, base):
     steps += [_step('validate_inputs', channels=chans), _step('run_com', channels=chans, thru_only=len(chans) <= 1),
               _step('summarize')]
     return outcome('PLAN', steps=steps, changes=changes, announce=announce, **base), {}
+
+
+def _checked_import(path, mods, base, announce=()):
+    """(working config, announce) for a config file imported and checked with the engine's loader, or (None,
+    (outcome, answers)) when the import stops or asks (rows ST05, ST14, ST15, CP15, IV21). announce: the lines said
+    before it. A run with files named and a workbook opened in the GUI's Config view read a file the same way."""
+    announce = list(announce)
+    sel = None
+    if path.lower().endswith(('.xlsx', '.xls')):
+        try:
+            sel = xlsx_io.selection_lists(path)
+        except Exception:
+            sel = None
+    fix = mods.get('import_fix')
+    wc, res = validate.validate_import(path, sel, allow=mods.get('allow') or ())
+    if fix and wc is not None:
+        wc = copy.deepcopy(wc)
+        old, new = fix
+        wc['main'] = {(new if k == old else k): v for k, v in wc['main'].items()}
+        res = validate.validate_config(wc, sel, allow=mods.get('allow') or ())
+    announce += [f['text'] for f in res['findings'] if f['status'] == 'announce']
+    if res['status'] == 'stop':
+        return None, _stop(_sentence(res['text']), announce=announce, **base)
+    if res['status'] == 'ask':
+        lead = next(f for f in res['findings'] if f['status'] == 'ask')
+        issue = _import_issue(path, lead)
+        if issue is not None:
+            return None, _ask(_sentence(lead['text']), issue[0], issue[1], announce=announce, **base)
+        opts = list(res['options']) or [CANCEL]
+        answers = {o: (None if res['answers'].get(o) is None else
+                       ({'set': res['answers'][o]['set']} if 'set' in res['answers'][o] else {'allow': res['answers'][o].get('allow', [])}))
+                   for o in opts}
+        return None, _ask(_sentence(res['text']), opts, answers, announce=announce, **base)
+    return wc, announce
 
 
 def _last_channels(ctx):
@@ -3026,10 +3055,26 @@ def _replay(req, ctx, base, thru_only=False):
     rec = ctx.last
     if rec is None:
         return _no_history(ctx, base)
-    # the tutor's step is what was shown then, not part of the command (Decision 11)
-    steps = [_step(s['op'], **(s.get('args') or {})) for s in ((rec.get('plan') or {}).get('steps') or [])
-             if s.get('op') in STEPS and s.get('op') != 'show_tutor'] or \
-        [_step('validate_config'), _step('run_com'), _step('summarize')]
+    view = []
+    if rec.get('kind') in ('edit', 'open'):
+        # the working config holds edits made in the GUI's Config view since the last command: the steps of that
+        # command are replayed on the working config as it is now, without its changes or its import, which would
+        # put the old values back over the edits (GUI_DESIGN.md section 10)
+        hist = ctx.history
+        k = next((i for i in range(len(hist) - 1, -1, -1) if hist[i].get('run_ids') and is_command(hist[i])), -1)
+        view = [r for r in hist[k + 1:] if r.get('kind') in ('edit', 'open') and r.get('working_config')]
+        cmd = hist[k] if k >= 0 else None
+        skip = ('show_tutor', 'import_config', 'set_param', 'add_param', 'recompute_linked', 'clear_overrides')
+        steps = [_step(s['op'], **(s.get('args') or {})) for s in (((cmd or {}).get('plan') or {}).get('steps') or [])
+                 if s.get('op') in STEPS and s.get('op') not in skip]
+        if not any(s['op'] in ('run_com', 'run_batch', 'build_matrix') for s in steps):
+            steps = [_step('validate_config'), _step('run_com'), _step('summarize')]
+        rec = dict(rec, phrase=(cmd or {}).get('phrase') or rec.get('phrase'))
+    else:
+        # the tutor's step is what was shown then, not part of the command (Decision 11)
+        steps = [_step(s['op'], **(s.get('args') or {})) for s in ((rec.get('plan') or {}).get('steps') or [])
+                 if s.get('op') in STEPS and s.get('op') != 'show_tutor'] or \
+            [_step('validate_config'), _step('run_com'), _step('summarize')]
     gone = [path for path, sha, _ in ctx.channels() if sha is None]
     if gone:                                     # row S1 fallback: an input of the last run is missing
         import difflib
@@ -3048,6 +3093,9 @@ def _replay(req, ctx, base, thru_only=False):
         if stops:
             return _stop(_sentence(stops[0]), **base)
     announce = ['replays the last command: %s' % rec.get('phrase')]
+    if view:
+        announce.append('it runs the working config as it is now, with what was done in the config view since: %s'
+                        % '; '.join('#%s %s' % (r.get('seq'), r.get('phrase')) for r in view))
     if thru_only:                                # the THRU alone, without the FEXT and NEXT files of the last run
         steps = [_step(s['op'], **dict(s['args'], thru_only=True)) if s['op'] == 'run_com' else s for s in steps]
         announce.append('thru only: the FEXT and NEXT files of the last run are left out')
@@ -3186,3 +3234,277 @@ def _compare(req, ctx, base):
         lines.append('a config does not load: %s' % (ea or eb))
     return outcome('PLAN', steps=[_step('compare_config', reference=files[0], other=others[0])], announce=lines,
                    **base), {}
+
+
+# ----------------------------------------------------------------------------- the GUI's Config view (GUI_DESIGN.md 6)
+VIEW_SET = 'config view: set'
+VIEW_OPEN = 'config view: open'
+
+
+def edit(project, changes=(), source=None, origin='gui'):
+    """The structured-change path (GUI_DESIGN.md section 6, and the version 1 prompt, section 1): changes against the
+    working config, [(json_path, value)], validated exactly as the same values typed in a phrase are, links followed,
+    and the outcome recorded as one history record. Nothing runs.
+
+    source: a workbook to import as the new source first. With no changes, that is a workbook opened in the GUI's
+    Config view, which Assist follows: the channel files of the last run are kept, and the overrides of the working
+    config are kept or left out as the user answers. With changes and a source, the source is imported first and the
+    changes apply to it (an edit made before Assist had a working config).
+
+    A PLAN is taken into the working config at once: its record names its own working config (configs/edit_NNNN.json),
+    the source, the channel files and the overrides, so the next command builds on it. A QUESTION is stored as the
+    pending question, and its answer (handle) resumes the edit. A STOP changes nothing."""
+    ctx = Context(project)
+    try:
+        pending = project.read_pending()
+    except (OSError, ValueError):
+        pending = None
+    pairs = changes.items() if isinstance(changes, dict) else changes
+    spec = {'changes': [[jp, v] for jp, v in pairs], 'source': source}
+    try:
+        out, answers, resume = _edit_resolve(spec, ctx, {})
+    except engine.EngineMissing as e:
+        out, answers, resume = outcome('STOP', reason=str(e), pattern='no engine'), {}, None
+    _note_writers(out, ctx, edit=True)
+    done = ctx._c.pop('edit_done', None)
+    kind = 'open' if source and not spec['changes'] else 'edit'
+    seq = _record(project, _edit_phrase(spec, ctx), out, None, answered=False, origin=origin, kind=kind,
+                  detail=ctx._c.get('edit_info'))
+    if done is not None and out['type'] == 'PLAN' and seq is not None:
+        _commit_edit(project, seq, done)
+    if out['type'] == 'QUESTION' and resume is not None:
+        project.write_pending(resume['phrase'], dict(out, resume=dict(resume, answers=answers)), seq)
+    elif pending:                                # a new command sets an open question aside, as a phrase does
+        project.clear_pending()
+    return out
+
+
+def _edit_resolve(spec, ctx, mods):
+    """(outcome, answers, resume) for an edit or an open from the Config view, with the answers chosen so far."""
+    base = dict(pattern=VIEW_OPEN if spec.get('source') and not spec['changes'] else VIEW_SET, unplaced=[])
+    ctx._c.pop('edit_done', None)
+    out, answers = _edit_plan(spec, ctx, mods, base)
+    return out, answers, {'phrase': _edit_phrase(spec, ctx), 'mods': mods, 'edit': spec}
+
+
+def _view_text(value):
+    """A value as the Config view sends it, as the text a phrase would carry: a number as Python writes it."""
+    if isinstance(value, bool):
+        return str(int(value))
+    if isinstance(value, (int, float)):
+        return repr(value)
+    return str(value).strip()
+
+
+def _jp_parts(jp):
+    """(block or None, name) of a json path /main/name or /packages/block/name."""
+    bits = str(jp).split('/')
+    if len(bits) == 3 and bits[1] == 'main' and bits[2]:
+        return None, bits[2]
+    if len(bits) == 4 and bits[1] == 'packages' and bits[2] and bits[3]:
+        return bits[2], bits[3]
+    raise ValueError('not a json path of a working config: %s' % jp)
+
+
+def _under(path, root):
+    try:
+        return os.path.commonpath([os.path.abspath(path), os.path.abspath(root)]) == os.path.abspath(root)
+    except ValueError:
+        return False
+
+
+def _edit_phrase(spec, ctx):
+    """The canonical sentence of an edit or an open, recorded as its phrase: Set DER_0 = 0.0001."""
+    sets = []
+    for jp, v in spec['changes']:
+        try:
+            block, name = _jp_parts(jp)
+        except ValueError:
+            block, name = None, jp
+        sets.append('%s = %s%s' % (name, _view_text(v), ' in %s' % block if block else ''))
+    src = spec.get('source')
+    where = os.path.relpath(ctx.path(src), ctx.root) if src and _under(ctx.path(src), ctx.root) else src
+    if src and sets:
+        return 'Open %s in the config view and set %s.' % (where, ' and '.join(sets))
+    if src:
+        return 'Open %s in the config view.' % where
+    return 'Set %s.' % ' and '.join(sets)
+
+
+def _edit_plan(spec, ctx, mods, base):
+    rec = ctx.last
+    info = {'edits': [], 'source_was': None, 'source_now': None, 'kept': [], 'left_out': []}
+    ctx._c['edit_info'] = info
+    old_src = dict((rec or {}).get('source') or {}) or None
+    info['source_was'] = old_src
+    channels = [dict(c) for c in (rec or {}).get('channels') or []]
+    overrides = [dict(o) for o in (rec or {}).get('overrides') or []]
+    steps, announce = [], []
+    stay = 'SiCoPR-Assist stays on %s' % ((old_src or {}).get('path') or 'no config')
+    src = spec.get('source')
+    if src:
+        path = ctx.path(src)
+        if not os.path.isfile(path):
+            return _stop('%s is not a file, so nothing changes. %s.' % (src, stay), **base)
+        wc, said = _checked_import(path, mods, base)
+        if wc is None:                           # the same STOP or QUESTION as the import phrase; nothing changes
+            said[0]['announce'] = list(said[0]['announce']) + [stay]
+            return said
+        new_src = {'path': os.path.relpath(path, ctx.root) if _under(path, ctx.root) else path, 'sha256': _sha(path)}
+        info['source_now'] = new_src
+        name = os.path.basename(path)
+        was = os.path.basename(old_src['path']) if old_src and old_src.get('path') else 'no config'
+        announce = said + ['SiCoPR-Assist now works on %s (it was %s); the channel files of the last run are kept'
+                           % (name, was)]
+        steps.append(_step('import_config', path=new_src['path']))
+        ctx._c['base'] = (wc, 'import', [])
+        ctx._c['source_path'] = path
+        ov = [o for o in overrides if o.get('kind') in ('set', 'add')]
+        overrides = []
+        if not spec['changes']:
+            return _open_plan(ctx, mods, base, wc, ov, name, new_src, channels, steps, announce, info)
+        old_src = new_src
+    wc = ctx.wc
+    if wc is None:
+        return _stop('There is no working config yet, so an edit in the config view has nothing to change. Run a config '
+                     'first (Run COM on data\\thru.s4p with data\\config.xlsx), or open a workbook in the config view.',
+                     **base)
+    items = []
+    for jp, v in spec['changes']:
+        try:
+            block, name = _jp_parts(jp)
+        except ValueError as e:
+            return _stop(_sentence(str(e)), **base)
+        tgt = _target(name, wc, block)
+        if isinstance(tgt, tuple):
+            return _stop('%s cannot be placed in this config (%s).' % (name, tgt[0]), **base)
+        info['edits'].append({'keyword': tgt['key'], 'block': tgt['block'],
+                              'before': config_model.get_value(wc, config_model.key_of(tgt['jp']))
+                              if _exists(wc, tgt['jp']) else None, 'after': v})
+        val = _prepare({'name': name, 'value': _view_text(v), 'op': 'set'}, tgt, wc, ctx)
+        if isinstance(val, tuple):
+            return _stop('%s = %s cannot be taken as it is.' % (tgt['key'], _view_text(v)), **base)
+        items.append((tgt['jp'], val))
+    changes = items + list((mods.get('set') or {}).items())
+    work = wc
+    links = _plain_links_question(changes, wc, mods, base)
+    if links is not None:
+        if links[0] == 'ask':
+            out, ans = links[1]
+            plain = validate.validate(wc, changes, None, allow=mods.get('allow') or ())
+            out['changes'] = _changes_from(plain, changes, wc, False)
+            return out, ans
+        work = links[1]
+    res = validate.validate(work, changes, _selections_for(changes, ctx), allow=mods.get('allow') or ())
+    out, answers = _change_outcome(res, changes, {'unplaced': [], 'flags': []}, ctx, mods, base, work)
+    for e in info['edits']:
+        e.update(accepted=out['type'] == 'PLAN', outcome=out['type'],
+                 reason=out.get('reason') or (out.get('question') or {}).get('text'))
+    if out['type'] != 'PLAN':
+        return out, answers
+    out['steps'] = steps + [s for s in out['steps'] if s['op'] not in ('run_com', 'summarize')]
+    out['announce'] = announce + list(out['announce'])
+    for c in out['changes']:
+        if c['kind'] in ('set', 'add'):
+            overrides = [o for o in overrides if o['json_path'] != c['json_path']]
+            overrides.append({'json_path': c['json_path'], 'before': c['before'], 'after': c['after'], 'kind': c['kind']})
+    ctx._c['edit_done'] = {'config': res['config'], 'source': old_src, 'channels': channels, 'overrides': overrides,
+                           'detail': info}
+    return out, answers
+
+
+def _open_plan(ctx, mods, base, wc, ov, name, new_src, channels, steps, announce, info):
+    """Another workbook in the Config view: imported as the new source, the overrides kept or left out as the user
+    answers (asked once, when there are any)."""
+    if ov and mods.get('keep') is None:
+        n = len(ov)
+        o1 = 'keep my %d override%s on %s' % (n, '' if n == 1 else 's', name)
+        o2 = 'start from %s as saved' % name
+        return _ask('The working config holds %d override%s (%s). Keep %s on %s, or start from %s as saved?'
+                    % (n, '' if n == 1 else 's', '; '.join('%s = %s' % (validate.name_of(o['json_path']), show(o['after']))
+                                                           for o in ov), 'it' if n == 1 else 'them', name, name),
+                    [o1, o2], {o1: {'keep': True}, o2: {'keep': False}}, announce=announce, **base)
+    kept = []
+    if mods.get('keep'):
+        held = []
+        for o in ov:
+            if o.get('kind') == 'set' and not _exists(wc, o['json_path']):
+                info['left_out'].append({'json_path': o['json_path'], 'after': o['after'],
+                                         'why': '%s does not hold it' % name})
+            else:
+                held.append((o['json_path'], o['after']))
+        # together first: one override can need another beside it (N_b = 0 needs MLSE = 0); then one at a time
+        if held and validate.validate(wc, held)['status'] == 'ok':
+            kept = held
+        else:
+            for jp, after in held:
+                r = validate.validate(wc, [(jp, after)])
+                if r['status'] != 'ok':
+                    info['left_out'].append({'json_path': jp, 'after': after, 'why': r['text']})
+                else:
+                    kept.append((jp, after))
+    for x in info['left_out']:
+        announce.append('the override %s = %s is left out: %s' % (validate.name_of(x['json_path']), show(x['after']),
+                                                                 x['why']))
+    applied = config_model.apply_changes(wc, kept)
+    overrides = []
+    for c in applied['changes']:
+        if c['kind'] in ('set', 'add'):
+            steps.append(_step('set_param' if c['kind'] == 'set' else 'add_param', json_path=c['json_path'],
+                               before=c['before'], after=c['after']))
+            overrides.append({'json_path': c['json_path'], 'before': c['before'], 'after': c['after'], 'kind': c['kind']})
+            info['kept'].append({'json_path': c['json_path'], 'after': c['after']})
+    linked = [c for c in applied['changes'] if c['kind'] == 'linked']
+    if linked:
+        steps.append(_step('recompute_linked', changes=[{'json_path': c['json_path'], 'before': c['before'],
+                                                         'after': c['after']} for c in linked]))
+    if info['kept']:
+        announce.append('the overrides kept: %s' % '; '.join('%s = %s' % (validate.name_of(k['json_path']),
+                                                                          show(k['after'])) for k in info['kept']))
+    elif ov:
+        announce.append('%s is used as saved; the earlier working config and its overrides stay in the history' % name)
+    steps.append(_step('validate_config'))
+    ctx._c['edit_done'] = {'config': applied['config'], 'source': new_src, 'channels': channels, 'overrides': overrides,
+                           'detail': info}
+    return outcome('PLAN', steps=steps, changes=[dict(c, applied=True) for c in applied['changes']],
+                   announce=announce, **base), {}
+
+
+def _commit_edit(project, seq, done):
+    """Write the working config of an edit or an open (configs/edit_NNNN.json) and fill in its history record."""
+    from sicopr_assist.project import _write_json, check_working_config
+    d = project.configs_dir
+    nums = [int(n[5:-5]) for n in (os.listdir(d) if os.path.isdir(d) else [])
+            if n.startswith('edit_') and n.endswith('.json') and n[5:-5].isdigit()]
+    path = os.path.join(d, 'edit_%04d.json' % ((max(nums) + 1) if nums else 1))
+    check_working_config(done['config'])
+    _write_json(path, done['config'])
+    project.update_history(seq, working_config=project.relative(path), source=done['source'],
+                           channels=done['channels'], overrides=done['overrides'], detail=done['detail'])
+
+
+def _note_writers(out, ctx, edit=False):
+    """The latest record wins (GUI_DESIGN.md section 6). A command that changes a keyword last set in the Config view
+    says so on its change line, and an edit in the view of a keyword a command set says that. Only a history with a
+    Config-view record has anything to say, so a project used from the command line alone never sees a change."""
+    hist = ctx.history
+    if out['type'] != 'PLAN' or not any(r.get('kind') in ('edit', 'open') for r in hist) and not edit:
+        return
+    last = {}
+    for r in hist:
+        for c in ((r.get('plan') or {}).get('changes') or []):
+            if c.get('applied') and c.get('kind') in ('set', 'add'):
+                last[c['json_path']] = r
+    for c in out['changes']:
+        r = last.get(c['json_path'])
+        if not c.get('applied') or c['kind'] not in ('set', 'add') or r is None:
+            continue
+        if edit and is_command(r):
+            note = ' (it was set by command #%s, %s)' % (r.get('seq'), r.get('phrase'))
+        elif not edit and r.get('kind') == 'edit':
+            note = ' (it was edited in the config view, #%s)' % r.get('seq')
+        else:
+            continue
+        n = validate.name_of(c['json_path'])
+        out['announce'] = [a + note if (a.startswith(n + ':') or a.startswith(n + ' in ')) and note not in a else a
+                           for a in out['announce']]

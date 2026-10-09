@@ -296,6 +296,15 @@ def unit_checks():
           not tutor.feedback_notice_due([rec('ok')] * 5, dict(st, feedback_notice=False)))
     check('successful commands are the ones with status ok',
           tutor.successes([rec('ok'), rec('answered'), rec('miss'), rec('cancelled')]) == 2)
+    # an edit or a workbook opened in the GUI's Config view is not a typed command (GUI_DESIGN.md section 10)
+    view = [dict(rec('ok'), kind='edit', origin='gui'), dict(rec('ok'), kind='open', origin='gui'),
+            dict(rec('miss'), kind='edit', origin='gui')]
+    check('Config-view records are not commands: not successes, and not in the window that counts misses',
+          tutor.successes([rec('ok')] + view * 3) == 1
+          and not tutor.trouble([rec('miss'), rec('ok'), rec('ok')] + view * 2, cur, st)
+          and len(tutor.trouble([rec('miss'), rec('miss')] + view * 3 + [rec('ok')], cur, st)) == 3
+          and not tutor.feedback_notice_due([rec('ok', ['tutor', 'feedback_notice'])] + [rec('ok')] * 5 + view * 10,
+                                            st))
 
 
 def main():
