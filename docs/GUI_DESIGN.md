@@ -256,12 +256,20 @@ from the Assist panel: Save that config as data\config_new.xlsx.`, because Save 
 plus the unsaved edits and leave out every Assist override. Assist's own export (row CP06, `export_xlsx`)
 writes the whole working config into a copy of the source workbook; the source is never the target.
 
-**Another workbook in the Config view.** If the user picks a different workbook in the Config tab
-(`sicopr:config` with another path), the panel removes the overlay and says: `the Config view shows
-<file>, not the working config (from <source>)`, with two buttons: `Show the working config` (sends
-`sicopr:open-config` back) and `Use <file> in Assist`, which puts a phrase that imports and runs it in the
-command box (`Run COM on <thru> with <file>.`) for the user to send. Nothing is imported behind the user's
-back.
+**Another workbook in the Config view** (maintainer, 9 October 2026: Assist follows). If the user opens a
+different workbook in the Config tab (`sicopr:config` with another path), Assist follows: it imports that
+workbook as the new source through `core.edit`'s import path, keeps the channel files of the last run, and
+the overlay is laid over the new workbook. The panel announces it: `SiCoPR-Assist now works on <file>
+(it was <source>); the channel files of the last run are kept`. Nothing runs until a command is sent.
+- If the previous working config had overrides, the panel asks once, with buttons: `keep my N overrides on
+  <file>` or `start from <file> as saved`. An override whose keyword the new workbook does not hold, or whose
+  value it refuses, is named and left out, as a typed change would be.
+- The previous working config and its overrides stay in the history, so `Undo that change.` (row C7) or
+  re-opening the earlier workbook brings them back; nothing is lost.
+- A file that does not import (ST14, ST15, IV21 and the like) gives the same STOP or QUESTION as the import
+  phrase would, and Assist stays on the previous source.
+- The switch is one history record (pattern `config view: open`), so the history shows exactly when the
+  source changed and why.
 
 **A source that is not a workbook** (a `.csv` or `.json` config, rows CP14 and CP16): the Config view has no
 workbook to show, so the panel says so and offers `Show me the config.` (row CP13). No spreadsheet is
@@ -303,6 +311,31 @@ holds, Decision 6 reuses that one.
 makes the Config view show the working config, so the Run tab shows one more line under its config line:
 `this runs the workbook file as saved, without the working config of SiCoPR-Assist; run from the panel to
 include it`. The text is the panel's, sent as the overlay's `run_note` (section 4.1); SiCoPR only shows it.
+
+## 7a. Everything the GUI does is in the history
+
+Maintainer, 9 October 2026: every interaction in the GUI is captured in the history, so that anything that
+does not work can be reviewed later. The history (`history.jsonl`) is the one log; the GUI adds no second
+log of its own. Each record the GUI writes carries `source: "gui"` and a `kind`:
+
+| kind | written when | holds |
+|---|---|---|
+| `phrase` | a phrase is sent from the command box | as the CLI's record: phrase, pattern, unplaced words, outcome |
+| `answer` | an option button is clicked | the question's record number, the option chosen, the outcome |
+| `edit` | a Config-view field is committed | keyword, block, value before and after, accepted or refused with the rule |
+| `open` | the Config view opens another workbook | old and new source with SHA-256, the overrides kept or left out |
+| `run` | a plan starts, and again when it ends | the plan, run ids, status, elapsed time, the stop reason if stopped |
+| `stop` | the user presses Stop | what was running and what was left |
+| `view` | a run is shown in Results, a dashboard is opened, settings or history are shown | what was shown |
+| `error` | the panel's server raises, an API call fails, or the page reports a script error | the endpoint or the page, the message, the traceback or the script line |
+
+- The page reports its own errors: a `window.onerror` and `unhandledrejection` handler posts them to
+  `POST /panel/assist/api/log`, which records them (at most one record per distinct message per minute, so a
+  loop cannot fill the file).
+- Records written by the CLI keep `source: "cli"`, so one history shows both, in order.
+- The feedback export (Decision 10) includes every record, with the masks applied to the new fields as to
+  the old ones; `What did I run last?` and the tutor read only the kinds they read today.
+- `GET history` returns every kind, so the panel can show the whole session again after a reload.
 
 ## 8. Endpoints of the panel and the core functions they call
 
@@ -367,6 +400,14 @@ path like any other.
   every Assist run folder is listed by SiCoPR's `/api/results` when the project folder is opened.
 - **Paths.** Anything outside the project folder and `host.roots()` is refused, including `..\` and absolute
   paths.
+- **The history (section 7a).** Each kind of interaction, driven through the API with a stand-in child and
+  stand-in page errors, writes exactly one record of its kind with `source: "gui"` and the fields listed; a
+  failing endpoint and a page script error each leave an `error` record; a repeated error is recorded once a
+  minute; the feedback export masks the new fields.
+- **Following another workbook.** Opening another of the four starting configs in the Config view imports it,
+  keeps the channel files, records one `open` record, and the next run's CSV loads to that workbook's fields
+  (loader check); with overrides present, both answers (keep, start as saved) give the right working config;
+  a workbook that does not import leaves Assist on the previous source.
 - **The page.** `panel.js` parses (node or esprima, as SiCoPR's static test does), every element id it uses
   exists, every class that sets `display` has a `[hidden]` rule, and every event name it uses is one of the
   contract's.
@@ -374,6 +415,9 @@ path like any other.
   `tests\test_text_style.py`.
 
 ## 12. Open questions for the maintainer
+
+*Decided 9 October 2026:* questions 1 to 5 and 7 to 10 as recommended; question 6 changed to "Assist
+follows" (below and section 6); and every GUI interaction is recorded in the history (section 7a).
 
 1. **Does SiCoPR take the panel slot of section 4?** About 300 lines in `gui\` and its tests, no engine
    change, written by you in a SiCoPR session. *Recommendation: yes.* Without it the GUI falls back to a
@@ -389,9 +433,9 @@ path like any other.
    the phrase that brings the same inputs into Assist; reuse then works through Decision 6 as usual.
 5. **Save as in the Config view while Assist is in use: disabled with a pointer to Assist's export?**
    *Recommendation: yes.* Enabled, it would write a workbook that silently leaves out every Assist override.
-6. **When the Config view is switched to another workbook, does Assist follow?** *Recommendation: no.* The
-   overlay is removed and the panel offers a phrase to import that workbook; nothing changes until it is
-   sent.
+6. **When the Config view is switched to another workbook, does Assist follow?** *Decided by the
+   maintainer, 9 October 2026: yes.* Assist imports it as the new source, keeps the channel files, announces
+   the switch, and asks once whether to keep any overrides (section 6).
 7. **Launch.** *Recommendation:* `sicopr-assist gui [folder]` starts SiCoPR's GUI with the project folder as
    `--dir` and `--run-dir`; starting SiCoPR's GUI directly also shows the panel, which then asks for a
    project folder.
