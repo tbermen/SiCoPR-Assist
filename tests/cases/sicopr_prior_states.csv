@@ -99,3 +99,9 @@ run complete with the starting config and data\thru.s4p; data\fext1.s4p also exi
 "run complete thru-only with the starting config and data\ch2\b300_thru1.s4p; data\ch2 holds two THRUs, b300_thru1.s4p and b500_thru1.s4p, and FEXT and NEXT files whose names match neither",1,XT05,seeded run,"the files named, written with make_s4p.py, and a history record of the run described",no
 as F1 but the newest entry for the interface holds several zips under one date,1,F11,stand-in page,a stand-in index page in the recorded markup,no
 as F1 but two entries for the interface share the newest date,1,F12,stand-in page,a stand-in index page in the recorded markup,no
+no history; the GUI selection holds the starting config as data\config.xlsx and the THRU data\thru.s4p,1,SL01,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
+"no history; the GUI selection holds the starting config as data\config.xlsx, the THRU data\ch\b300_thru1.s4p, three FEXT and four NEXT files of data\ch",1,SL02,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
+no history; the GUI selection holds the starting config as data\config.xlsx and no channel file,1,SL03,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
+no history; both files exist; there is no GUI selection (the command line),1,SL04,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
+run complete with the starting config and data\thru.s4p; the GUI selection holds that config and the THRU data\thru2.s4p,1,SL05,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
+"empty project folder: no config, no channel file, no history",1,EX01,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no

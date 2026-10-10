@@ -39,7 +39,7 @@ import math
 import os
 import re
 
-from sicopr_assist import config_model, engine, fetch, parse, summary, validate, xlsx_io
+from sicopr_assist import config_model, engine, example_channel, fetch, parse, summary, validate, xlsx_io
 from sicopr_assist.project import history_record, is_command, read_settings, setting_text
 
 # The step vocabulary, frozen in Phase 1 from the expected_detail chains of the use-case table
@@ -61,6 +61,8 @@ CANCEL = 'cancel'
 # Decision 7: the one question for a sweep with points that a rule asks about (maintainer, 6 October)
 SWEEP_ASK_OPTIONS = ('run all points anyway', 'run only the points that pass', CANCEL)
 EXAMPLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'sicopr_config_example.json')
+# where the example setup writes its synthetic THRU when the project folder holds no channel file (Decision 22)
+EXAMPLE_THRU = os.path.join('data', 'example_thru.s4p')
 CONFIG_EXT = ('.xlsx', '.xls', '.csv', '.json')
 
 # Asked for beside a run, the tutor and feedback export are named on their own, as one announced line (Decisions 10
@@ -159,9 +161,10 @@ class Context:
     """What a phrase is read against: the settings, the history, the working config of the last run (or the
     config in the project folder), its source workbook, and the runs already on disk. Read lazily."""
 
-    def __init__(self, project):
+    def __init__(self, project, selection=None):
         self.project = project
         self.root = project.root
+        self.selection = selection_of(selection, project.root)
         self._c = {}
 
     def _get(self, key, make):
@@ -322,7 +325,8 @@ class Context:
                     fields, err = config_model.loaded_fields(wc)
                     if err:
                         continue
-                    out.append((rid, _fingerprint(fields, [c.get('sha256') for c in res.get('channels') or []],
+                    out.append((rid, _fingerprint(fields, channel_keys((c.get('role'), c.get('sha256'))
+                                                                        for c in res.get('channels') or []),
                                                   res.get('sicopr_sha256'), res.get('export_mat'))))
             return out
         return self._get('runs', make)
@@ -343,9 +347,37 @@ def _sha(path):
         return hashlib.sha256(f.read()).hexdigest()
 
 
+def selection_of(selection, root):
+    """The selection of a GUI's tabs (Decision 20) in the form the core reads: {'config', 'thru', 'fext', 'next'},
+    each path relative to the project folder when it is inside it, as a phrase would name it, and absolute
+    otherwise. None stays None: there is no selection (the command line)."""
+    if selection is None:
+        return None
+
+    def rel(p):
+        if not p or not isinstance(p, str):
+            return None
+        full = os.path.abspath(p if os.path.isabs(p) else os.path.join(root, *re.split(r'[\\/]', p)))
+        try:
+            r = os.path.relpath(full, root)
+        except ValueError:                           # another drive
+            return full
+        return full if r.startswith('..') else r
+    return {'config': rel(selection.get('config')), 'thru': rel(selection.get('thru')),
+            'fext': [x for x in (rel(p) for p in selection.get('fext') or []) if x],
+            'next': [x for x in (rel(p) for p in selection.get('next') or []) if x]}
+
+
+def channel_keys(pairs):
+    """What a run's channel files are to its fingerprint: [(role, sha256)] as texts role:sha256. The role is part
+    of it since the roles can be given by the selection in the GUI's tabs (Decision 20): the same file as a FEXT
+    and as a NEXT aggressor is not the same run. A channel with no role recorded is a THRU."""
+    return ['%s:%s' % (role or 'thru', sha or '') for role, sha in pairs]
+
+
 def _fingerprint(fields, channel_shas, sicopr_sha, export_mat=False):
-    """What decides reuse: the loaded fields (without where output goes), the channel files, the engine, and whether
-    the engine's .mat export was on (the dashboard needs it)."""
+    """What decides reuse: the loaded fields (without where output goes), the channel files each in its role
+    (channel_keys), the engine, and whether the engine's .mat export was on (the dashboard needs it)."""
     keep = {k: v for k, v in fields.items() if not k.endswith('RESULT_DIR')}
     return keep, sorted(s or '' for s in channel_shas), sicopr_sha, bool(export_mat)
 
@@ -362,10 +394,13 @@ def _same_fingerprint(have, want):
 
 
 # ----------------------------------------------------------------------------- the entry point
-def handle(phrase, project, origin='cli'):
+def handle(phrase, project, origin='cli', selection=None):
     """Turn one phrase and the project state into a PLAN, a QUESTION or a STOP. Never runs COM. origin says where
-    the phrase came from ('cli' or 'gui'), for the history record only; the outcome does not depend on it."""
-    ctx = Context(project)
+    the phrase came from ('cli' or 'gui'), for the history record only; the outcome does not depend on it.
+    selection is what is selected in the tabs of a GUI, handed over as data (Decision 20): {'config': path or None,
+    'thru': path or None, 'fext': [paths], 'next': [paths]}, or None where there is no such thing (the command
+    line). Only a phrase that speaks of the selection ("the selected config and channels") reads it."""
+    ctx = Context(project, selection)
     try:
         pending = project.read_pending()
     except (OSError, ValueError):
@@ -387,8 +422,12 @@ def handle(phrase, project, origin='cli'):
     view_edit = (resume or {}).get('edit') is not None
     _note_writers(out, ctx, edit=view_edit)
     shown = [] if view_edit else _with_tutor(phrase, out, ctx)
-    seq = _record(project, phrase, out, pending, answered=got is not None, shown=shown, origin=origin,
-                  **({'detail': ctx._c.get('edit_info')} if view_edit else {}))
+    more = {'detail': ctx._c.get('edit_info')} if view_edit else {}
+    if not view_edit and ctx.selection is not None and 'selection' in (out.get('pattern') or '').split('; '):
+        # a phrase that spoke of the selection: the record keeps what was selected then, so the session can be
+        # reviewed later (GUI_DESIGN.md section 7a)
+        more = {'detail': {'selection': ctx.selection}}
+    seq = _record(project, phrase, out, pending, answered=got is not None, shown=shown, origin=origin, **more)
     if done is not None and out['type'] == 'PLAN' and seq is not None:
         _commit_edit(project, seq, done)
     if out['type'] == 'QUESTION' and resume is not None:
@@ -569,6 +608,9 @@ def _plan(text, ctx, mods):
                      'run (Show me the summary again), statistics of a result over the last set of runs, and how a '
                      'parameter relates to a result.', **base)
     low = text.lower()
+    # the config and the channel files selected in the tabs of the GUI (Decision 20, rows SL01 to SL05)
+    if 'selection' in req['flags']:
+        return _selection_request(req, ctx, mods, base)
     # the tutor on request, and turning it off or on (Decision 11, rows TU03, TU06)
     if not _has_v1_action(req) and ('tutor' in acts or re.search(r'\bwhat can i (say|type)\b|\bexample commands\b', low)):
         return _tutor_request(req, low, ctx, base)
@@ -723,7 +765,7 @@ def _exported_run(ctx, wc):
     fields, err = config_model.loaded_fields(wc)
     if err:
         return None
-    want = _fingerprint(fields, [s for _, s, _ in ctx.channels()], engine.engine_sha256(), True)
+    want = _fingerprint(fields, channel_keys((r, s) for _, s, r in ctx.channels()), engine.engine_sha256(), True)
     return next((rid for rid, fp in ctx.runs if _same_fingerprint(fp, want)), None)
 
 
@@ -1271,7 +1313,7 @@ def _fetch_matrix(ctx, mods, base, wc, sel, rows, modes, steps, announce):
                 pt['skipped'] = 'validate_inputs fails: %s' % stops[0]
                 points.append(pt)
                 continue
-            fp = _fingerprint(fields, [_sha(p) for p, _ in paths], sic)
+            fp = _fingerprint(fields, channel_keys((r, _sha(p)) for p, r in paths), sic)
             rid = next((r for r, f in prior if _same_fingerprint(f, fp)), None)
             if rid is not None:
                 pt['reused_from'] = rid
@@ -2426,7 +2468,7 @@ def _sweep(req, ctx, mods, base_fields):
     notes = [n for d in dims for n in d.get('notes', [])]
     combos = list(itertools.product(*[d['points'] for d in dims]))
     channels = ctx.channels()
-    chan_shas = [s for _, s, _ in channels]
+    chan_shas = channel_keys((r, s) for _, s, r in channels)
     chans = _last_channels(ctx)
     sic = engine.engine_sha256()
     prior = ctx.runs
@@ -2566,13 +2608,19 @@ def _sweep(req, ctx, mods, base_fields):
 
 
 # ----------------------------------------------------------------------------- runs from files
-def _first_run(req, ctx, mods, base):
-    """Run COM on a channel file with a config file (or the files in the folder)."""
+def _first_run(req, ctx, mods, base, roles=None, lead=()):
+    """Run COM on a channel file with a config file (or the files in the folder). roles: the role of each channel
+    file, when the caller knows them (the selection in the GUI's tabs, Decision 20); otherwise they are read from
+    the order and the names (channel_roles). lead: lines that open the announcement.
+
+    The example setup with no channel file in the project folder runs on a synthetic THRU that is written when the
+    plan is carried out (Decision 22, row EX01)."""
     configs = [f['text'] for f in req['files'] if f['ext'] in CONFIG_EXT + ('.mat',)]
     chans = [f['text'] for f in req['files'] if f['ext'] == 'channel']
     found_cfg = ctx.config_files()
     found_ch = ctx.channel_files()
-    announce = []
+    announce = list(lead)
+    synthetic = None
     example = 'example' in req['flags'] and not configs
     if example:                                 # the example setup: the shipped working config (from Case1)
         configs = [EXAMPLE]
@@ -2599,6 +2647,11 @@ def _first_run(req, ctx, mods, base):
         elif found_ch:
             return _ask('There is more than one channel file in this folder: which one?', found_ch + [CANCEL],
                         {c: {'stop': 'Run COM on %s with %s.' % (c, configs[0])} for c in found_ch}, **base)
+        elif example:                           # Decision 22: the example runs from an empty folder
+            synthetic = EXAMPLE_THRU
+            chans = [synthetic]
+            announce.append('the channel is a synthetic %g mm lossy line, written to %s when this plan is carried '
+                            'out; it is not a measured channel' % (example_channel.LENGTH_MM, synthetic))
         else:
             return _ask('There is no channel file in this project folder, so there is nothing to run COM on. Name one, '
                         'for example: Run COM on data\\thru.s4p with data\\config.xlsx.', ['provide files', CANCEL],
@@ -2612,6 +2665,8 @@ def _first_run(req, ctx, mods, base):
                     {o: {'replace': [cfg, o]} for o in opts if o != 'the example setup'} |
                     {'the example setup': {'stop': 'Run SiCoPR on the example setup.'}}, **base)
     for c in chans:
+        if c == synthetic:
+            continue
         if not os.path.exists(ctx.path(c)):
             return _ask('%s does not exist in this project folder.' % c, [x for x in found_ch if x != c] + [CANCEL],
                         {x: {'replace': [c, x]} for x in found_ch if x != c}, **base)
@@ -2622,7 +2677,8 @@ def _first_run(req, ctx, mods, base):
     if wc is None:
         return announce
     is_json = path.lower().endswith('.json') and not example
-    steps = [] if is_json else [_step('import_config', path=cfg, example=example)]
+    steps = [] if is_json else [_step('import_config', path=cfg, example=example,
+                                      **({'example_channel': synthetic} if synthetic else {}))]
     changes = []
     if req['sets'] or req['packages'] or req['attempts']:
         ctx._c['base'] = (wc, 'import', [])
@@ -2653,12 +2709,14 @@ def _first_run(req, ctx, mods, base):
         return _unplaced_only(req, base)
     final = config_model.apply_changes(wc, [(c['json_path'], c['after']) for c in changes
                                             if c['kind'] in ('set', 'add')])['config'] if changes else wc
-    stops, notes = input_check(final, [(ctx.path(c), r) for c, r in channel_roles(chans)])
+    pairs = list(zip(chans, roles)) if roles and len(roles) == len(chans) else channel_roles(chans)
+    stops, notes = input_check(final, [(ctx.path(c), r) for c, r in pairs], with_notes=not synthetic)
     if stops:
         return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in changes], announce=announce, **base)
     announce += notes
-    steps += [_step('validate_inputs', channels=chans), _step('run_com', channels=chans, thru_only=len(chans) <= 1),
-              _step('summarize')]
+    given = {'roles': [r for _, r in pairs]} if roles else {}      # the roles as selected, not as the names say
+    steps += [_step('validate_inputs', channels=chans), _step('run_com', channels=chans, thru_only=len(chans) <= 1,
+                                                              **given), _step('summarize')]
     return outcome('PLAN', steps=steps, changes=changes, announce=announce, **base), {}
 
 
@@ -2812,6 +2870,153 @@ def _swap_plan(req, ctx, mods, base, wc, swaps, new, lines):
     steps = swaps + pre + [_step('validate_inputs', channels=[p for p, _ in new]), _step('validate_config'),
                            _step('run_com', thru_only=thru_only), _step('summarize')]
     return outcome('PLAN', steps=steps, changes=changes, announce=lines + more + warn, **base), {}
+
+
+# ----------------------------------------------------------------------------- the selection in the tabs (Decision 20)
+SELECT_IN_RUN_TAB = 'select one in the Run tab'
+SELECT_IN_CONFIG_TAB = 'select one in the Config tab'
+NAME_A_FILE = 'name a file'
+PROVIDE_FILES = 'provide files'
+RUN_SELECTION = 'Run the selected config and channels.'       # the phrase of the panel's Run selection button
+
+
+def _selection_request(req, ctx, mods, base):
+    """A run of what is selected in the tabs of the GUI (Decision 20, rows SL01 to SL05). ctx.selection is the data
+    the GUI handed over with the phrase: the config of the Config tab and the THRU, FEXT and NEXT files of the Run
+    tab, with the roles the user gave them there.
+
+    - no selection at all (the command line) asks for files (row SL04); no channel selected asks (row SL03);
+    - with no working config yet, or when the phrase names the selected config and it is another file than the
+      source of the working config, the selected config is imported and run on the selected channels, as Run COM on
+      <channels> with <config> would be (rows SL01, SL02);
+    - otherwise the working config is kept, with its overrides and what was done in the Config view, and only the
+      channel files change to the selected ones: Decision 18's swap with the files from the selection (row SL05).
+    Nothing is guessed: a selected file that is not on disk stops, and any other request in the phrase asks."""
+    flags = set(req['flags'])
+    acts = set(req['actions'])
+    sel = ctx.selection
+    runs = bool(acts & {'run', 'rerun'}) or 'again' in flags
+    if not runs or acts - {'run', 'rerun', 'change'} or req['sweeps'] or req['files'] or \
+            flags & {'example', 'these_files', 'this_config', 'crosstalk', 'thru_only', 'last_run'}:
+        return _ask('The selection in the tabs is run on its own, so nothing runs. Run it with: %s After a run, '
+                    'Re-run with the selected channel. keeps the config and changes only the channel files.'
+                    % RUN_SELECTION, [CANCEL], {CANCEL: None}, **base)
+    if sel is None:                                                             # row SL04
+        return _ask('There is no selection outside the GUI: the selected config and channel files are the ones '
+                    'picked in the tabs of the GUI (sicopr-assist gui). Name the files instead, for example: Run COM '
+                    'on data\\thru.s4p with data\\config.xlsx.', [PROVIDE_FILES, CANCEL],
+                    {PROVIDE_FILES: {'stop': 'Name the files: Run COM on <channel> with <config>.'}, CANCEL: None},
+                    **base)
+    cfg = sel['config']
+    if not sel['thru']:                                                         # row SL03
+        more = ' (%d FEXT and %d NEXT files are selected, and no THRU)' % (len(sel['fext']), len(sel['next'])) \
+            if sel['fext'] or sel['next'] else ''
+        return _ask('No channel file is selected in the tabs%s, so there is nothing to run COM on. Select a THRU file '
+                    'in the Run tab, or name one%s.' % (more, ': Run COM on <channel> with %s' % cfg if cfg else ''),
+                    [SELECT_IN_RUN_TAB, NAME_A_FILE, CANCEL],
+                    {SELECT_IN_RUN_TAB: {'stop': 'Pick the THRU file, and any FEXT and NEXT files, in the Run tab. '
+                                                 'Then: %s' % RUN_SELECTION},
+                     NAME_A_FILE: {'stop': 'Name the file: Run COM on <channel> with %s.' % (cfg or '<config>')},
+                     CANCEL: None}, **base)
+    chans = [(sel['thru'], 'thru')] + [(p, 'fext') for p in sel['fext']] + [(p, 'next') for p in sel['next']]
+    for p, role in chans:
+        if not os.path.isfile(ctx.path(p)):
+            return _stop('%s, the %s selected in the tabs, does not exist. Nothing runs.' % (p, role.upper()), **base)
+        bad = touchstone_problem(ctx.path(p))
+        if bad:
+            return _stop('%s, the %s selected in the tabs, is not a valid Touchstone file: %s. Nothing runs.'
+                         % (p, role.upper(), bad), **base)
+    rec = ctx.last
+    src = (rec or {}).get('source') or {}
+    same_cfg = bool(cfg and src.get('path') and _same_file(ctx.path(src['path']), ctx.path(cfg)))
+    names_cfg = 'sel_config' in flags and 'last_config' not in flags
+    if rec is not None and ctx.wc is not None and (same_cfg or not names_cfg or not cfg):
+        return _selection_swap(req, ctx, mods, base, chans)
+    if not names_cfg:                              # Re-run with the selected channel, and no run to re-run
+        return _no_history(ctx, base, channel=sel['thru'])
+    if not cfg:
+        return _ask('No config is selected in the tabs, so there is nothing to run. Open a workbook in the Config '
+                    'tab, or name one: Run COM on %s with <config>.' % sel['thru'],
+                    [SELECT_IN_CONFIG_TAB, NAME_A_FILE, CANCEL],
+                    {SELECT_IN_CONFIG_TAB: {'stop': 'Open the workbook in the Config tab. Then: %s' % RUN_SELECTION},
+                     NAME_A_FILE: {'stop': 'Name the file: Run COM on %s with <config>.' % sel['thru']},
+                     CANCEL: None}, **base)
+    if not os.path.isfile(ctx.path(cfg)):
+        return _stop('%s, the config selected in the tabs, does not exist. Nothing runs.' % cfg, **base)
+    lines = ['the config and the channel file%s are the ones selected in the tabs' % ('' if len(chans) == 1 else 's'),
+             'config: %s' % cfg] + _selection_lines(chans)
+    if rec is not None and src.get('path'):
+        n = len(rec.get('overrides') or [])
+        lines.append('the selected config is another file than the source of the working config (%s), so it is '
+                     'imported as saved%s' % (src['path'], ', without the %d override%s of the working config'
+                                              % (n, '' if n == 1 else 's') if n else ''))
+    files = [{'text': cfg, 'ext': parse._ext(cfg), 'role': None}] + \
+            [{'text': p, 'ext': 'channel', 'role': r} for p, r in chans]
+    return _first_run(dict(req, files=files, flags=[f for f in req['flags'] if not f.startswith('sel')]), ctx, mods,
+                      base, roles=[r for _, r in chans], lead=lines)
+
+
+def _selection_lines(chans):
+    """One line per selected channel file, with its role: THRU, then FEXT, then NEXT, as the engine is given them."""
+    out = ['%s: %s' % (r.upper(), p) for p, r in chans]
+    n = {r: sum(1 for _, x in chans if x == r) for r in ('fext', 'next')}
+    if n['fext'] or n['next']:
+        out.append('the engine is given the THRU, then the %d FEXT, then the %d NEXT file%s, with their counts'
+                   % (n['fext'], n['next'], '' if n['next'] == 1 else 's'))
+    return out
+
+
+def _selection_swap(req, ctx, mods, base, chans):
+    """The working config is kept and the channel files become the selected ones (Decision 18's swap with the files
+    from the selection, row SL05): one set_channel step for the THRU when it changes, one for the aggressors when
+    they change. With nothing changed since a run, nothing runs (as row CH07)."""
+    rec = ctx.last
+    wc = ctx.wc
+    last = [(p, r or 'thru') for p, _, r in ctx.channels()]
+    recorded = {c['path']: c.get('sha256') for c in rec.get('channels') or []}
+
+    def same(old, new):
+        return os.path.isfile(ctx.path(old)) and _same_file(ctx.path(old), ctx.path(new)) and \
+            recorded.get(old) == _sha(ctx.path(new))
+    old_thru = next((p for p, r in last if r == 'thru'), None)
+    old_x = [(p, r) for p, r in last if r != 'thru']
+    thru, new_x = chans[0][0], chans[1:]
+    swaps = []
+    if old_thru is None or not same(old_thru, thru):
+        swaps.append(_step('set_channel', role='thru', before=old_thru, after=thru))
+    if len(old_x) != len(new_x) or any(ro != rn or not same(po, pn) for (po, ro), (pn, rn) in zip(old_x, new_x)):
+        swaps.append(_step('set_channel', role='crosstalk', thru=thru, before=[p for p, _ in old_x] or None,
+                           fext=[p for p, r in new_x if r == 'fext'], next=[p for p, r in new_x if r == 'next'],
+                           rule='selection'))
+    has_change = bool(req['sets'] or req['packages'] or req['attempts'])
+    viewed = rec.get('kind') in ('edit', 'open')         # something was done in the Config view since the last run
+    after_run = bool(rec.get('run_ids')) and not viewed and rec.get('status') == 'ok'
+    rid = ctx.last_run_id()
+    if not swaps and not has_change and after_run:
+        return _stop('The channel file%s selected in the tabs %s already the one%s of the last run (%s), and its config '
+                     'is unchanged: nothing changed, so the results would equal the last run. Nothing runs.'
+                     % ((('', 'is', '') if len(chans) == 1 else ('s', 'are', 's')) + (rid,)), **base)
+    what = _and([{'thru': 'THRU', 'crosstalk': 'FEXT and NEXT files'}[s['args']['role']] for s in swaps])
+    if after_run:
+        lines = ['the config of the last run (%s) is kept, and only the %s change%s, taken from the selection in the '
+                 'tabs' % (rid, what or 'parameter named', 's' if len(swaps) < 2 and 'files' not in what else '')]
+    elif viewed:
+        lines = ['the working config is kept as it is, with what was done in the config view, and it runs on the '
+                 'channel file%s selected in the tabs' % ('' if len(chans) == 1 else 's')]
+    else:                                                 # the last run did not complete: it is run again
+        lines = ['the config of the last run (%s, which did not complete) is kept, and it runs on the channel file%s '
+                 'selected in the tabs' % (rid, '' if len(chans) == 1 else 's')]
+    for s in swaps:
+        a = s['args']
+        if a['role'] == 'thru':
+            lines.append('THRU: %s -> %s' % (a['before'] or 'none', a['after']))
+        else:
+            lines.append('FEXT and NEXT: %s -> %d FEXT and %d NEXT files'
+                         % ('%d files' % len(a['before']) if a['before'] else 'none', len(a['fext']), len(a['next'])))
+            lines += ['%s: %s' % (r.upper(), p) for p, r in new_x]
+    if not swaps:
+        lines.append('the channel files are those of the last run, unchanged: %s' % ', '.join(p for p, _ in chans))
+    return _swap_plan(req, ctx, mods, base, wc, swaps, list(chans), lines)
 
 
 # ----------------------------------------------------------------------------- crosstalk (Decision 19)

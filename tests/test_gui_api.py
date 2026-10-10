@@ -178,10 +178,14 @@ def main():
             label = scoring.labels_of(row)[0]
             phrase = sc.phrase_of(row)
             a, b = sc.context(row, label), sc.context(row, label)
+            # a row whose prior state holds a selection in the GUI's tabs (rows SL01 to SL05): the page posts it with
+            # the phrase, and the panel hands it to the core as data (Decision 20)
             with env(a.env):
-                want = core.handle(phrase, Project(a.root))
+                want = core.handle(phrase, Project(a.root),
+                                   **({'selection': a.selection} if a.selection is not None else {}))
+            body = dict({'phrase': phrase}, **({'selection': b.selection} if b.selection is not None else {}))
             with env(b.env):
-                code, got = call(NoRun(root=b.root), 'POST', 'handle', {'phrase': phrase}, Host([b.root]))
+                code, got = call(NoRun(root=b.root), 'POST', 'handle', body, Host([b.root]))
             compared += 1
             if code != 200 or 'outcome' not in got or \
                     normalise(want, [a.root]) != normalise(got['outcome'], [b.root]):
@@ -428,6 +432,131 @@ def main():
               'record %r, result %r' % ({k: rec.get(k) for k in ('status', 'reason', 'run_ids')}, res.get('status')))
         check('a stopped run is never reused: the same command runs again', not any(
             rid2 == rid for rid2, _ in core.Context(proj).runs), core.Context(proj).runs)
+
+        # ------------------------------------------------------------ the selection in the tabs (Decision 20)
+        def selected(c, thru=None, fext=(), nxt=(), config='config.xlsx'):
+            full = lambda n: os.path.join(c.root, 'data', n).replace(os.sep, '/')   # noqa: E731 - as the page holds them
+            return {'config': full(config) if config else None, 'thru': full(thru) if thru else None,
+                    'fext': [full(n) for n in fext], 'next': [full(n) for n in nxt]}
+        sctx = prior_states.Ctx(fx, 'Case1')
+        prior_states.xtalk_folder(sctx)
+        sp, shost = api.Panel(root=sctx.root, child=STANDIN), Host([sctx.root])
+        xt = [os.path.join('ch', n) for n in prior_states.XT_FEXT], [os.path.join('ch', n) for n in prior_states.XT_NEXT]
+        shown = []
+        for sel in (selected(sctx), selected(sctx, 'thru.s4p'),
+                    selected(sctx, os.path.join('ch', 'b300_thru1.s4p'), xt[0], xt[1]), selected(sctx, config=None)):
+            code, r = call(sp, 'POST', 'selection', {'selection': sel}, shost)
+            shown.append(r.get('line'))
+        check('the selection line follows the config and the channel files: Selected: <config>; THRU <file>; 3 FEXT, '
+              '4 NEXT', shown == ['Selected: config.xlsx; ' + api.NO_CHANNEL, 'Selected: config.xlsx; THRU thru.s4p',
+                                  'Selected: config.xlsx; THRU b300_thru1.s4p; 3 FEXT, 4 NEXT',
+                                  'Selected: no config; ' + api.NO_CHANNEL] and r.get('phrase') == core.RUN_SELECTION,
+              shown)
+        sel = selected(sctx, os.path.join('ch', 'b300_thru1.s4p'), xt[0], xt[1])
+        other = prior_states.Ctx(fx, 'Case1')
+        prior_states.xtalk_folder(other)
+        with env(sctx.env):
+            want = core.handle(api.RUN_SELECTION, Project(other.root), selection=selected(
+                other, os.path.join('ch', 'b300_thru1.s4p'), xt[0], xt[1]))
+
+            class Held(api.Panel):
+                def start(self, p, seq, out):
+                    return None
+            code, got = call(Held(root=sctx.root), 'POST', 'handle', {'phrase': api.RUN_SELECTION, 'selection': sel}, shost)
+        run_step = next((s['args'] for s in (got.get('outcome') or {}).get('steps') or [] if s['op'] == 'run_com'), {})
+        check('the phrase of the Run selection button, posted with the selection, gives the plan with those files: the '
+              'THRU, 3 FEXT and 4 NEXT, as the core plans them', got.get('outcome', {}).get('type') == 'PLAN'
+              and normalise(got['outcome'], [sctx.root]) == normalise(want, [other.root])
+              and run_step.get('roles') == ['thru'] + ['fext'] * 3 + ['next'] * 4
+              and [os.path.basename(c) for c in run_step.get('channels') or []]
+              == ['b300_thru1.s4p'] + prior_states.XT_FEXT + prior_states.XT_NEXT,
+              (got.get('outcome', {}).get('type'), run_step))
+        plans = []
+        for phrase in ('Run the selected config and channel.', 'Run on the config and channels specified in the tabs.',
+                       'Run the config and channel specified.'):
+            c2 = prior_states.Ctx(fx, 'Case3')
+            with env(c2.env):
+                code, g = call(Held(root=c2.root), 'POST', 'handle',
+                               {'phrase': phrase, 'selection': selected(c2, 'thru.s4p')}, Host([c2.root]))
+            o = g.get('outcome') or {}
+            plans.append((o.get('type'), [(s['op'], json.dumps(s.get('args'), sort_keys=True)) for s in
+                                          o.get('steps') or [] if s['op'] != 'show_tutor']))
+        check('through the panel, the maintainer\'s two phrases give the plan of row SL01 on the selected files',
+              plans[0][0] == 'PLAN' and [op for op, _ in plans[0][1]] == ['import_config', 'validate_inputs', 'run_com',
+                                                                         'summarize']
+              and plans[1] == plans[0] and plans[2] == plans[0], [(t, [op for op, _ in st]) for t, st in plans])
+        # with no selection posted the core is handed none, as on the command line (row SL04)
+        c3 = prior_states.Ctx(fx, 'Case1')
+        with env(c3.env):
+            code, g = call(Held(root=c3.root), 'POST', 'handle', {'phrase': api.RUN_SELECTION}, Host([c3.root]))
+        check('a phrase posted without a selection is handed none: the question of row SL04',
+              (g.get('outcome') or {}).get('type') == 'QUESTION'
+              and g['outcome']['question']['options'] == [core.PROVIDE_FILES, core.CANCEL], g.get('outcome'))
+        # a path from outside the opened directories never reaches the core
+        away = tempfile.mkdtemp(prefix='sicopr_assist_away_')
+        stray = os.path.join(away, 'thru.s4p')
+        shutil.copyfile(fx.thru, stray)
+        c4 = prior_states.Ctx(fx, 'Case1')
+        bad_sel = dict(selected(c4), thru=stray, fext=[stray, os.path.join(c4.root, os.path.relpath(stray, c4.root))])
+        code, r = call(api.Panel(root=c4.root), 'POST', 'selection', {'selection': bad_sel}, Host([c4.root]))
+        with env(c4.env):
+            code, g = call(Held(root=c4.root), 'POST', 'handle', {'phrase': api.RUN_SELECTION, 'selection': bad_sel},
+                           Host([c4.root]))
+        code, r2 = call(api.Panel(root=c4.root), 'POST', 'selection', {'selection': bad_sel}, Host([c4.root, away]))
+        check('a selected file outside the project folder and the opened directories is left out and never reaches the '
+              'core (the question of row SL03), and is taken once its directory is opened',
+              r.get('selection') == {'config': os.path.abspath(selected(c4)['config']), 'thru': None, 'fext': [],
+                                     'next': []}
+              and (g.get('outcome') or {}).get('type') == 'QUESTION'
+              and g['outcome']['question']['options'][0] == core.SELECT_IN_RUN_TAB
+              and r2.get('selection', {}).get('thru') == os.path.abspath(stray) and len(r2['selection']['fext']) == 2,
+              (r.get('selection'), (g.get('outcome') or {}).get('type'), r2.get('selection')))
+        shutil.rmtree(away, ignore_errors=True)
+
+        # the state the maintainer was in: a run, then something done in the Config view; his phrase runs the working
+        # config as it is now on the channel selected in the Run tab
+        mctx = seeded('Case1')
+        prior_states.second_thru(mctx)
+        with env(mctx.env):
+            mp, mhost = panel_on(mctx)
+            call(mp, 'POST', 'edit', {'edits': [{'key': 'DER_0', 'value': '5e-5'}]}, mhost)
+            code, g = call(mp, 'POST', 'handle', {'phrase': 'Run on the config and channels specified in the tabs.',
+                                                  'selection': selected(mctx, 'thru2.s4p')}, mhost)
+            st = wait(mp)
+        mproj = Project(mctx.root)
+        mrec = mproj.last_record(with_runs=True)
+        mrid = (mrec.get('run_ids') or [None])[-1]
+        mf, _ = fx.load_csv_bytes(open(mproj.run_csv_path(mrid), 'rb').read()) if mrid else ({}, None)
+        check('after an edit in the Config view, the maintainer\'s phrase runs the edited working config on the channel '
+              'selected in the Run tab', (g.get('outcome') or {}).get('type') == 'PLAN' and g.get('job')
+              and [s['op'] for s in g['outcome']['steps'] if s['op'] != 'show_tutor']
+              == ['set_channel', 'validate_inputs', 'validate_config', 'run_com', 'summarize']
+              and (st.get('done') or {}).get('status') == 'ok' and mrid != 'run_0001'
+              and [os.path.basename(c['path']) for c in mrec.get('channels') or []] == ['thru2.s4p']
+              and mproj.read_working_config(mrid)['main'].get('DER_0') == 5e-5 and bool(mf),
+              ((g.get('outcome') or {}).get('type'), g.get('outcome', {}).get('question'), st.get('done'),
+               mrec.get('channels')))
+
+        # ------------------------------------------------------------ the examples under the command box (Decision 21)
+        ectx = prior_states.Ctx(fx, 'Case1')
+        with env(ectx.env):
+            code, e0 = call(api.Panel(root=ectx.root), 'POST', 'examples', {'selection': selected(ectx)}, Host([ectx.root]))
+        first_run = 'Run COM on %s with %s' % (os.path.join('data', 'thru.s4p'), os.path.join('data', 'config.xlsx'))
+        check('with no run yet the examples start with what runs now: the files of the folder, and the example setup',
+              (e0.get('phrases') or [])[:2] == [first_run, 'Run the example.']
+              and len(e0['phrases']) <= api.MAX_EXAMPLES and not any('Re-run' in ph for ph in e0['phrases']), e0)
+        ectx = seeded('Case1')
+        with env(ectx.env):
+            code, e1 = call(api.Panel(root=ectx.root), 'POST', 'examples', {'selection': selected(ectx)}, Host([ectx.root]))
+            outs = []
+            for ph in e1.get('phrases') or []:
+                fresh = seeded('Case1')
+                outs.append(core.handle(ph, Project(fresh.root))['type'])
+        names = fx.working_config('Case1')['main']
+        check('after a run there are four examples, written with names of the config in view, and each one sent to the '
+              'core gives a PLAN (row TU04)', len(e1.get('phrases') or []) == api.MAX_EXAMPLES
+              and outs == ['PLAN'] * api.MAX_EXAMPLES and any(k in ph for ph in e1['phrases'] for k in names)
+              and 'Run the example.' not in e1['phrases'], (e1, outs))
 
         # ------------------------------------------------------------ paths
         outside = tempfile.mkdtemp(prefix='sicopr_assist_outside_')

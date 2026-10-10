@@ -8,6 +8,8 @@ sicopr_assist.project, so the formats are the product's own.
     build(row['prior_state'], ctx)
     ctx.root        the project folder
     ctx.prior_wc    the working config the next command starts from
+    ctx.selection   what is selected in the tabs of the GUI, handed to the core with the phrase as data (Decision
+                    20); None for every state that does not speak of a selection, as on the command line
     ctx.env         environment variables to set while the core is called: by default a stand-in Rscript is
                     found and nothing else (fx.r_env), so a dashboard plans the same on every machine; row D3
                     hides it, from PATH and from Program Files
@@ -53,6 +55,7 @@ class Ctx:
             os.remove(user_file)
         self.env = fx.r_env()
         self.prior_wc = fx.working_config(label) if label in fx.configs else None
+        self.selection = None                          # what a GUI hands the core with each phrase (Decision 20)
         self._k = 0
 
     def data(self, name):
@@ -461,6 +464,28 @@ def xtalk_no_match(ctx):
              channels=[('data\\ch2\\b300_thru1.s4p', 'thru')])
 
 
+# after the maintainer's first GUI session (10 October): the config and the channel files selected in the GUI's tabs
+# (Decision 20), and the example setup in an empty folder (Decision 22)
+def select(ctx, thru=None, fext=(), nxt=(), config='config.xlsx'):
+    """The selection as SiCoPR's GUI holds it and the panel hands it over: absolute paths, the config of the Config
+    tab and the THRU, FEXT and NEXT files of the Run tab. Names are given under data."""
+    ctx.selection = {'config': ctx.data(config) if config else None, 'thru': ctx.data(thru) if thru else None,
+                     'fext': [ctx.data(n) for n in fext], 'next': [ctx.data(n) for n in nxt]}
+
+
+def select_with_crosstalk(ctx):
+    xtalk_folder(ctx)
+    select(ctx, thru=os.path.join('ch', 'b300_thru1.s4p'), fext=[os.path.join('ch', n) for n in XT_FEXT],
+           nxt=[os.path.join('ch', n) for n in XT_NEXT])
+
+
+def empty_folder(ctx):
+    """No config, no channel file, no history: the fixture layout taken away."""
+    import shutil
+    shutil.rmtree(os.path.join(ctx.root, 'data'))
+    ctx.prior_wc = None
+
+
 def config_edited_in_excel(ctx):
     edit_workbook(ctx.fx.configs[ctx.label], ctx.data('config.xlsx'), edits={'SNR_TX': 34})
 
@@ -801,6 +826,16 @@ BUILDERS = {
     r'files (x_NEXT_Tx7_to_Rx7.s4p, x_NEXT_Tx8_to_Tx7.s4p)': xtalk_one_thru,
     r'run complete thru-only with the starting config and data\ch2\b300_thru1.s4p; data\ch2 holds two THRUs, '
     r'b300_thru1.s4p and b500_thru1.s4p, and FEXT and NEXT files whose names match neither': xtalk_no_match,
+    # the first GUI session (10 October): the selection in the tabs, and the example in an empty folder
+    r'no history; the GUI selection holds the starting config as data\config.xlsx and the THRU data\thru.s4p':
+        lambda c: select(c, thru='thru.s4p'),
+    r'no history; the GUI selection holds the starting config as data\config.xlsx, the THRU data\ch\b300_thru1.s4p, '
+    r'three FEXT and four NEXT files of data\ch': select_with_crosstalk,
+    r'no history; the GUI selection holds the starting config as data\config.xlsx and no channel file': select,
+    'no history; both files exist; there is no GUI selection (the command line)': base_layout,
+    r'run complete with the starting config and data\thru.s4p; the GUI selection holds that config and the THRU '
+    r'data\thru2.s4p': lambda c: (seed_run(c), second_thru(c), select(c, thru='thru2.s4p')),
+    'empty project folder: no config, no channel file, no history': empty_folder,
 }
 
 

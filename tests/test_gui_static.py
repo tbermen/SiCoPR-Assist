@@ -30,8 +30,9 @@ from check import check, finish  # noqa: E402
 STATIC = os.path.join(ROOT, 'sicopr_assist', 'panel', 'static')
 JS = os.path.join(STATIC, 'panel.js')
 CSS = os.path.join(STATIC, 'panel.css')
-# the panel contract, API 1 (GUI_DESIGN.md section 4.1): the page sends the first five and hears the last five
-CONTRACT = {'config', 'edit', 'view', 'run', 'browsed', 'open-config', 'overlay', 'clear-edits', 'show', 'browse'}
+# the panel contract, API 1 (GUI_DESIGN.md section 4.1): the page sends the first six and hears the last five
+CONTRACT = {'config', 'edit', 'view', 'run', 'browsed', 'channels', 'open-config', 'overlay', 'clear-edits', 'show',
+            'browse'}
 
 src = io.open(JS, encoding='utf-8').read()
 css = io.open(CSS, encoding='utf-8').read()
@@ -99,7 +100,8 @@ check('every event panel.js sends or hears is one of the panel contract\'s', (se
       and sent and heard, 'not in the contract: %s' % sorted((sent | heard | named) - CONTRACT))
 check('panel.js sends only events the page hears, and hears only events the page sends',
       sent <= {'open-config', 'overlay', 'clear-edits', 'show', 'browse'}
-      and heard <= {'config', 'edit', 'view', 'run', 'browsed'}, 'sent %s, heard %s' % (sorted(sent), sorted(heard)))
+      and heard <= {'config', 'edit', 'view', 'run', 'browsed', 'channels'},
+      'sent %s, heard %s' % (sorted(sent), sorted(heard)))
 try:
     from sicopr_assist import engine
     readme = os.path.join(engine.folder(), 'gui', 'README.md')
@@ -121,5 +123,106 @@ called = {re.match(r'[a-z]+', c).group(0) for c in re.findall(r"call\('([a-z]+[^
 called |= {'log'} if "API + 'log'" in src else set()
 check('panel.js calls only endpoints api.py answers', called and called <= answered,
       'called %s, answered %s' % (sorted(called), sorted(answered)))
+
+
+# ---- the command box and the selection (Decisions 20 and 21; gate V6.3)
+#
+# The maintainer's first session: the one-line box was easy to miss, and nothing told the panel which channel files
+# were picked in the tabs. These read the template, the handlers and the stylesheet; the real page is driven in the
+# walk-through of gate V6.5.
+def fn(name):
+    """The text of a function of the panel: from its header to the closing brace at its own indent."""
+    m = re.search(r'^  (?:async )?function %s\(.*?^  \}' % re.escape(name), src, re.S | re.M)
+    return m.group(0) if m else ''
+
+
+def heard_body(event):
+    m = re.search(r"^  window\.addEventListener\('sicopr:%s', \(e\) => \{.*?^  \}\);" % re.escape(event), src,
+                  re.S | re.M)
+    return m.group(0) if m else ''
+
+
+def wired(el_id, event):
+    """The handler text of $a('#id').addEventListener('event', ...), up to the end of the statement."""
+    m = re.search(r"^  \$a\('#%s'\)\.addEventListener\('%s', (.*?)^(?=  \S)(?!  \})" % (re.escape(el_id), event), src,
+                  re.S | re.M)
+    if not m:
+        return ''
+    text = m.group(1)
+    end = re.search(r'^  \}\);', text, re.M)
+    return text[:end.end()] if end else text.split(';\n')[0]
+
+
+def rule(selector):
+    m = re.search(r'#panel-assist ' + re.escape(selector) + r'\s*\{([^}]*)\}', css)
+    return m.group(1) if m else ''
+
+
+tpl = template.group(1) if template else ''
+box = re.search(r'<textarea id="aCmd"([^>]*)>', tpl)
+rows = re.search(r'\brows="(\d+)"', box.group(1)) if box else None
+check('the command box is a text area of three lines or more', box and rows and int(rows.group(1)) >= 3
+      and '<input id="aCmd"' not in tpl, 'the template holds %r' % (box.group(0) if box else 'no textarea #aCmd'))
+check('the command box has its visible label, Type a command',
+      re.search(r'<label for="aCmd"[^>]*>Type a command</label>', tpl) is not None
+      and 'font-weight' in rule('.alabel'), 'no label for aCmd with that text, or the label has no weight')
+keys = wired('aCmd', 'keydown')
+enter = re.search(r"if \(e\.key === 'Enter' && !e\.shiftKey\) \{(.*?)\}", keys, re.S)
+check('Enter sends the box, and Shift+Enter does not (it is a new line)',
+      enter and 'e.preventDefault()' in enter.group(1) and "send($a('#aCmd').value)" in enter.group(1)
+      and len(re.findall(r"e\.key === 'Enter'", src)) == 1, 'the keydown handler of the box: %r' % keys[:200])
+check('a phrase of several lines is sent as one line',
+      re.search(r"phrase = String\(phrase \|\| ''\)\.replace\(/\\s\*\\n\\s\*/g, ' '\)\.trim\(\)", fn('send')),
+      'send() does not join the lines of the box')
+area = rule('.abox textarea')
+check('the command box is set apart from the conversation: its own border in the accent colour and a height of '
+      'several lines', re.search(r'border:\s*2px solid var\(--accent\)', area) and re.search(r'min-height:\s*[4-9]', area),
+      area)
+cmd = re.search(r'<div id="aCommand" class="acommand">(.*?)\n    </div>\n', tpl, re.S)
+block = rule('.acommand')
+conv = rule('.aconv')
+check('the command box stays in view: its block sticks to the bottom of the panel, and the conversation scrolls',
+      cmd and 'id="aCmd"' in cmd.group(1) and re.search(r'position:\s*sticky', block)
+      and re.search(r'bottom:\s*0', block) and re.search(r'background:\s*var\(--panel\)', block)
+      and re.search(r'overflow-y:\s*auto', conv) and 'max-height' in conv
+      and tpl.find('id="aConv"') < tpl.find('id="aCommand"'), (block, conv))
+check('the command box takes the focus on load, once it is on screen, and never from a field in use',
+      re.search(r"async function init\(\) \{\s*focusBox\(\d+\);", src) is not None
+      and 'box.offsetParent !== null' in fn('focusBox') and 'if (free) box.focus();' in fn('focusBox')
+      and 'document.activeElement === document.body' in fn('focusBox'), fn('focusBox'))
+fit = fn('fitBox')
+check('the command box grows with its content', 'box.scrollHeight + 4' in fit and "box.style.height = 'auto'" in fit
+      and "addEventListener('input', fitBox)" in src and 'fitBox();' in fn('fillBox'), fit)
+
+sync = fn('syncSelection')
+cfg_ev, ch_ev = heard_body('config'), heard_body('channels')
+check('the selection line follows sicopr:config and sicopr:channels',
+      'SELECTION.config = d.path' in cfg_ev and 'await syncSelection()' in cfg_ev
+      and 'SELECTION.thru = d.thru' in ch_ev and 'SELECTION.fext = (d.fext' in ch_ev
+      and 'SELECTION.next = (d.next' in ch_ev and 'await syncSelection()' in ch_ev
+      and "call('selection', { selection: SELECTION })" in sync and "$a('#aSelLine').textContent = r.line" in sync,
+      'config handler %r\nchannels handler %r' % (cfg_ev[:160], ch_ev[:300]))
+check('the selection line and the Run selection button sit above the command box',
+      cmd and 0 <= cmd.group(1).find('id="aSelLine"') < cmd.group(1).find('id="aRunSel"') < cmd.group(1).find('id="aCmd"')
+      and '>Run selection</button>' in cmd.group(1), 'the order in the template')
+from sicopr_assist import core as _core  # noqa: E402
+from sicopr_assist.panel import api as _api  # noqa: E402
+first_phrase = re.search(r"let RUN_PHRASE = '([^']*)';", src)
+check('Run selection sends the phrase Run the selected config and channels.',
+      'send(RUN_PHRASE)' in wired('aRunSel', 'click') and first_phrase
+      and first_phrase.group(1) == _core.RUN_SELECTION == 'Run the selected config and channels.'
+      and 'RUN_PHRASE = r.phrase || RUN_PHRASE' in sync, (wired('aRunSel', 'click')[:120], first_phrase and first_phrase.group(1)))
+check('every phrase is posted with the selection, so the core is handed it as data',
+      "call('handle', { phrase, selection: SELECTION })" in fn('send'), 'send() posts the phrase without the selection')
+ex = fn('loadExamples')
+check('an example phrase fills the command box: up to four are asked from the panel, and a click puts one in the box',
+      "call('examples', { selection: SELECTION })" in ex and "b.addEventListener('click', () => fillBox(p))" in ex
+      and 'box.value = text' in fn('fillBox') and 'box.focus()' in fn('fillBox') and _api.MAX_EXAMPLES == 4
+      and 'id="aExamples"' in (cmd.group(1) if cmd else ''), ex[:300])
+check('the examples are asked again when the config in view changes and when a command ends',
+      'loadExamples()' in cfg_ev and 'loadExamples()' in fn('send') and 'loadExamples()' in fn('finished')
+      and 'await loadExamples()' in fn('init'), 'a call of loadExamples is missing')
+check('while a plan runs, the box, Send and Run selection are off together',
+      all(("$a('#%s').disabled = on" % i) in fn('busyUi') for i in ('aCmd', 'aSend', 'aRunSel')), fn('busyUi'))
 
 finish()

@@ -644,3 +644,9 @@ XT03,Case1; Case3,change,must,QUESTION,options,name the files | cancel
 XT05,Case1; Case3,change,must,QUESTION,options,name the files | cancel
 XT06,Case1; Case3,change,must,QUESTION,options,cancel
 SM16,Case1; Case3,summary,must,PLAN,chain,summarize
+SL01,Case1; Case3,run,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+SL02,Case1; Case3,run,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+SL03,Case1; Case3,run,must,QUESTION,options,select one in the run tab | name a file | cancel
+SL04,Case1; Case3,run,must,QUESTION,options,provide files | cancel
+SL05,Case1; Case3,run,must,PLAN,chain,set_channel > validate_inputs > validate_config > run_com > summarize
+EX01,any,run,must,PLAN,chain,import_config > validate_inputs > run_com > summarize

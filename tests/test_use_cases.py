@@ -7,6 +7,7 @@
     python tests\\test_use_cases.py --gate V1.1                         version 2, Phase V2-1: tutor and feedback
     python tests\\test_use_cases.py --gate V2.1                         version 2, Phase V2-2: the dashboard
     python tests\\test_use_cases.py --gate V3.1                         version 2, Phase V2-3: channel download
+    python tests\\test_use_cases.py --gate V6.2                         version 2, Phase V2-6: the selection, the example
     $env:SICOPR_ASSIST_FULL = "1"                   L3 on every pair (default: Case1 and the variants)
 
 It fails on a defect of the harness itself: a prior state with no builder, a builder that does not
@@ -36,7 +37,7 @@ import fixtures  # noqa: E402
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2', 'V1.1', 'V2.1', 'V3.1'],
+    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2', 'V1.1', 'V2.1', 'V3.1', 'V6.2'],
                     action='append',
                     default=[],
                     help='check a gate condition as well (may be given more than once)')
@@ -113,6 +114,8 @@ def main(argv=None):
         gate_v21(rows, results, full)
     if 'V3.1' in args.gate:
         gate_v31(rows, results, full)
+    if 'V6.2' in args.gate:
+        gate_v62(rows, results, full)
     if 'G1.3' in args.gate:
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
@@ -343,10 +346,11 @@ def gate_n1(rows, results, full):
     print('N1: %d pairs; L4 on %d of them' % (len(got), sum(1 for r in got if r['L4'] in ('PASS', 'FAIL'))))
     check('N1: no row is excused by an open dispute', not open_disputes(), sorted(open_disputes()))
     frozen = [r['id'] for r in csv.DictReader(open(scoring.FROZEN, newline='', encoding='utf-8'))]
-    check('N1: the frozen list has 645 rows and its new ones are exactly XT01, XT02, XT03, XT05, XT06 and SM16',
-          len(frozen) == 645 and sorted(i for i in frozen if i in NEW_ROWS_N) ==
-          ['SM16', 'XT01', 'XT02', 'XT03', 'XT05', 'XT06'] and frozen[-6:] ==
-          ['XT01', 'XT02', 'XT03', 'XT05', 'XT06', 'SM16'], (len(frozen), frozen[-8:]))
+    # the list has grown since (gate V6.2 pins the 645 rows it had then and what came after them)
+    check('N1: the frozen list had 645 rows and its new ones were exactly XT01, XT02, XT03, XT05, XT06 and SM16',
+          len(frozen) >= 645 and sorted(i for i in frozen if i in NEW_ROWS_N) ==
+          ['SM16', 'XT01', 'XT02', 'XT03', 'XT05', 'XT06'] and frozen[639:645] ==
+          ['XT01', 'XT02', 'XT03', 'XT05', 'XT06', 'SM16'], (len(frozen), frozen[637:647]))
 
 
 V1_GROUPS = ('tutor', 'feedback')
@@ -449,6 +453,66 @@ def gate_n2(rows):
                 plans.append((o['type'], o['steps']))
             check('N2 %s: both phrases give the PLAN of XT01 (%s)' % (label, ' > '.join(s['op'] for s in plans[0][1])),
                   plans[0][0] == 'PLAN' and plans[1] == plans[0] and plans[2] == plans[0],
+                  [(t, [s['op'] for s in st]) for t, st in plans])
+
+
+NEW_ROWS_V6 = ('SL01', 'SL02', 'SL03', 'SL04', 'SL05', 'EX01')
+MAINTAINER_SL = ('Run on the config and channels specified in the tabs.', 'Run the config and channel specified.')
+# the frozen list as it was before Phase V2-6: its header and 645 rows, joined with a line feed
+FROZEN_645_SHA256 = '33a7ee09fc4f36429a5c290c3fdf3ca236d18fc7e5eb49331ee563547479f329'
+
+
+def gate_v62(rows, results, full):
+    """Gate V6.2 (the first GUI session, 10 October): every must SL row and EX01 pass L1 and every other level that
+    applies (the harness hands each row's selection to the core, scoring.Scorer.call); the maintainer's two phrases
+    (paraphrases of SL01) give SL01's plan; only the new rows entered the frozen list."""
+    import hashlib
+    import scoring
+    import prior_states
+    from sicopr_assist import core
+    want = sum(len(scoring.labels_of(r)) for r in rows if r['id'] in NEW_ROWS_V6 and r['priority'] == 'must')
+    got = [r for r in results if r['applies'] == 'yes' and r['id'] in NEW_ROWS_V6 and r['priority'] == 'must']
+    check('V6.2: the must SL rows and EX01 were scored (%d pairs)' % want, want == 11 and len(got) == want, len(got))
+    check('V6.2: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
+    board(got, 'V6.2: the SL rows and EX01')
+    bad = [r for r in got if r['L1'] != 'PASS' or 'FAIL' in (r['L2'], r['L3'], r['L4'])]
+    check('V6.2: every must SL and EX01 pair passes L1, and L2, L3 and L4 where they apply', not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad])
+    print('V6.2: %d pairs; L3 on %d and L4 on %d of them' % (len(got), sum(1 for r in got if r['L3'] in ('PASS', 'FAIL')),
+                                                             sum(1 for r in got if r['L4'] in ('PASS', 'FAIL'))))
+    check('V6.2: every one of them is scored at L4 (all six rows are in the frozen list)',
+          all(r['L4'] == 'PASS' for r in got), [(r['id'], r['L4']) for r in got if r['L4'] != 'PASS'])
+    handed = [r['id'] for r in rows if r['id'] in NEW_ROWS_V6 and 'GUI selection holds' in r['prior_state']]
+    check('V6.2: the prior states of SL01, SL02, SL03 and SL05 hold a selection, and SL04 and EX01 hold none',
+          handed == ['SL01', 'SL02', 'SL03', 'SL05'], handed)
+    check('V6.2: no row is excused by an open dispute', not open_disputes(), sorted(open_disputes()))
+    with open(scoring.FROZEN, newline='', encoding='utf-8') as f:
+        lines = f.read().splitlines()
+    ids = [ln.split(',')[0] for ln in lines[1:]]
+    check('V6.2: the frozen list has 651 rows: the 645 it had, unchanged, then SL01 to SL05 and EX01',
+          len(ids) == 651 and ids[645:] == list(NEW_ROWS_V6)
+          and hashlib.sha256('\n'.join(lines[:646]).encode('utf-8')).hexdigest() == FROZEN_645_SHA256,
+          (len(ids), ids[643:]))
+    sl01 = next(r for r in rows if r['id'] == 'SL01')
+    check('V6.2: the maintainer\'s two phrases are paraphrases of SL01',
+          all(p in [x.strip() for x in sl01['paraphrases'].split(' | ')] for p in MAINTAINER_SL))
+    with fixtures.Fixtures() as fx:
+        for label in scoring.labels_of(sl01):
+            plans = []
+            for phrase in (sl01['phrase'],) + MAINTAINER_SL:
+                ctx = prior_states.Ctx(fx, label)
+                prior_states.build(sl01['prior_state'], ctx)
+                o = core.handle(phrase, ctx.project, selection=ctx.selection)
+                steps = [s for s in o['steps'] if s['op'] != 'show_tutor']
+                plans.append((o['type'], [dict(s, args={k: str(v).replace(ctx.root, '<root>') for k, v in
+                                                        (s.get('args') or {}).items()}) for s in steps]))
+                fx.remove_project(ctx.root)
+            check('V6.2 %s: both phrases give the PLAN of SL01 (%s), with the selected files'
+                  % (label, ' > '.join(s['op'] for s in plans[0][1])),
+                  plans[0][0] == 'PLAN' and [s['op'] for s in plans[0][1]] ==
+                  ['import_config', 'validate_inputs', 'run_com', 'summarize']
+                  and plans[1] == plans[0] and plans[2] == plans[0]
+                  and 'thru.s4p' in plans[0][1][2]['args'].get('channels', ''),
                   [(t, [s['op'] for s in st]) for t, st in plans])
 
 

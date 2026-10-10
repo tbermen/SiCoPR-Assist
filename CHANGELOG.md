@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.8.0 (10 October 2026)
+
+Version 2, Phase V2-6: what the maintainer's first GUI session found. He picked a config and a channel in the
+GUI's tabs and typed `Run on the config and channels specified in the tabs.`; the panel had no way to know which
+channel files were picked, strict mode had no meaning for "the selected", and it asked about `b_min(1)`. The
+one-line command box was easy to miss. `Run the example` asked for a channel file. Rows SL01 to SL05 and EX01
+(six new prior states) specify the first and the third; the table has 865 rows.
+
+- **The selection in the tabs (Decision 20).** `core.handle(phrase, project, selection=...)` takes what is
+  selected in a GUI's tabs as data, one more optional input like `origin`: the config, the THRU, and the FEXT
+  and NEXT files. "the selected", "the specified" or "the chosen" config, channel, channels or files, "in the
+  tabs", "the selection" and "what is selected" mean that selection, in those forms only (a selection word
+  outside them is still asked about). With no working config the selected config is imported and run on the
+  selected channels, as the same files named in a phrase would be; with one, it is kept, with its overrides and
+  what was done in the Config view, and only the channel files change (Decision 18's swap with the files from
+  the selection). The files run in the roles they were given in the Run tab, whatever their names say. No
+  channel selected asks; no selection at all, as on the command line, asks; a selected file that is not on disk
+  stops. The history record of a phrase that spoke of the selection keeps what was selected then.
+- **The role of a channel file is part of what decides reuse.** Until now a file's role followed from its name,
+  so the same files always meant the same run. With roles given by the selection, the same file as a FEXT and as
+  a NEXT aggressor is another run, and is never served by the result of the first.
+- **The panel keeps the selection** (the config from `sicopr:config`, the channels from the new page event
+  `sicopr:channels` of SiCoPR's GUI), shows it in a line above the command box
+  (`Selected: <config>; THRU <file>; 3 FEXT, 4 NEXT`), and posts it with every phrase. A path outside the project
+  folder and the opened directories is left out before it reaches the core. A **Run selection** button sends
+  `Run the selected config and channels.`
+- **The command box (Decision 21)** is a text area of three lines that grows with its content, in its own block
+  with the label `Type a command` and a border in the accent colour. Enter sends, Shift+Enter starts a new
+  line, and it has the focus when the panel comes up. Under it are up to four phrases that give a PLAN right
+  now; a click puts one in the box. The block stays in view at the bottom of the panel while the conversation
+  scrolls.
+- **`Run the example.` works from an empty folder (Decision 22).** With no channel file in the project folder,
+  the plan runs the example setup on a synthetic THRU, the 400 mm lossy line, written to `data\example_thru.s4p`
+  when the plan is carried out, and says that it is synthetic and not a measured channel. A channel file already
+  in the folder is used instead. The line model moved into the package as `sicopr_assist\example_channel.py`;
+  `tests\cases\make_s4p.py` hands the tests that one implementation and writes the same bytes as before.
+- Found in the walk-through on the real page and fixed: the box could not take the focus while SiCoPR still had
+  the panel slot hidden (it is now tried until the box is on screen, and never taken from a field in use); a
+  run that was stopped counted as "the last run" with nothing changed, so the same selection could not be run
+  again (only a completed run does now); the examples under the box are hidden while a plan runs, so the
+  progress lines have the room.
+- Tests: `tests\test_selection.py` (30 checks, and gate V6.4 end to end with `SICOPR_ASSIST_E2E = 1`), the
+  selection and the examples through the panel in `tests\test_gui_api.py`, the command box and the selection
+  line in `tests\test_gui_static.py`, and `tests\test_use_cases.py --gate V6.2`. The frozen L4 list has 651
+  rows: the 645 it had, unchanged, then the six new rows.
+
 ## 0.7.0 (9 October 2026)
 
 Version 2, Phase V2-5: the GUI, built to `docs\GUI_DESIGN.md` as approved on 9 October 2026 with the

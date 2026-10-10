@@ -149,8 +149,8 @@ class _Runner:
         fields, err = config_model.loaded_fields(wc)
         if err:
             return None, err
-        shas = [_sha(self.ctx.path(p)) for p, _ in channels]
-        return core._fingerprint(fields, shas, self.sic, export), None
+        keys = core.channel_keys((r, _sha(self.ctx.path(p))) for p, r in channels)
+        return core._fingerprint(fields, keys, self.sic, export), None
 
     def run_point(self, wc, channels, head, notes=(), export=False):
         """One point: reuse an equal earlier run, or run it. head starts its status line (the step, and for a batch
@@ -578,7 +578,17 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
         named = next((a.get('channels') for op, a in steps if op in ('validate_inputs', 'run_com') and a.get('channels')),
                      None)
         if named:
-            channels = core.channel_roles(named)
+            # the roles as the plan gives them (the selection in the GUI's tabs, Decision 20), else from the names
+            roles = next((a.get('roles') for op, a in steps if op == 'run_com' and a.get('roles')), None)
+            channels = list(zip(named, roles)) if roles and len(roles) == len(named) else core.channel_roles(named)
+        synthetic = imported.get('example_channel') if imported else None
+        if synthetic and not os.path.exists(ctx.path(synthetic)):
+            # the example setup in a folder with no channel file (Decision 22): its synthetic THRU is written now
+            from sicopr_assist import example_channel
+            os.makedirs(os.path.dirname(ctx.path(synthetic)), exist_ok=True)
+            n, il, _ = example_channel.write(ctx.path(synthetic))
+            R.say('status', 'wrote %s: a synthetic %g mm lossy line (%d points, %.1f dB at 53.125 GHz), not a '
+                            'measured channel' % (_native(synthetic), example_channel.LENGTH_MM, n, il))
     else:
         wc = ctx.wc
         if wc is None:

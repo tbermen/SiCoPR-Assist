@@ -246,7 +246,9 @@ class Scorer:
         old = {k: os.environ.get(k) for k in ctx.env}
         os.environ.update(ctx.env)
         try:
-            o = self.handle(phrase, Project(ctx.root))
+            # the selection in the GUI's tabs is handed to the core as data, where the prior state has one
+            sel = {'selection': ctx.selection} if getattr(ctx, 'selection', None) is not None else {}
+            o = self.handle(phrase, Project(ctx.root), **sel)
             if isinstance(o, dict) and o.get('type') == 'PLAN' and self.handle is core.handle and run.fetch_pending(o):
                 o = run.carry_out(Project(ctx.root), o)['next']
             return o

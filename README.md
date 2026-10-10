@@ -76,6 +76,13 @@ sicopr-assist "What's my COM summary statistics for the last set of runs?"
 sicopr-assist                            # an interactive prompt; type quit to leave
 ```
 
+With nothing of your own at hand, `sicopr-assist "Run the example."` works from an empty folder: it runs
+the example setup (the working config of the Case1 workbook, shipped with the tool) on a synthetic THRU,
+a 400 mm lossy line that it writes to `data\example_thru.s4p` when the plan is carried out. The plan says
+that the channel is synthetic and not a measured one. A channel file already in the folder is used
+instead. The line model is `sicopr_assist\example_channel.py`; the file is ours, and no IEEE file is
+involved.
+
 `python -m sicopr_assist "..."` does the same if the `sicopr-assist` script is not on your `PATH`.
 `--json` prints the outcome as JSON. `--quiet` is described below. When the answer is a QUESTION, the
 next phrase is read as the answer: an option number, the option's text, or `cancel`.
@@ -90,8 +97,8 @@ Some things to know:
 - A sweep in `X steps` with a whole X of 2 or more is a count of points, both ends included. Any
   other step size follows MATLAB `start:step:end`, so it can stop short of the end; the points are
   announced.
-- A point whose loaded parameters, channel files and SiCoPR version equal an earlier run is reused,
-  not run again. More new runs than `max_new_runs` asks first.
+- A point whose loaded parameters, channel files (each in its role: THRU, FEXT or NEXT) and SiCoPR
+  version equal an earlier run is reused, not run again. More new runs than `max_new_runs` asks first.
 - Runs go one at a time, each in a child process. `Re-run the last one` replays the stored plan.
 
 ### A re-run with another channel file
@@ -318,12 +325,14 @@ nothing itself and makes no network connection for feedback. You can also open a
 
 ## How it is tested
 
-The behaviour is specified by a table of 859 use cases (`tests\cases\sicopr_use_cases.csv`), written
+The behaviour is specified by a table of 865 use cases (`tests\cases\sicopr_use_cases.csv`), written
 and checked against SiCoPR before any code; rows were added after the maintainer's first use (CH01 to
-CH08, 6 October 2026), his second session (XT01 to XT06 and SM16) and the reading of the IEEE tools
-page (F11 and F12, 7 October). Each row gives a phrase, the state of the project before it, and the
-expected outcome. The harness runs every row on each starting workbook it applies to (2447 row and
-config pairs) and scores four levels:
+CH08, 6 October 2026), his second session (XT01 to XT06 and SM16), the reading of the IEEE tools
+page (F11 and F12, 7 October) and his first GUI session (SL01 to SL05 and EX01, 10 October). Each row
+gives a phrase, the state of the project before it, and the expected outcome; for the SL rows that
+state holds what is selected in the GUI's tabs, which the harness hands to the core as data. The
+harness runs every row on each starting workbook it applies to (2458 row and config pairs) and scores
+four levels:
 
 | level | what is compared |
 |---|---|
@@ -357,15 +366,19 @@ stand-in of the tools page in its own markup, served from 127.0.0.1 (`tests\case
 with small zips the tests write.
 
 `python tests\test_use_cases.py --gate G7` prints the scoreboard by group and level, `--gate V1.1`
-the tutor and feedback rows, `--gate V2.1` the dashboard rows, and `--gate V3.1` the download rows. The tutor text and the feedback
+the tutor and feedback rows, `--gate V2.1` the dashboard rows, `--gate V3.1` the download rows, and `--gate V6.2` the selection and
+example rows. The tutor text and the feedback
 file, which the four levels do not read, are checked by `tests\test_tutor.py` and
 `tests\test_feedback.py`. `tests\test_dashboard.py` carries out dashboard plans with a stand-in COM
 child and a stand-in Rscript, so it needs no R. `tests\test_gui_api.py` drives the GUI panel's API as
 SiCoPR's GUI does, with a stand-in child (the frozen L4 rows through the panel give what the core gives,
 the Config-view round trip on the four workbooks, runs, Stop, paths, the history, following another
-workbook), and `tests\test_gui_static.py` parses the panel's script and checks its ids, its `[hidden]`
-rules and its events; the checks of SiCoPR's real server routing to the panel print SKIP when the
-SiCoPR in use has no panel slot. The build scores are in
+workbook, the selection handed to the core), and `tests\test_gui_static.py` parses the panel's script
+and checks its ids, its `[hidden]` rules, its events, the command box and the selection line; the checks
+of SiCoPR's real server routing to the panel print SKIP when the SiCoPR in use has no panel slot.
+`tests\test_selection.py` checks how the selection is read and planned, that the engine is given the
+files in the roles they were selected in, and the example in an empty folder (with
+`SICOPR_ASSIST_E2E = 1`, through the real engine). The build scores are in
 `CHANGELOG.md`.
 
 ## The GUI
@@ -386,7 +399,21 @@ SiCoPR's GUI directly also shows the panel, which then asks for the project fold
 - **The panel** shows the project, the working config, and the conversation: each phrase with its
   PLAN, QUESTION or STOP as on the command line, a question's options as buttons, the tutor's lines with
   their example phrases as links, live progress while a plan runs (Stop terminates it), and each run's
-  summary with buttons that show it in SiCoPR's Results tabs. Up and Down recall earlier phrases.
+  summary with buttons that show it in SiCoPR's Results tabs.
+- **The command box** is the block at the bottom of the panel, under the label `Type a command`: a text
+  area of three lines that grows with what you type. Enter sends, Shift+Enter starts a new line, Up and
+  Down recall earlier phrases. Under it are up to four phrases that work right now (`Run the example.`
+  in a new project; phrases written with the names of your config after that); a click puts one in the
+  box. The block stays in view while the conversation scrolls.
+- **The selection in the tabs.** The line above the command box says what is selected: the workbook of
+  the Config tab and the THRU, FEXT and NEXT files picked in the Run tab, for example
+  `Selected: config.xlsx; THRU thru.s4p; 3 FEXT, 4 NEXT`. `Run the selected config and channels.` (the
+  **Run selection** button sends it) runs exactly those files, in the roles you gave them in the Run
+  tab. "the selected", "the specified" or "the chosen" config, channel, channels or files, "in the tabs",
+  "the selection" and "what is selected" all mean that selection. After a run,
+  `Re-run with the selected channel.` keeps the config and changes only the channel files. With no
+  channel picked, the tool asks. On the command line there is no selection, so those phrases ask for
+  files.
 - **The Config view shows the working config.** Every value that differs from the workbook is shown in
   place with where it came from (`Assist #12`, `edited here #13`, `linked`, `proposed`, `option 2`) and
   the workbook value beside it. SiCoPR's Save as is off while the panel is in use: save the working
@@ -407,7 +434,8 @@ SiCoPR's GUI directly also shows the panel, which then asks for the project fold
 ## What version 2 adds
 
 Version 2 was built in phases: the tutor and feedback export (above) in 0.4.0, the dashboard in 0.5.0,
-channel download in 0.6.0, and the GUI in 0.7.0.
+channel download in 0.6.0, and the GUI in 0.7.0. Version 0.8.0 follows the first GUI session: the
+selection in the tabs, the command box, and the example that runs from an empty folder.
 
 ## What is known to be incomplete
 
@@ -416,7 +444,7 @@ channel download in 0.6.0, and the GUI in 0.7.0.
 - A re-run with another channel file replaces one THRU, or one FEXT or NEXT file. When the last run
   had several FEXT (or NEXT) files, naming one of them stops and asks for the whole set with its
   config.
-- 214 of the 859 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
+- 214 of the 865 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
   They are scored at L1 (and L2 and L3 where those apply) and listed for a person to review.
 - Four behaviours are assumptions not yet confirmed by the maintainer: matching a typo in an action
   or filler word (`agian` read as `again`, never for a parameter name); the trouble thresholds of

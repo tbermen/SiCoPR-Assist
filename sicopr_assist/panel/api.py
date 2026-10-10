@@ -346,6 +346,74 @@ def settings(project):
     return {'lines': core.settings_lines(read_settings(project))}
 
 
+MAX_EXAMPLES = 4                 # example phrases under the command box (Decision 21)
+NO_CHANNEL = 'no channel file (pick a THRU in the Run tab)'
+RUN_SELECTION = core.RUN_SELECTION
+
+
+def clean_selection(project, sel, roots):
+    """The selection the page reports (the config of the Config tab from sicopr:config, the THRU, FEXT and NEXT
+    files of the Run tab from sicopr:channels), as the core takes it (Decision 20): absolute paths, and only those
+    inside the project folder or a directory opened in the GUI. A path from anywhere else is left out, so it never
+    reaches the core. None when the page reports no selection at all."""
+    if not isinstance(sel, dict):
+        return None
+
+    def one(p):
+        return allowed(project, p, roots)
+
+    def many(ps):
+        return [x for x in (one(p) for p in (ps if isinstance(ps, list) else [])) if x]
+    return {'config': one(sel.get('config')), 'thru': one(sel.get('thru')), 'fext': many(sel.get('fext')),
+            'next': many(sel.get('next'))}
+
+
+def selection_line(sel):
+    """The line above the command box: Selected: <config>; THRU <file>; 3 FEXT, 4 NEXT."""
+    sel = sel or {}
+    cfg = os.path.basename(sel['config']) if sel.get('config') else 'no config'
+    if not sel.get('thru'):
+        return 'Selected: %s; %s' % (cfg, NO_CHANNEL)
+    fx, nx = len(sel.get('fext') or []), len(sel.get('next') or [])
+    return 'Selected: %s; THRU %s%s' % (cfg, os.path.basename(sel['thru']),
+                                        '; %d FEXT, %d NEXT' % (fx, nx) if fx or nx else '')
+
+
+def selection(project, sel, roots):
+    """POST selection: the selection as the core will take it, the line that shows it, and the phrase of the Run
+    selection button."""
+    clean = clean_selection(project, sel, roots)
+    return {'selection': clean, 'line': selection_line(clean), 'phrase': RUN_SELECTION}
+
+
+def examples(project, sel=None, limit=MAX_EXAMPLES):
+    """POST examples: up to limit phrases to show under the command box (Decision 21), each one checked by the core
+    against the project as it is now and kept only when it gives a PLAN with no word left unplaced (the tutor's
+    rule, row TU04). With no run yet they start with what runs now: the one config and channel of the folder when
+    there is exactly one of each, and the example setup. Once there is a working config (a run, or a workbook
+    opened or edited in the Config view), the rest are the tutor's examples, written with the names of that config,
+    which is the one the Config view shows."""
+    from sicopr_assist import tutor
+    ctx = core.Context(project, sel)
+    cands = []
+    if not any(r.get('run_ids') for r in ctx.history):
+        first = tutor.first_run(ctx)
+        cands += ([first] if first else []) + ['Run the example.']
+    if ctx.wc is not None:                        # the tutor's phrases build on a working config
+        try:
+            cands += [p for _, p in tutor.examples(ctx)]
+        except Exception:                         # noqa: BLE001 - no examples is not an error of the panel
+            pass
+    out = []
+    for p in cands:
+        if len(out) >= limit:
+            break
+        got, _ = tutor._resolve(p, core.Context(project, sel))
+        if got is not None and got['type'] == 'PLAN' and not got.get('unplaced') and p not in out:
+            out.append(p)
+    return {'phrases': out}
+
+
 def log(project, kind, detail, outcome_type=None):
     """Write one GUI log record (run, stop, view, error) with origin gui. Returns its seq."""
     rec = history_record(origin='gui', kind=kind, detail=detail, outcome=outcome_type)
@@ -453,7 +521,12 @@ class Panel:
         if p is None:
             return {'error': 'no project folder: use Browse to choose one'}
         if path == 'handle' and method == 'POST':
-            return self.phrase(p, str(body.get('phrase') or ''), host)
+            return self.phrase(p, str(body.get('phrase') or ''), host,
+                               clean_selection(p, body.get('selection'), roots))
+        if path == 'selection' and method == 'POST':
+            return selection(p, body.get('selection'), roots)
+        if path == 'examples' and method == 'POST':
+            return examples(p, clean_selection(p, body.get('selection'), roots))
         if path == 'job':
             j = self.job
             return {'idle': True} if j is None else j.status(int(q.get('since') or 0))
@@ -480,13 +553,14 @@ class Panel:
         return 404, 'application/json', b'{"error": "not an endpoint of the Assist panel"}'
 
     # ---- commands
-    def phrase(self, p, phrase, host):
-        """POST handle: core.handle, then a PLAN carried out in the worker."""
+    def phrase(self, p, phrase, host, selection=None):
+        """POST handle: core.handle, then a PLAN carried out in the worker. selection: what is selected in the tabs
+        (clean_selection), handed to the core as data with every phrase (Decision 20)."""
         if not phrase.strip():
             return {'error': 'type a command'}
         if self.running():
             return {'error': 'a plan is being carried out; wait for it, or press Stop'}
-        out = core.handle(phrase, p, origin='gui')
+        out = core.handle(phrase, p, origin='gui', selection=selection)
         seq = (p.last_record() or {}).get('seq')
         res = {'outcome': out, 'seq': seq, 'job': False}
         if out['type'] != 'PLAN':

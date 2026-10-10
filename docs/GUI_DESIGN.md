@@ -5,6 +5,11 @@ built in Phase V2-5 (SiCoPR-Assist 0.7.0, and the slot of section 4 on SiCoPR's 
 Where the build differs from the text below, the text was changed to match and section 13 lists it. The
 static mock-up is `docs\gui_mockup.html` (open it from the file system; it needs no server and no network).
 
+Changed in Phase V2-6 (10 October 2026, SiCoPR-Assist 0.8.0) after the maintainer's first session with the
+GUI: the selection in the tabs (section 5a, and the event `sicopr:channels` in section 4.1), the command box
+(section 5, item 5), and the example that runs from an empty folder (section 7). Section 14 lists what was
+built and where it differs from what was written. The mock-up still shows the 0.7.0 panel.
+
 Written against SiCoPR-Assist 0.6.0 (`f884c1f`) and SiCoPR `55c3f71` (1.1.1), whose GUI was read in full
 (`gui\app.py`, `config_io.py`, `runner.py`, `schematic.py`, `static\`, `README.md`) and run once from a
 temporary folder (`--no-browser --dir <temp> --run-dir <temp>`, port 8799) to see its layout, views and
@@ -61,7 +66,7 @@ What matters for this design:
 | what it is | SiCoPR's GUI gains a small, documented extension point: installed packages register a panel; the page shows it on the right and exchanges a few named events with it | Assist imports `gui.app` from the SiCoPR install, subclasses its `Handler`, rewrites `index.html` on the fly to add the panel, and wraps `app.js` functions at run time | Assist copies `app.py`, `app.js`, `style.css`, `config_io.py`, `runner.py`, `schematic.py` (about 4,300 lines) and edits them |
 | change in SiCoPR | yes, about 300 lines in `gui\` and its tests, written by the maintainer (section 4) | none | none |
 | cost now | the SiCoPR change, then the panel in Assist | the panel, plus run-time patching of names that are not an interface (`Handler`, `EXTRA_ROOTS`, `CFG`, `EDITS`, `renderPanel`, element ids) | the copy, its licence notes, and edits throughout it |
-| cost later | a versioned contract to keep stable (one endpoint, two route prefixes, ten event names); every SiCoPR GUI fix reaches Assist users at once | any SiCoPR GUI change can break Assist with no test in SiCoPR to say so; Assist would have to pin the hashes of SiCoPR's GUI files and fail on every SiCoPR release | drift: SiCoPR's fixes (the poll that died, the unbounded terminal, the Windows path split of 1 October) never reach the copy; two config editors for one file format; si-gui would have to merge two forks |
+| cost later | a versioned contract to keep stable (one endpoint, two route prefixes, eleven event names since Phase V2-6); every SiCoPR GUI fix reaches Assist users at once | any SiCoPR GUI change can break Assist with no test in SiCoPR to say so; Assist would have to pin the hashes of SiCoPR's GUI files and fail on every SiCoPR release | drift: SiCoPR's fixes (the poll that died, the unbounded terminal, the Windows path split of 1 October) never reach the copy; two config editors for one file format; si-gui would have to merge two forks |
 | SiCoPR with no Assist installed | unchanged: no panel registered, the slot stays hidden | unchanged | unchanged |
 | for si-gui and BeSS | the same slot takes a BeSS panel or an si-gui composition | nothing reusable | nothing reusable |
 
@@ -113,6 +118,10 @@ On the page, SiCoPR and a panel talk through `CustomEvent`s on `window`. SiCoPR 
 | `sicopr:view` | `{view}` | the tab changed |
 | `sicopr:run` | `{returncode, command, cwd}` | a run started from the Run tab finished (once per run, under the existing `RUN_DONE` guard) |
 | `sicopr:browsed` | `{purpose, path}` | the Browse dialog was used for a panel (see `sicopr:browse`) |
+| `sicopr:channels` | `{thru, fext, next, cause}` | the channel files chosen in the Run tab changed (added in Phase V2-6, section 5a): `thru` a path, empty when none, `fext` and `next` lists of paths, as the page holds them. Sent once at start (`cause` `boot`; the lists are empty until the Run tab is first opened), on a pick in THRU, FEXT or NEXT (`user`), and when the lists are filled again and the selection differs (`list`: a directory, the filter, the first THRU taken by default) |
+
+The panel API number stays 1: an event was added and none changed, so a panel written for the ten events of
+0.7.0 works as before.
 
 and listens for:
 
@@ -134,7 +143,7 @@ Keys are SiCoPR's own: `name` for a main keyword, `name#tx` and `name#rx` for th
 | `gui\app.py` | load panels from the entry points at start (and `--no-panels`); `GET /api/panels` (`{api: 1, panels: [{name, title, script, style}]}`); `/panel/<name>/static/<file>` served by base name only, as `/static/` is; `/panel/<name>/api/...` routed to `handle` with a `host`; `/api/exec/start` refuses while a panel reports `busy()`; a panel that fails to import or raises is reported and skipped | 80 lines |
 | `gui\static\index.html` | the views and a right-hand `<aside id="panelSlot" hidden>` in one grid | 6 lines |
 | `gui\static\style.css` | the grid with the slot (400 px, sticky, own scroll; one column under 1200 px), `.panelslot[hidden]`, the overlay tag and field highlight, the dashed outline of a block with overlaid keys | 30 lines |
-| `gui\static\app.js` | `loadPanels()` in `boot()`; the five events sent and five handled; `OVERLAY` beside `EDITS` (a field compares with the overlay value when there is one, so editing back to it is not a change); Browse for a panel | 110 lines |
+| `gui\static\app.js` | `loadPanels()` in `boot()`; the five events sent and five handled (six sent since Phase V2-6: `sicopr:channels`, about 25 lines); `OVERLAY` beside `EDITS` (a field compares with the overlay value when there is one, so editing back to it is not a change); Browse for a panel | 110 lines |
 | `gui\README.md` | a section "Panels": the contract above, and that no panel means no change | 40 lines |
 | `tests\test_gui_server.py` | no panel: `/api/panels` gives `[]`, the page and every existing check unchanged; a stand-in panel (a module injected in place of the entry points): its static and api routes answer, `../` and absolute paths under `/panel/` are refused, a raising panel is skipped and the server still serves, `busy()` makes `/api/exec/start` refuse with its text | about 15 checks, 90 lines |
 | `tests\test_gui_static.py` | the slot is hidden by default; every event name `app.js` sends or handles is in the README's table; `.panelslot[hidden]` exists (the existing hidden-class check covers it) | 20 lines |
@@ -174,9 +183,25 @@ From top to bottom:
 3. **Live progress** while a plan is carried out (section 7).
 4. **The result** of each run: the run summary lines (`summary.run_summary`), COM first with pass or fail
    against COM Pass threshold, and buttons that show the run in Results, static or Results, dynamic.
-5. **The command box**, at the bottom of the panel: Enter sends; Up and Down recall earlier phrases from the
-   project's history (`history.jsonl`, newest first, the same list the CLI keeps); Stop while a run is in
-   progress.
+5. **The command box** (Decision 21, Phase V2-6: the first thing a new user sees in the panel). Its own
+   block at the bottom of the panel, set apart from the conversation by a rule and a border in the accent
+   colour, and kept in view: the conversation scrolls above it, the block does not (it sticks to the bottom
+   of the panel). From top to bottom:
+   - the selection line and the **Run selection** button (section 5a);
+   - the label `Type a command`;
+   - a text area of three lines that grows with its content (up to about twelve lines, then it scrolls), with
+     Send beside it. Enter sends; Shift+Enter starts a new line (a phrase typed on several lines is sent as
+     one line); Up and Down recall earlier phrases from the project's history (`history.jsonl`, newest first,
+     the same list the CLI keeps) while the box holds one line. The box has the focus when the panel comes
+     up, and is never given the focus while the user is in another field;
+   - one line that says so (`Enter sends. Shift+Enter starts a new line. ...`);
+   - up to four example phrases, each a button that puts its phrase in the box and sends nothing. They are
+     phrases that give a PLAN right now, checked by the core against the project as it is (the tutor's rule,
+     row TU04): with no run yet, the phrase that runs the one config and the one channel file of the folder
+     (when there is exactly one of each) and `Run the example.`; once there is a working config, the tutor's
+     examples, written with the names of that config, which is the one the Config view shows. They are asked
+     again when the config in view changes and when a command ends, and hidden while a plan runs.
+   While a plan runs, the box, Send and Run selection are off, and Stop (in the progress block) is live.
 6. **Settings** (folded): the settings in force with where each came from (`core.settings_lines`); they are
    changed by phrase (`Tutor off`) as on the command line.
 7. **Language model** (folded, reserved): shows `none: this version is rules-based`. When the layer is added
@@ -184,6 +209,53 @@ From top to bottom:
    may turn loose wording into a phrase or propose `changes`, and the core validates them exactly as typed
    input; the conversation then shows the user's own wording and the phrase the core resolved, both kept in
    the history. The panel never gives it a way to write the run CSV, start a run or skip validation.
+
+## 5a. The selection in the tabs (Decision 20, Phase V2-6)
+
+The maintainer picked a config in the Config tab and a channel in the Run tab and typed `Run on the config and
+channels specified in the tabs.` The panel had followed the config, but nothing told it which channel files
+were picked, and strict mode had no meaning for "the selected", so it asked about `b_min(1)`.
+
+**Where SiCoPR's GUI holds the selection.** The config is the workbook the Config tab shows (`CFG.path`, already
+sent as `sicopr:config`). The channel files of a run are held by the Run tab alone, in its three lists: THRU
+(`#nlThru`, one file), FEXT aggressors (`#nlFext`) and NEXT aggressors (`#nlNext`), each a list of paths the
+user may fill against the file names (the filter can be switched off). They are what the Run tab's command is
+built from. The S-parameters tab has a list of its own (`#spFiles`), which picks files to plot, with no roles and
+no tie to a run, so it is not part of the selection. SiCoPR therefore sends `sicopr:channels` from the Run tab:
+once at start, on every pick in the three lists, and whenever the lists are filled again and the selection
+differs (section 4.1). The Run tab fills its lists when it is first opened, so until then the selection has a
+config and no channel file.
+
+**What the panel does with it.** It keeps the selection (`config` from `sicopr:config`, `thru`, `fext` and
+`next` from `sicopr:channels`), shows it in a line above the command box, and posts it with every phrase:
+
+    Selected: config.xlsx; THRU thru.s4p; 3 FEXT, 4 NEXT
+    Selected: config.xlsx; no channel file (pick a THRU in the Run tab)
+
+The line is asked from the panel's server (`POST selection`), which answers what the core will be handed: each
+path is checked against the project folder and the opened directories, and one from anywhere else is left out
+and never reaches the core. The **Run selection** button sends `Run the selected config and channels.`
+
+**What the core does with it** (`core.handle(phrase, project, selection=...)`, one more optional input like
+`origin`; the outcome is data as before). "the selected", "the specified" or "the chosen" config, channel,
+channels or files, "in the tabs", "the selection" and "what is selected" mean the selection, in those forms
+only: a selection word outside them is left unplaced and asked about (Rule 4).
+
+| state | outcome | row |
+|---|---|---|
+| no working config yet, or the phrase names the selected config and it is another file than the source of the working config | the selected config is imported and run on the selected channels, as `Run COM on <channels> with <config>` would be: `import_config > validate_inputs > run_com > summarize`, the files and their roles announced | SL01, SL02 |
+| a working config whose source is the selected config, or a phrase that names only the channel | the working config is kept, with its overrides and what was done in the Config view, and only the channel files change: `set_channel > validate_inputs > validate_config > run_com > summarize` (Decision 18's swap; one `set_channel` step for the THRU when it changes, one for the aggressors when they change) | SL05 |
+| the same, and nothing changed since a completed run | STOP: the results would equal the last run (as row CH07) | |
+| no channel file selected | QUESTION: select one in the Run tab, name a file, cancel | SL03 |
+| no selection at all (the command line, or a phrase posted without one) | QUESTION: provide files, cancel | SL04 |
+| `Re-run with the selected channel.` and no run yet | the question of row CH05 (there is no config of a last run to keep) | |
+| a selected file that is not on disk, or is not a Touchstone file | STOP that names it | |
+| the selection beside a sweep, named files, the example or another request | QUESTION: the selection is run on its own | |
+
+The files run in the roles they have in the Run tab (`run_com` carries `roles`), not the roles their names
+suggest: a file the user put under NEXT is a NEXT aggressor whatever it is called. An answer to a question is
+posted with the selection too, so a question asked about a selection phrase is resolved against the selection of
+the moment it is answered.
 
 ## 6. The config round trip
 
@@ -292,6 +364,12 @@ panel sends `sicopr:show` with the run folder only if the user clicks the button
 away from what they are reading), except after a dashboard phrase, where the page is shown in Results,
 dynamic in place of opening a browser tab (`carry_out(open_page=...)` already takes a stand-in).
 
+**The example in an empty project** (Decision 22, Phase V2-6). `Run the example.` in a project folder with no
+channel file gives a PLAN on a synthetic THRU: the 400 mm lossy line of `sicopr_assist\example_channel.py`,
+written to `data\example_thru.s4p` when the plan is carried out (the first progress line says so) and never at
+plan time. The plan says that the channel is synthetic and not a measured one. A channel file already in the
+folder is used instead, as row R1 does. It is the phrase under the command box in a new project.
+
 **It lands in the results views** with no further work: the project folder is an opened root, and each run's
 folder is a run directory by SiCoPR's own rule (section 2). A batch is several run folders, one per point;
 the panel shows the batch summary table and the path of `batch_summary.csv`.
@@ -351,7 +429,9 @@ folder and `host.roots()`.
 |---|---|---|
 | `GET state` | the project line, the pending question, whether a plan is running | `Project`, `Project.read_pending`, `core.history_lines`, `core.Context(...).base` |
 | `POST project {path}` | change the project folder (a directory under `host.roots()`) | `Project` |
-| `POST handle {phrase}` | resolve a phrase; carry out a PLAN in the worker | `core.handle`, then `run.carry_out` (and `core.fetch_followup` through `next`) |
+| `POST handle {phrase, selection}` | resolve a phrase, with the selection in the tabs handed over as data (section 5a); carry out a PLAN in the worker | `core.handle`, then `run.carry_out` (and `core.fetch_followup` through `next`) |
+| `POST selection {selection}` | the selection as the core will be handed it (paths outside the project folder and `host.roots()` left out), the line that shows it, and the phrase of the Run selection button | none of the core: `api.clean_selection`, `api.selection_line` |
+| `POST examples {selection}` | up to four phrases for under the command box, each one giving a PLAN now | `tutor.first_run`, `tutor.examples`, `core._resolve` through the tutor's own check |
 | `GET job?since=` | progress lines, running or done, the carry-out result | the worker's buffer, `run.line_text` |
 | `POST stop` | stop the plan in progress | the worker (new cancel hook, section 10) |
 | `POST overlay {keys, changed}` | the source workbook path and the overlay cells, keyed as the view shows them (`keys` from `sicopr:config`), with `focus` for the keys of the last outcome | `core.Context`, `config_model.import_config` of the source (cached by SHA-256), `config_model.same_value`, history for the origin of each override |
@@ -419,6 +499,17 @@ path like any other.
   contract's.
 - Every new check shown to fail on the defect it targets (Rule 7), GX after each phase, and
   `tests\test_text_style.py`.
+- **The selection and the command box (Phase V2-6).** SiCoPR's `tests\test_gui_static.py`: the event is sent at
+  start, when the lists are filled and on every pick, carries the three lists and the cause, is not sent again
+  for an unchanged selection, and makes no request and changes nothing (so the page with no panel is as it
+  was). Here: `tests\test_selection.py` (the forms read and the near-forms left unplaced; the plans; the roles
+  the engine is given, with a stand-in child that records its arguments; the example in an empty folder);
+  `tests\test_gui_api.py` (the selection line; the phrase posted with a selection gives what the core gives; a
+  path outside the opened directories never reaches the core; the examples all give a PLAN);
+  `tests\test_gui_static.py` (the box is a text area of three lines with its label, Enter sends and Shift+Enter
+  does not, the block stays in view, the line follows both events, Run selection sends its phrase, an example
+  fills the box). The real page is driven in the walk-through of gate V6.5, where the same behaviours are
+  checked with real key presses.
 
 ## 12. Open questions for the maintainer
 
@@ -490,3 +581,47 @@ changed to match:
 11. **`core.edit(project, changes, source=None, origin='gui')`** is the entry point of section 6; `core.handle`
     gains `origin` for the record only (the outcome does not depend on it), so the frozen L4 list gives the same
     outcomes through the panel as through the core.
+
+## 14. As built (Phase V2-6, 10 October 2026)
+
+Decisions 20, 21 and 22 of the build prompt, after the maintainer's first session with the GUI. Rows SL01 to SL05
+and EX01 of the use-case table specify the selection and the example; the command box has no rows and is specified
+by Decision 21 and section 5. Where a decision was silent, the least surprising reading was taken:
+
+1. **`sicopr:channels` is sent from the Run tab only**, with the causes `boot`, `user` and `list` (section 4.1).
+   The S-parameters tab picks files to plot, not files for a run, so it is not the selection (section 5a). The
+   event is not sent again for an unchanged selection, so the filter checkbox and a refilled list are not a change.
+   At start the Run tab's lists are still empty, so the first event carries no channel: the selection line then
+   says `no channel file (pick a THRU in the Run tab)`, and `Run selection` gives the question of row SL03.
+   SiCoPR's lists are not filled earlier for the panel's sake, because that would add requests to a page that
+   makes none of them today.
+2. **The selection is posted with every phrase** (`POST handle {phrase, selection}`) and not kept on the
+   server, so two browser tabs cannot hand each other's selection to the core, and a phrase sent right after a
+   pick carries that pick. `POST selection` only answers the line to show. The history record of a phrase that
+   spoke of the selection keeps what was selected then (`detail.selection`), so a session can be reviewed
+   later (section 7a); no other record holds it.
+3. **With a working config, the selection keeps it.** Decision 20 gives the plan of row SL01 for a project with
+   no history and the swap of row SL05 after a run. In between is the state the maintainer was in: a workbook
+   opened in the Config view (Assist followed it, an `open` record) and no run since. There the working config
+   is the selected config with whatever was done to it in the Config view, so it is kept and run on the selected
+   channel files; importing the workbook again would drop the edits. The plan says so.
+4. **`Run the selected config and channels.` after a completed run with the same files and nothing changed** is
+   a STOP (the results would equal the last run), as row CH07 is for a channel named in a phrase. After a run
+   that failed or was stopped, the same selection runs again.
+5. **`Re-run with the selected channel.` with no run yet** asks as row CH05 does, although the selection holds a
+   config: a re-run has nothing to re-run, and Decision 18 says so for a channel named in a phrase.
+   `Run the selected config and channel.` is the phrase that runs it.
+6. **"the selected file" (one file, no kind named) is not one of the forms**: it could be the config or a
+   channel, so it is asked about. "the selected files" is the whole selection.
+7. **The selection beside any other request** (a sweep, files named, the example, crosstalk, a question about
+   the config) asks, with `cancel` as its only option, and says which two phrases run a selection. A change of
+   a parameter in the same phrase is planned as a re-run would plan it (`Run the selected config and channels
+   with DER_0 = 1e-4`).
+8. **The examples under the box** are checked against the project as it is, not as if a run had just been made
+   (the tutor's examples are checked that way, and are shown after a PLAN). So a new project shows only what
+   runs now; the tutor's phrases appear once there is a working config.
+9. **Focus.** SiCoPR shows the panel slot only after the panel's script has loaded, so the box cannot take the
+   focus at once: it is tried until the box is on screen, and only when no other field has the focus.
+10. **`Run the example.` writes `data\example_thru.s4p` only when the plan is carried out**, creating `data` if
+    it is not there; planning writes nothing in the project folder but the history. The step that carries it is
+    `import_config(example)` with one more argument, so the chain of row EX01 is the chain of row R1.

@@ -6,17 +6,18 @@
 #panel-assist .apath { flex: 1; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
 #panel-assist .amuted { color: var(--muted); font-size: 12px; }
 #panel-assist .asmall { padding: 3px 8px; font-size: 12px; }
-#panel-assist .aconv { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto;
+#panel-assist .aconv { display: flex; flex-direction: column; gap: 8px; max-height: 36vh; overflow-y: auto;
   border-top: 1px solid var(--line); padding-top: 8px; }
 #panel-assist .aentry.aold { opacity: .7; }
-#panel-assist .asaid { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600; }
+#panel-assist .asaid { font-family: ui-monospace, monospace; font-size: 12px; font-weight: 600;
+  overflow-wrap: anywhere; }
 #panel-assist .asaid.aview { color: var(--dirty); }
 #panel-assist .acard { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; margin-top: 4px;
   background: var(--bg); }
 #panel-assist .acard.tplan, #panel-assist .acard.aresult { border-color: var(--accent); }
 #panel-assist .acard.tquestion { border-color: var(--sweep); }
 #panel-assist .acard.tstop { border-color: var(--warn); }
-#panel-assist .aann { font-size: 12px; }
+#panel-assist .aann { font-size: 12px; overflow-wrap: anywhere; }
 #panel-assist .aplan, #panel-assist .aq { font-weight: 600; margin-top: 4px; }
 #panel-assist .astop { color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 4px 8px;
   margin-top: 4px; }
@@ -24,7 +25,8 @@
 #panel-assist .aopts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 #panel-assist .atutor { margin-top: 6px; color: var(--muted); font-size: 12px; }
 #panel-assist .alink { color: var(--accent); }
-#panel-assist .anote { font-size: 12px; }
+/* a long path in a note or an announced line wraps, so the conversation never scrolls sideways */
+#panel-assist .anote { font-size: 12px; overflow-wrap: anywhere; }
 #panel-assist .anote.abad { color: var(--warn); }
 #panel-assist .anote.aout { font-family: ui-monospace, monospace; }
 #panel-assist .aprogress { display: flex; flex-direction: column; gap: 4px; }
@@ -34,8 +36,27 @@
 #panel-assist .alines { background: #10131a; color: #d6dae3; border-radius: 8px; padding: 8px; margin: 0;
   height: 180px; overflow: auto; font-size: 11.5px; white-space: pre-wrap; word-break: break-word; }
 #panel-assist .apending { border-top: 1px solid var(--line); padding-top: 6px; }
-#panel-assist .abox { display: flex; gap: 6px; }
-#panel-assist .abox input { flex: 1; max-width: none; font-family: ui-monospace, monospace; }
+/* The command box is the first thing a new user looks for (Decision 21): its own block with a label, a border in
+   the accent colour and three lines of height, kept in view at the bottom of the panel while the conversation
+   scrolls above it. */
+#panel-assist .acommand { position: sticky; bottom: 0; z-index: 2; display: flex; flex-direction: column; gap: 5px;
+  background: var(--panel); border-top: 2px solid var(--accent); padding: 8px 0 6px; }
+#panel-assist .aselrow { display: flex; align-items: center; gap: 8px; }
+#panel-assist .aselline { flex: 1; font-size: 12px; word-break: break-all; }
+#panel-assist .alabel { font-size: 14px; font-weight: 700; }
+#panel-assist .abox { display: flex; gap: 6px; align-items: stretch; }
+#panel-assist .abox textarea { flex: 1; min-height: 4.8em; max-width: none; box-sizing: border-box; resize: vertical;
+  font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.4; padding: 7px 9px; color: var(--ink);
+  background: var(--bg); border: 2px solid var(--accent); border-radius: 8px; }
+#panel-assist .abox textarea:focus { outline: 3px solid var(--accent-soft); outline-offset: 0; }
+#panel-assist .abox textarea:disabled { border-color: var(--line); color: var(--muted); }
+#panel-assist .ahint { color: var(--muted); font-size: 11.5px; }
+#panel-assist .aexamples { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+/* hidden while a plan runs, to leave the room to the progress lines; display:flex needs its own [hidden] rule */
+#panel-assist .aexamples[hidden] { display: none; }
+#panel-assist .aexample { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--line);
+  border-radius: 12px; padding: 2px 9px; font-family: ui-monospace, monospace; font-size: 11.5px;
+  text-align: left; }
 #panel-assist .afold > summary { cursor: pointer; color: var(--muted); font-size: 12px; text-transform: uppercase;
   letter-spacing: .06em; }
 #panel-assist .aset { font-size: 11.5px; white-space: pre-wrap; max-height: 30vh; overflow: auto; }

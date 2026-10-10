@@ -19,7 +19,8 @@ read(phrase, names, blocks) returns a plain dictionary:
                 a clause above lands here, so no word is ever dropped
     corrected   {typed: read as} for the typo rule
     flags       set of plain markers: again, this_config, these_files, example, thru_only, crosstalk,
-                different, instead, all, diff, both, last_config, last_run
+                different, instead, all, diff, both, last_config, last_run, and selection with sel_config and
+                sel_channel (the config and the channel files selected in the GUI's tabs, Decision 20)
     pattern     a short text of how the phrase was read (goes to history)
 
 Nothing here reads a config or the engine: the caller passes the known names and block names.
@@ -80,6 +81,10 @@ CHANNEL_ROLES = {'thru': 'thru', 'fext': 'fext', 'next': 'next'}
 # ("include the matching xtalk files in the simulation")
 CROSSTALK_WORDS = ('crosstalk', 'xtalk', 'cross-talk')
 CROSSTALK_VERBS = ('add', 'include')
+# words for the config and the channel files selected in the GUI's tabs (Decision 20). They are read only in the
+# forms _selection lists, and are not known words on their own: "selected" alone is still asked about.
+SELECT_WORDS = ('selected', 'specified', 'chosen')
+SELECT_THINGS = {'config': 'config', 'channel': 'channel', 'channels': 'channel', 'files': 'files'}
 
 # Every word the reader can place: the typo rule reads a near miss of one of these as the word itself.
 KNOWN_WORDS = set(ACTION_WORDS) | FILLER | set(SIDES) | set(WORD_NUMBERS) | {
@@ -414,6 +419,9 @@ class _Reader:
         end = self._crosstalk(i)
         if end > i:
             return end
+        end = self._selection(i)
+        if end > i:
+            return end
         # "a different DER_0", "a different package": placed only before what it qualifies, else unplaced
         if w == 'different' and (self.kind(i + 1) == 'name' or self.word(i + 1) in ('package', 'packages')):
             self.flag('different')
@@ -492,6 +500,67 @@ class _Reader:
         self.flag('crosstalk')
         self.take(*range(start, k))
         return k
+
+    def _selection(self, i):
+        """The config and the channel files selected in the GUI's tabs (Decision 20), in these forms, where S is
+        selected, specified or chosen and T is config, channel, channels or files:
+
+            [the] S T [and [the] [S] T]         the selected config and channel; the chosen files
+            [the] T [and [the] T] S             the config and channels specified; the channel selected
+            [the] T [and [the] T] in the tabs   the config and channels in the tabs
+            the selection                       what's S, what is S
+
+        each with "in the tabs" after it or not. Sets the flag selection, and sel_config and sel_channel for what
+        was named (files, the selection and what is selected name both). Returns the index after it, or i. The
+        words are taken only together: one of them alone is left where it was, and is asked about."""
+        def low(k):
+            if 0 <= k < self.n and not self.used[k] and self.marks[k][0] in ('word', 'unknown'):
+                return self.toks[k]['low']
+            return None
+
+        def things(k):
+            got = []
+            if low(k) not in SELECT_THINGS:
+                return got, k
+            got.append(SELECT_THINGS[low(k)])
+            j = k + 1
+            if low(j) == 'and':
+                j += 1 + (low(j + 1) == 'the')
+                j += low(j) in SELECT_WORDS
+                if low(j) in SELECT_THINGS:
+                    got.append(SELECT_THINGS[low(j)])
+                    return got, j + 1
+            return got, k + 1
+
+        def tabs(k):
+            return k + 3 if low(k) == 'in' and low(k + 1) == 'the' and low(k + 2) in ('tabs', 'tab') else k
+
+        k = i + (low(i) == 'the')
+        got, end = [], i
+        if low(k) in SELECT_WORDS:
+            got, e = things(k + 1)
+            end = tabs(e) if got else i
+        elif low(k) in SELECT_THINGS:
+            got, e = things(k)
+            if low(e) in SELECT_WORDS:
+                end = tabs(e + 1)
+            elif tabs(e) > e:
+                end = tabs(e)
+        elif low(k) == 'selection' and k > i:
+            got, end = ['files'], tabs(k + 1)
+        elif k == i and (low(i) == "what's" or (low(i) == 'what' and low(i + 1) == 'is')):
+            j = i + 1 + (low(i) == 'what')
+            if low(j) in SELECT_WORDS:
+                got, end = ['files'], tabs(j + 1)
+        if end == i:
+            return i
+        self.flag('selection')
+        if 'config' in got or 'files' in got:
+            self.flag('sel_config')
+        if 'channel' in got or 'files' in got:
+            self.flag('sel_channel')
+        self.take(*range(i, end))
+        return end
 
     def _switch_names(self, k, val):
         got = []
@@ -747,6 +816,7 @@ class _Reader:
         parts += ['package' for _ in o['packages']]
         parts += ['file' for _ in o['files']]
         parts += ['crosstalk' for f in o['flags'] if f == 'crosstalk']
+        parts += ['selection' for f in o['flags'] if f == 'selection']
         parts += ['ask %s' % a['text'] for a in o['attempts']]
         return '; '.join(parts) or 'nothing matched'
 

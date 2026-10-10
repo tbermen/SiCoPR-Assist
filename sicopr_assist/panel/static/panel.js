@@ -6,7 +6,12 @@
  * A phrase typed here goes to the core through /panel/assist/api/handle, exactly as on the command line; a PLAN is
  * carried out on the server and its progress polled from /job. The Config view shows the working config laid over
  * its workbook (sicopr:overlay), an edit committed there is taken into the working config (sicopr:edit to /edit), and
- * a workbook opened there is followed (sicopr:config to /open). Every action is in the project's history. */
+ * a workbook opened there is followed (sicopr:config to /open). Every action is in the project's history.
+ *
+ * The page also tells the panel what is selected in its tabs: the workbook of the Config tab (sicopr:config) and the
+ * THRU, FEXT and NEXT files of the Run tab (sicopr:channels). The panel keeps that selection, shows it in a line
+ * above the command box, and hands it to the core with every phrase, so "the selected config and channels" means
+ * those files. */
 (function () {
   const API = '/panel/assist/api/';
   const ROOT = document.getElementById('panel-assist');
@@ -25,10 +30,19 @@
       <pre id="aLines" class="alines"></pre>
     </div>
     <div id="aPending" class="apending" hidden></div>
-    <div class="abox">
-      <input id="aCmd" type="text" spellcheck="false" autocomplete="off"
-             placeholder="type a command, for example: Re-run with DER_0 = 1e-4">
-      <button id="aSend">Send</button>
+    <div id="aCommand" class="acommand">
+      <div class="aselrow">
+        <span id="aSelLine" class="aselline">Selected: nothing yet</span>
+        <button id="aRunSel" class="ghost asmall">Run selection</button>
+      </div>
+      <label for="aCmd" class="alabel">Type a command</label>
+      <div class="abox">
+        <textarea id="aCmd" rows="3" spellcheck="false" autocomplete="off"
+                  placeholder="for example: Re-run with DER_0 = 1e-4"></textarea>
+        <button id="aSend">Send</button>
+      </div>
+      <div class="ahint">Enter sends. Shift+Enter starts a new line. Up and Down recall earlier commands.</div>
+      <div id="aExamples" class="aexamples"></div>
     </div>
     <details id="aSettings" class="afold"><summary>Settings</summary><pre id="aSetLines" class="aset"></pre></details>
     <details id="aHistory" class="afold"><summary>History</summary><div id="aHistLines" class="aset"></div></details>
@@ -50,6 +64,10 @@
   // a workbook the user opened in the Config view is being followed, or its keep-or-start question is open: the
   // view stays on it, and nothing here pulls it back to the source of the working config meanwhile
   let FOLLOWING = false;
+  // what is selected in the tabs: the workbook of the Config tab and the channel files of the Run tab (Decision 20)
+  const SELECTION = { config: null, thru: null, fext: [], next: [] };
+  let RUN_PHRASE = 'Run the selected config and channels.';
+  const BOX_MAX_PX = 220;   // the command box grows with its content up to here, then scrolls
 
   function emit(name, detail) {
     window.dispatchEvent(new CustomEvent('sicopr:' + name, { detail }));
@@ -142,7 +160,7 @@
         d.appendChild(document.createTextNode(line.slice(0, i)));
         const a = el('a', 'alink', p);
         a.href = '#';
-        a.addEventListener('click', (e) => { e.preventDefault(); $a('#aCmd').value = p; $a('#aCmd').focus(); });
+        a.addEventListener('click', (e) => { e.preventDefault(); fillBox(p); });
         d.appendChild(a);
         d.appendChild(document.createTextNode(line.slice(i + p.length)));
       }
@@ -171,7 +189,7 @@
     p.textContent = '';
     p.hidden = !pending;
     $a('#aCmd').placeholder = pending ? 'answer the question, or type a new command'
-      : 'type a command, for example: Re-run with DER_0 = 1e-4';
+      : 'for example: Re-run with DER_0 = 1e-4';
     if (!pending) return;
     p.appendChild(card({ type: 'QUESTION', question: pending.question, announce: [] }, { live: true }));
   }
@@ -213,9 +231,63 @@
     if (STATE && STATE.source && STATE.source_kind === 'workbook') emit('open-config', { path: STATE.source });
   }
 
+  /* ------------------------------------------- the command box and the selection */
+  /* The box grows with what is typed in it, from its three lines up to BOX_MAX_PX. */
+  function fitBox() {
+    const box = $a('#aCmd');
+    box.style.height = 'auto';
+    box.style.height = Math.min(box.scrollHeight + 4, BOX_MAX_PX) + 'px';   // 4: its two borders
+  }
+
+  /* The command box takes the focus when the panel comes up: SiCoPR shows the slot only after this script has
+   * loaded, so it is tried until the box is on screen, and never taken from a field the user is already in. */
+  function focusBox(tries) {
+    const box = $a('#aCmd');
+    const free = !document.activeElement || document.activeElement === document.body;
+    if (box.offsetParent !== null && !box.disabled) {
+      if (free) box.focus();
+      return;
+    }
+    if (tries > 0) setTimeout(() => focusBox(tries - 1), 50);
+  }
+
+  function fillBox(text) {
+    const box = $a('#aCmd');
+    box.value = text;
+    fitBox();
+    box.focus();
+  }
+
+  /* The selection line follows the tabs. It is asked from the server, which says what the core will be handed. */
+  async function syncSelection() {
+    if (!STATE || !STATE.project) return;
+    const r = await call('selection', { selection: SELECTION });
+    if (r.error) return;
+    $a('#aSelLine').textContent = r.line;
+    $a('#aSelLine').title = [r.selection.config, r.selection.thru].concat(r.selection.fext, r.selection.next)
+      .filter(Boolean).join('\n');
+    RUN_PHRASE = r.phrase || RUN_PHRASE;
+  }
+
+  /* Up to four phrases that work now, under the command box; clicking one puts it in the box (Decision 21). */
+  async function loadExamples() {
+    if (!STATE || !STATE.project) return;
+    const r = await call('examples', { selection: SELECTION });
+    const host = $a('#aExamples');
+    host.textContent = '';
+    if (r.error || !(r.phrases || []).length) return;
+    host.appendChild(el('span', 'amuted', 'Examples (click one to put it in the box):'));
+    for (const p of r.phrases) {
+      const b = el('button', 'aexample', p);
+      b.type = 'button';
+      b.addEventListener('click', () => fillBox(p));
+      host.appendChild(b);
+    }
+  }
+
   /* ------------------------------------------------------------ commands */
   async function send(phrase) {
-    phrase = String(phrase || '').trim();
+    phrase = String(phrase || '').replace(/\s*\n\s*/g, ' ').trim();
     if (!phrase) return;
     // a half-typed edit in the Config view is committed, and taken in, before the phrase is read
     if (document.activeElement && document.activeElement !== $a('#aCmd')
@@ -223,20 +295,24 @@
     await EDITS;
     FOLLOWING = false;                 // a phrase answers the keep-or-start question, or sets it aside
     $a('#aCmd').value = '';
+    fitBox();
     RECALL = -1;
     if (!PHRASES.length || PHRASES[0] !== phrase) PHRASES.unshift(phrase);
-    const r = await call('handle', { phrase });
+    const r = await call('handle', { phrase, selection: SELECTION });
     if (r.error) { note(r.error, 'abad'); return; }
     entry(phrase, r.outcome);
     if (r.refused) note(r.refused, 'abad');
     await refresh();
     await syncOverlay((r.outcome.changes || []).map((c) => c.json_path));
     if (r.job) startJob();
+    else loadExamples().catch(() => {});
   }
 
   function busyUi(on) {
     $a('#aCmd').disabled = on;
     $a('#aSend').disabled = on;
+    $a('#aRunSel').disabled = on;
+    $a('#aExamples').hidden = on;       // no phrase can be sent while a plan runs; the room goes to its progress
     $a('#aProgress').hidden = !on && !$a('#aLines').textContent;
     $a('#aStop').disabled = !on;
   }
@@ -308,6 +384,8 @@
     await refresh();
     await syncOverlay([]);
     scrollDown();
+    loadExamples().catch(() => {});
+    focusBox(0);
   }
 
   async function resultCard(rid) {
@@ -333,9 +411,11 @@
     const d = e.detail || {};
     KEYS = d.keys || [];
     VIEW_PATH = d.path;
+    SELECTION.config = d.path || null;
     (async () => {
       if (!STATE) await refresh();
       if (!STATE.project) return;
+      await syncSelection();
       const same = STATE.source && norm(STATE.source) === norm(d.path);
       if (d.cause === 'user' && !same) {
         // another workbook opened in the Config view: Assist follows (GUI_DESIGN.md section 6)
@@ -359,7 +439,22 @@
         return;
       }
       await syncOverlay([]);
-    })().catch((x) => report('config event', String(x.message || x)));
+    })().catch((x) => report('config event', String(x.message || x)))
+      .then(() => loadExamples())                  // the examples are written with the names of the config in view
+      .catch(() => {});
+  });
+
+  /* The channel files picked in the Run tab (Decision 20): kept, shown in the selection line, and handed to the
+   * core with the next phrase. */
+  window.addEventListener('sicopr:channels', (e) => {
+    const d = e.detail || {};
+    SELECTION.thru = d.thru || null;
+    SELECTION.fext = (d.fext || []).slice();
+    SELECTION.next = (d.next || []).slice();
+    (async () => {
+      if (!STATE) await refresh();
+      await syncSelection();
+    })().catch((x) => report('channels event', String(x.message || x)));
   });
 
   window.addEventListener('sicopr:edit', (e) => {
@@ -384,7 +479,7 @@
     const phrase = cfg && thru ? 'Run COM on ' + thru + ' with ' + cfg + '.' : '';
     note('a run from the Run tab finished; SiCoPR-Assist does not track it.'
       + (phrase ? ' To build on it here: ' + phrase : ''), 'amuted');
-    if (phrase && !$a('#aCmd').value) $a('#aCmd').value = phrase;
+    if (phrase && !$a('#aCmd').value) fillBox(phrase);
   });
 
   window.addEventListener('sicopr:browsed', (e) => {
@@ -396,6 +491,8 @@
       await refresh();
       await loadHistory();
       showSource();
+      await syncSelection();
+      await loadExamples();
     }).catch(() => {});
   });
 
@@ -408,15 +505,19 @@
     note(r.stopped ? 'stop requested: the run under way is terminated and nothing after it starts'
       : 'nothing was running', 'amuted');
   }));
+  $a('#aRunSel').addEventListener('click', () => send(RUN_PHRASE).catch((x) => note(x.message, 'abad')));
+  $a('#aCmd').addEventListener('input', fitBox);
   $a('#aCmd').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && !e.shiftKey) {             // Enter sends; Shift+Enter is a new line in the box
       e.preventDefault();
       send($a('#aCmd').value).catch((x) => note(x.message, 'abad'));
-    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !$a('#aCmd').value.includes('\n')) {
+      // recall, while the box holds one line; in a text of several lines the arrows move the caret
       if (!PHRASES.length) return;
       e.preventDefault();
       RECALL = Math.max(-1, Math.min(PHRASES.length - 1, RECALL + (e.key === 'ArrowUp' ? 1 : -1)));
       $a('#aCmd').value = RECALL < 0 ? '' : PHRASES[RECALL];
+      fitBox();
     }
   });
   $a('#aSettings').addEventListener('toggle', () => {
@@ -452,6 +553,7 @@
   }
 
   async function init() {
+    focusBox(100);                       // the command box is where a new user starts (Decision 21)
     await refresh();
     if (!STATE.project) {
       note('Choose the project folder with Browse: the folder that holds (or will hold) .sicopr.', 'amuted');
@@ -460,6 +562,8 @@
     await loadHistory();
     showSource();
     if (STATE.running) startJob();
+    await syncSelection();
+    await loadExamples();
   }
   init().catch((x) => report('init', String(x.message || x)));
 }());
