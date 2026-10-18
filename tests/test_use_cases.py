@@ -9,6 +9,7 @@
     python tests\\test_use_cases.py --gate V3.1                         version 2, Phase V2-3: channel download
     python tests\\test_use_cases.py --gate V6.2                         version 2, Phase V2-6: the selection, the example
     python tests\\test_use_cases.py --gate V7.3                         version 2, Phase V2-7: the Run tab and Assist as one
+    python tests\\test_use_cases.py --gate V8.2                         version 2, Phase V2-8: GUI first, the phrasings
     $env:SICOPR_ASSIST_FULL = "1"                   L3 on every pair (default: Case1 and the variants)
 
 It fails on a defect of the harness itself: a prior state with no builder, a builder that does not
@@ -39,7 +40,7 @@ import fixtures  # noqa: E402
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2', 'V1.1', 'V2.1', 'V3.1', 'V6.2',
-                                         'V7.3'],
+                                         'V7.3', 'V8.2'],
                     action='append',
                     default=[],
                     help='check a gate condition as well (may be given more than once)')
@@ -120,6 +121,8 @@ def main(argv=None):
         gate_v62(rows, results, full)
     if 'V7.3' in args.gate:
         gate_v73(rows, results, full)
+    if 'V8.2' in args.gate:
+        gate_v82(rows, results, full)
     if 'G1.3' in args.gate:
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
@@ -560,8 +563,9 @@ def gate_v73(rows, results, full):
     with open(scoring.FROZEN, newline='', encoding='utf-8') as f:
         lines = f.read().splitlines()
     ids = [ln.split(',')[0] for ln in lines[1:]]
-    check('V7.3: the frozen list has 655 rows: the 651 it had, unchanged, then RT01, RT03, RT04 and RT05',
-          len(ids) == 655 and ids[651:] == ['RT01', 'RT03', 'RT04', 'RT05']
+    # the list has grown since (gate V8.2 pins the 655 rows it had then and what came after them)
+    check('V7.3: the frozen list had 655 rows: the 651 it had, unchanged, then RT01, RT03, RT04 and RT05',
+          len(ids) >= 655 and ids[651:655] == ['RT01', 'RT03', 'RT04', 'RT05']
           and hashlib.sha256('\n'.join(lines[:652]).encode('utf-8')).hexdigest() == FROZEN_651_SHA256,
           (len(ids), ids[649:]))
     with open(scoring.REVIEW, newline='', encoding='utf-8') as f:
@@ -602,6 +606,134 @@ def gate_v73(rows, results, full):
                         label, 'with a Run tab' if tab else 'on the command line', phrase, rid,
                         o['type'] + (': ' + ' > '.join(steps) if steps else '')), ok,
                           (o['type'], steps, o.get('reason'), o.get('question')))
+                    fx.remove_project(ctx.root)
+
+
+NEW_ROWS_V8 = ('GF01', 'GF02', 'GF03', 'GF04', 'GF05')
+# the maintainer's phrases of records 36, 37 and 39 of the maintainer's own session history (17 and 18 October), as typed
+MAINTAINER_GF = {36: ('GF02', 'Run config thru-only and xtalk and compare results.'),
+                 37: ('GF03', 'Run with settings captured.  Run thru-only and with xtalk.  Compare results of two cases.'),
+                 39: ('GF01', 'Run with current settings.')}
+# the frozen list as it was before Phase V2-8: its header and 655 rows, joined with a line feed; the review list's 216
+FROZEN_655_SHA256 = '1f183766f701e25aedf384f271b6948db8b7c4612651dbb5add1d40952e55155'
+REVIEW_216_SHA256 = '6b4f977c1649270d11978ab2f158c5afd615d1e706be03ff76ba3310f8ce2e79'
+BATCH_CHAIN = ['build_matrix', 'validate_config', 'run_batch', 'batch_summary', 'diff_results']
+
+
+def _gf_points(o):
+    """[(mode, new, reused_from, number of channel files)] of a thru-only and crosstalk batch."""
+    return [((p.get('values') or {}).get('mode'), p.get('new'), p.get('reused_from'), len(p.get('channels') or []))
+            for p in o.get('points') or []]
+
+
+def _handle_in(ctx, phrase):
+    from sicopr_assist import core
+    old = {k: os.environ.get(k) for k in ctx.env}
+    os.environ.update(ctx.env)
+    try:
+        return core.handle(phrase, ctx.project, selection=ctx.selection)
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def gate_v82(rows, results, full):
+    """Gate V8.2 (the third GUI session, 18 October): every must GF row passes L1 and every other level that applies;
+    the two cases of GF02 and GF04 are the right points, new and reused; the maintainer's phrases of records 36, 37 and
+    39 give GF02's, GF03's and GF01's outcomes, on the command line and with a Run tab beside them; only the new rows
+    entered the frozen list."""
+    import hashlib
+    import scoring
+    import prior_states
+    want = sum(len(scoring.labels_of(r)) for r in rows if r['id'] in NEW_ROWS_V8 and r['priority'] == 'must')
+    got = [r for r in results if r['applies'] == 'yes' and r['id'] in NEW_ROWS_V8 and r['priority'] == 'must']
+    check('V8.2: the must GF rows were scored (%d pairs)' % want, want == 10 and len(got) == want, len(got))
+    check('V8.2: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
+    board(got, 'V8.2: the GF rows')
+    bad = [r for r in got if r['L1'] != 'PASS' or 'FAIL' in (r['L2'], r['L3'], r['L4'])]
+    check('V8.2: every must GF pair passes L1, and L2, L3 and L4 where they apply', not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad])
+    check('V8.2: GF01 to GF05 are all scored at L4 (all five are in the frozen list)',
+          len(got) == 10 and all(r['L4'] == 'PASS' for r in got), [(r['id'], r['L4']) for r in got])
+    check('V8.2: no row is excused by an open dispute', not open_disputes(), sorted(open_disputes()))
+    with open(scoring.FROZEN, newline='', encoding='utf-8') as f:
+        lines = f.read().splitlines()
+    ids = [ln.split(',')[0] for ln in lines[1:]]
+    check('V8.2: the frozen list has 660 rows: the 655 it had, unchanged, then GF01 to GF05',
+          len(ids) == 660 and ids[655:] == list(NEW_ROWS_V8)
+          and hashlib.sha256('\n'.join(lines[:656]).encode('utf-8')).hexdigest() == FROZEN_655_SHA256,
+          (len(ids), ids[653:]))
+    with open(scoring.REVIEW, newline='', encoding='utf-8') as f:
+        rlines = f.read().splitlines()
+    check('V8.2: the review list has the 216 rows it had, unchanged',
+          len(rlines) == 217 and hashlib.sha256('\n'.join(rlines).encode('utf-8')).hexdigest() == REVIEW_216_SHA256,
+          len(rlines) - 1)
+    by_id = {r['id']: r for r in rows}
+    with fixtures.Fixtures() as fx:
+        # the two cases, as the rows announce them: GF02 (and GF03) one new thru-only run and the last run reused for
+        # the crosstalk case; GF04 the last run reused for the thru-only case and one new run with 3 FEXT and 4 NEXT
+        for rid, want_pts in (('GF02', [('thru_only', True, None, 1), ('xtalk', False, 'run_0001', 8)]),
+                              ('GF03', [('thru_only', True, None, 1), ('xtalk', False, 'run_0001', 8)]),
+                              ('GF04', [('thru_only', False, 'run_0001', 1), ('xtalk', True, None, 8)])):
+            for label in scoring.labels_of(by_id[rid]):
+                ctx = prior_states.Ctx(fx, label)
+                prior_states.build(by_id[rid]['prior_state'], ctx)
+                o = _handle_in(ctx, by_id[rid]['phrase'])
+                pts = _gf_points(o)
+                check('V8.2 %s, %s: the two points are %s' % (rid, label, want_pts), pts == want_pts
+                      and any(a.startswith('2 points: ') for a in o['announce']), (pts, o['announce'][:2]))
+                fx.remove_project(ctx.root)
+        # stricter than the harness, which calls a paraphrase wrong only for a PLAN of the wrong type or target: every
+        # paraphrase of GF01 and GF02 gives the row's own chain of steps
+        frozen = scoring.read_frozen()
+        off = []
+        for rid in ('GF01', 'GF02'):
+            row = by_id[rid]
+            chain = frozen['%s|%s' % (rid, row['starting_config'])][1]
+            for ph in [x.strip() for x in row['paraphrases'].split(' | ') if x.strip()]:
+                ctx = prior_states.Ctx(fx, 'Case1')
+                prior_states.build(row['prior_state'], ctx)
+                o = _handle_in(ctx, ph)
+                steps = [s['op'] for s in o['steps'] if s['op'] != 'show_tutor']
+                if o['type'] != 'PLAN' or steps != chain or o['unplaced']:
+                    off.append((rid, ph, o['type'], steps))
+                fx.remove_project(ctx.root)
+        check('V8.2: every paraphrase of GF01 and GF02 gives the row\'s own chain of steps', not off, off)
+        for seq, (rid, phrase) in sorted(MAINTAINER_GF.items()):
+            row = by_id[rid]
+            check('V8.2: the maintainer\'s phrase of record %d is the phrase of %s' % (seq, rid), row['phrase'] == phrase)
+            for label in scoring.labels_of(row):
+                for tab in (False, True):
+                    ctx = prior_states.Ctx(fx, label)
+                    prior_states.build(row['prior_state'], ctx)
+                    if tab and rid != 'GF01':    # as in his session: the GUI hands the Run tab over with the phrase
+                        prior_states.select(ctx, thru=os.path.join('ch', 'b300_thru1.s4p'),
+                                            fext=[os.path.join('ch', n) for n in prior_states.XT_FEXT],
+                                            nxt=[os.path.join('ch', n) for n in prior_states.XT_NEXT])
+                        ctx.selection['options'] = {'export_mat': False, 'eye_under_mlse': False}
+                    if not tab and rid == 'GF01':  # GF01's state holds a Run tab; the command line has none
+                        ctx.selection = None
+                    o = _handle_in(ctx, phrase)
+                    steps = [s['op'] for s in o['steps'] if s['op'] != 'show_tutor']
+                    opts = (o.get('question') or {}).get('options') or []
+                    if rid != 'GF01':
+                        ok = o['type'] == 'PLAN' and steps == BATCH_CHAIN and not o['unplaced'] \
+                            and _gf_points(o) == [('thru_only', True, None, 1), ('xtalk', False, 'run_0001', 8)]
+                        what = "GF02's plan"
+                    elif tab:
+                        ok = o['type'] == 'PLAN' and steps == ['validate_inputs', 'validate_config', 'run_com',
+                                                               'summarize'] and not o['unplaced']
+                        what = "GF01's plan"
+                    else:
+                        ok = o['type'] == 'QUESTION' and opts == ['re-run the last run', 'cancel'] and not o['unplaced']
+                        what = "RT03's question (no Run tab on the command line)"
+                    check('V8.2 %s, %s: record %d %r gives %s (%s)' % (
+                        label, 'with a Run tab' if tab else 'on the command line', seq, phrase, what,
+                        o['type'] + (': ' + ' > '.join(steps) if steps else '')), ok,
+                          (o['type'], steps, o.get('reason'), opts, o.get('unplaced')))
                     fx.remove_project(ctx.root)
 
 

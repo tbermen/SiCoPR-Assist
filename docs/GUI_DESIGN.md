@@ -16,6 +16,15 @@ with `sicopr:channels` (now with its two options), and while it is assembled the
 panel (`sicopr:run-request`); this replaces the answer to question 4 (section 12) for that case. The slot branch was
 rebased onto SiCoPR 1.1.2, whose request guard covers the panel routes. Section 15 lists what was built.
 
+Changed in Phase V2-8 (18 October 2026, SiCoPR-Assist 0.10.0) after the maintainer's third session: GUI first
+(Decision 24). SiCoPR's GUI is the tool, used as without Assist; the panel drives it by typing. **The panel no longer
+shows run output.** A run carried out by the panel streams its lines to the Run tab's Output (`sicopr:output`), with
+the Run tab's status line and Stop (`sicopr:stop-request`); the page shows the Run tab when it starts unless the user
+is editing in Config (`sicopr:show` with `unless_editing`); results land in the Results tabs as after a run of
+SiCoPR's own. The panel keeps short replies: the plan as a short list, questions with buttons, one running line, then
+the headline result or a batch's short table, with long text behind a details toggle. Sections 4.1, 5, 7, 7a, 8 and 12
+were changed to match; section 16 lists what was built.
+
 Written against SiCoPR-Assist 0.6.0 (`f884c1f`) and SiCoPR `55c3f71` (1.1.1), whose GUI was read in full
 (`gui\app.py`, `config_io.py`, `runner.py`, `schematic.py`, `static\`, `README.md`) and run once from a
 temporary folder (`--no-browser --dir <temp> --run-dir <temp>`, port 8799) to see its layout, views and
@@ -126,6 +135,7 @@ On the page, SiCoPR and a panel talk through `CustomEvent`s on `window`. SiCoPR 
 | `sicopr:browsed` | `{purpose, path}` | the Browse dialog was used for a panel (see `sicopr:browse`) |
 | `sicopr:channels` | `{thru, fext, next, options, cause}` | the channel files chosen in the Run tab, or its two options, changed (added in Phase V2-6, section 5a; `options` in Phase V2-7, section 15): `thru` a path, empty when none, `fext` and `next` lists of paths, as the page holds them, `options` `{export_mat, eye_under_mlse}` (Output dynamic results and `--eye-under-mlse`). Sent once at start (`cause` `boot`; the lists are empty until the Run tab is first opened), on a pick in THRU, FEXT or NEXT or a tick of either box (`user`), when the lists are filled again and the selection differs (`list`: a directory, the filter, the first THRU taken by default), and after a panel's `sicopr:set-run` (`panel`) |
 | `sicopr:run-request` | `{thru, fext, next, options}` | Run was pressed while a panel has the Run tab assembled (Phase V2-7): sent cancelable; the panel that takes the run calls `preventDefault()`, and when none does the Run tab runs as always |
+| `sicopr:stop-request` | `{job}` | Stop was pressed in the Run tab while its Output shows a panel's run that is not done (Phase V2-8): the panel stops its run; SiCoPR's own runner is not asked |
 
 The panel API number stays 1: events and fields were added and none changed, so a panel written for the ten events
 of 0.7.0 works as before.
@@ -137,7 +147,8 @@ and listens for:
 | `sicopr:open-config` | `{path}` | selects and loads that workbook (with the usual discard-edits confirm) |
 | `sicopr:overlay` | `{source, title, cells: {key: {value, tag, note}}, save_hint, run_note, focus}` or `null` | shows each listed key with the overlay value in place of the workbook value, a tag (`tag` text), and the workbook value in the field's info line; marks the blocks that hold overlaid keys; shows `title` in the header; while an overlay is set, Save as is disabled with `save_hint` as its tooltip and the Run tab shows `run_note` under its config line. `focus` (a list of keys) selects their block when they all sit in one. `null` removes it |
 | `sicopr:clear-edits` | `{keys}` | drops those keys from `EDITS` (the panel took them) |
-| `sicopr:show` | `{view, run, build}` | switches tab; with `run`, selects that run folder in the Results tabs; with `build` (Phase V2-7), Results, dynamic builds the dashboard of that run's newest `.mat` export when it has none yet |
+| `sicopr:show` | `{view, run, build, unless_editing}` | switches tab; with `run`, selects that run folder in the Results tabs; with `build` (Phase V2-7), Results, dynamic builds the dashboard of that run's newest `.mat` export when it has none yet; with `unless_editing` (Phase V2-8), the tab is not switched while the user is in the middle of an edit in Config (a field of it has the focus, or an edit is unsaved) |
+| `sicopr:output` | `{job, lines, status, done}` | Phase V2-8: shows a panel's run in the Run tab's Output as a run of its own: a new `job` clears the Output, `lines` are appended to the same bounded terminal (follow output applies), `status` goes in the status line, and Stop is live (Run off) until `done`; Stop then sends `sicopr:stop-request`. It does not switch tab. A run started with Run sicopr.py takes the Output back |
 | `sicopr:set-run` | `{config, thru, fext, next, options: {export_mat, eye_under_mlse}, command, note}` or `null` | Phase V2-7: the Run tab selects the files (choosing their directory), sets the two boxes, shows `command` in its command box and `note` (in place of an overlay's `run_note`) and `config` under Configuration; its controls stay live, and Run sends `sicopr:run-request`. `null` gives the Run tab back |
 | `sicopr:browse` | `{purpose, title}` | opens the Browse dialog; "Use this directory" opens the directory (`/api/open`, as today) and answers with `sicopr:browsed` |
 
@@ -187,10 +198,14 @@ From top to bottom:
      `answer the question, or type a new command`; it survives a page reload (`pending.json`);
    - STOP: the reason, in the problem style SiCoPR uses.
    The tutor's lines (Decision 11) follow the card as on the command line; each example phrase is a link that
-   puts it in the command box.
-3. **Live progress** while a plan is carried out (section 7).
-4. **The result** of each run: the run summary lines (`summary.run_summary`), COM first with pass or fail
-   against COM Pass threshold, and buttons that show the run in Results, static or Results, dynamic.
+   puts it in the command box. *Since Phase V2-8* a card is short: the plan's steps as a list, the question with its
+   buttons, the stop's reason; the announced lines fold behind a `details` toggle.
+3. **One running line** while a plan is carried out (`run_0006 running: output in the Run tab`, and for a batch its
+   point), with a button that shows the Run tab. *Since Phase V2-8* the run's lines go to the Run tab's Output, not
+   the panel (section 7); before, the panel had a progress area of its own.
+4. **The result** of each run: the headline (`run_0006: COM 8.80571 dB, pass (COM Pass threshold 3 dB)`), buttons that
+   show the run in Results, static or Results, dynamic, and the run summary lines (`summary.run_summary`) behind
+   `details`; for a batch, its short table, one row per point.
 5. **The command box** (Decision 21, Phase V2-6: the first thing a new user sees in the panel). Its own
    block at the bottom of the panel, set apart from the conversation by a rule and a border in the accent
    colour, and kept in view: the conversation scrolls above it, the block does not (it sticks to the bottom
@@ -209,7 +224,7 @@ From top to bottom:
      (when there is exactly one of each) and `Run the example.`; once there is a working config, the tutor's
      examples, written with the names of that config, which is the one the Config view shows. They are asked
      again when the config in view changes and when a command ends, and hidden while a plan runs.
-   While a plan runs, the box, Send and Run selection are off, and Stop (in the progress block) is live.
+   While a plan runs, the box, Send and Run selection are off, and Stop (in the Run tab, since Phase V2-8) is live.
 6. **Settings** (folded): the settings in force with where each came from (`core.settings_lines`); they are
    changed by phrase (`Tutor off`) as on the command line.
 7. **Language model** (folded, reserved): shows `none: this version is rules-based`. When the layer is added
@@ -363,14 +378,24 @@ written to make one (Decision 2).
 use-case table scores it that way). The panel's `handle` endpoint returns the outcome, records it (the core
 does), and starts `run.carry_out(project, outcome, progress=...)` in a worker thread. The progress callback
 of Decision 17 appends `(kind, text)` to a bounded buffer, which the panel polls by `since`, the same pattern
-as SiCoPR's runner (a failed poll retries with backoff and never ends the loop; the panel keeps the last 2000
-lines; a quiet run says how long it has been silent). Status lines are shown as they are, engine lines
-indented and dimmed, exactly as `run.line_text` forms them and `run.log` holds them. A two-part channel
-download (rows F1 to F12) is followed the way `cli.handle_and_run` follows `next`. The command box is
-disabled while a plan runs; Stop terminates the child. When a run finishes, the result card appears and the
-panel sends `sicopr:show` with the run folder only if the user clicks the button (it does not pull the user
-away from what they are reading), except after a dashboard phrase, where the page is shown in Results,
-dynamic in place of opening a browser tab (`carry_out(open_page=...)` already takes a stand-in).
+as SiCoPR's runner (a failed poll retries with backoff and never ends the loop; the server keeps the last 2000
+lines; a quiet run says how long it has been silent). The lines are exactly as `run.line_text` forms them and
+`run.log` holds them. *Since Phase V2-8 (GUI first)* the panel hands every new line to the page as
+`sicopr:output`, and the Run tab's Output shows them as it shows a run of its own: the same bounded terminal,
+follow output, its status line (`SiCoPR-Assist #12 running, 40 s`), and Stop, which sends `sicopr:stop-request`
+back to the panel (the panel's `stop` endpoint). When a plan that runs COM starts, the panel sends
+`sicopr:show {view: 'run', unless_editing: true}`, so the Run tab comes up unless the user is in the middle of an
+edit in Config. The panel itself shows one line while it runs, `run_0006 running: output in the Run tab` (the
+job's `running_line`, made on the server from the status lines), and a button that shows the Run tab. A batch
+streams every point's lines in order, each headed by its status line (`step 3 of 5: run_batch: point 2 of 2
+(channel = ..., mode = xtalk): run_0007 started`). A plan that runs nothing (a setting, an export) sends no output.
+A two-part channel download (rows F1 to F12) is followed the way `cli.handle_and_run` follows `next`. The command
+box is disabled while a plan runs; Stop terminates the child. When a run finishes, the panel shows the headline
+result and the page stays on the Run tab, as after a run of SiCoPR's own; the run is in the Results tabs, and the
+panel sends `sicopr:show` with the run folder when the user clicks a result button. After an export run (Output
+dynamic results ticked) the page goes to Results, dynamic and builds the dashboard, as SiCoPR does after its own
+export run; after a dashboard phrase the page is shown in Results, dynamic in place of opening a browser tab
+(`carry_out(open_page=...)` already takes a stand-in).
 
 **The example in an empty project** (Decision 22, Phase V2-6). `Run the example.` in a project folder with no
 channel file gives a PLAN on a synthetic THRU: the 400 mm lossy line of `sicopr_assist\example_channel.py`,
@@ -380,7 +405,8 @@ folder is used instead, as row R1 does. It is the phrase under the command box i
 
 **It lands in the results views** with no further work: the project folder is an opened root, and each run's
 folder is a run directory by SiCoPR's own rule (section 2). A batch is several run folders, one per point;
-the panel shows the batch summary table and the path of `batch_summary.csv`.
+the panel shows the batch summary as a short table (point, values, status, run, COM) with the path of
+`batch_summary.csv` and the comparison behind `details`.
 
 **One COM run at a time, across both.** The panel's `busy()` makes SiCoPR refuse to start a Run-tab run
 while an Assist plan runs (`a run started from SiCoPR-Assist is in progress`), and the panel checks
@@ -389,7 +415,7 @@ is busy.
 
 **The Run tab assembled by the panel** (Phase V2-7, Decision 23; section 15). Once a PLAN that runs COM has been
 sent, the Run tab shows that setup and its command, and its Run button hands the run to the panel, which carries it
-out as `Run the command.`: in Assist's history, reused by Decision 6, with live progress in the panel. What follows
+out as `Run the command.`: in Assist's history, reused by Decision 6, with its output in the Run tab (since Phase V2-8; before, live progress in the panel). What follows
 holds for the Run tab before any such plan, which is the Run tab as SiCoPR has it.
 
 **A run started from the Run tab** is not in Assist's history, so Assist neither shows it in its history nor
@@ -418,7 +444,7 @@ the source config of a record, section 13):
 | `answer` | an option button is clicked | the question's record number, the option chosen, the outcome |
 | `edit` | a Config-view field is committed | keyword, block, value before and after, accepted or refused with the rule |
 | `open` | the Config view opens another workbook | old and new source with SHA-256, the overrides kept or left out |
-| `run` | a plan starts, and again when it ends | the plan, run ids, status, elapsed time, the stop reason if stopped |
+| `run` | a plan starts, and again when it ends | the plan, run ids, status, elapsed time, the stop reason if stopped; since Phase V2-8 the end record holds the status lines of Decision 17 (`lines`; the engine's own lines are in each run's `run.log`) |
 | `stop` | the user presses Stop | what was running and what was left |
 | `view` | a run is shown in Results, a dashboard is opened, settings or history are shown | what was shown |
 | `error` | the panel's server raises, an API call fails, or the page reports a script error | the endpoint or the page, the message, the traceback or the script line |
@@ -446,15 +472,15 @@ folder and `host.roots()`.
 | `POST selection {selection}` | the selection as the core will be handed it (paths outside the project folder and `host.roots()` left out), the line that shows it, and the phrase of the Run selection button | none of the core: `api.clean_selection`, `api.selection_line` |
 | `POST runtab {selection}` | the Run tab's setup for its files and options now, the working config kept (Phase V2-7): `{config, thru, fext, next, options, command, note, run_id}`, or `{command: null}` with no THRU | `run.run_tab_preview` (which uses `core.Context` and `run.run_tab_command`) |
 | `POST examples {selection}` | up to four phrases for under the command box, each one giving a PLAN now | `tutor.first_run`, `tutor.examples`, `core._resolve` through the tutor's own check |
-| `GET job?since=` | progress lines, running or done, the carry-out result | the worker's buffer, `run.line_text` |
+| `GET job?since=` | progress lines, running or done, the carry-out result; whether the plan runs anything (`runs`) and the panel's one line (`running_line`), since Phase V2-8 | the worker's buffer, `run.line_text` |
 | `POST stop` | stop the plan in progress | the worker (new cancel hook, section 10) |
 | `POST overlay {keys, changed}` | the source workbook path and the overlay cells, keyed as the view shows them (`keys` from `sicopr:config`), with `focus` for the keys of the last outcome | `core.Context`, `config_model.import_config` of the source (cached by SHA-256), `config_model.same_value`, history for the origin of each override |
 | `POST edit {edits}` | take committed Config-view edits into the working config | `core.edit` (new) |
 | `POST open {path}` | follow another workbook opened in the Config view | `core.edit` with a source |
 | `POST log {kind}` | a view shown (`view`) or a page error (`error`), recorded | `Project.append_history` |
 | `GET history?limit=` | phrases for recall, and the conversation on reload | `Project.read_history` |
-| `GET result?run=` | one run's summary card, whether it has the `.mat` export, and the phrase that shows its dynamic results | `summary.run_summary`, `core.dynamic_phrase` |
-| `GET batch?seq=` | a batch's table | `summary.batch_rows`, `summary.batch_lines` |
+| `GET result?run=` | one run's summary card, its headline (COM, pass or fail; Phase V2-8), whether it has the `.mat` export, and the phrase that shows its dynamic results | `summary.run_summary`, `api.headline`, `core.dynamic_phrase` |
+| `GET batch?seq=` | a batch's table: its lines and, since Phase V2-8, its rows (point, values, status, run, COM) | `summary.batch_rows`, `summary.batch_lines` |
 | `GET settings` | the settings in force | `project.read_settings`, `core.settings_lines` |
 
 ## 9. What is separable for si-gui
@@ -555,7 +581,8 @@ follows" (below and section 6); and every GUI interaction is recorded in the his
 8. **Do view edits count as commands for the tutor (Decision 11)?** *Recommendation: no*; they are listed in
    the feedback export, marked `config view`.
 9. **The command box during a run.** *Recommendation: disabled until the plan ends* (Stop stays live), as
-   the CLI is. Read-only questions during a run (`What's my COM summary...`) can come later.
+   the CLI is. Read-only questions during a run (`What's my COM summary...`) can come later. *Since Phase V2-8* Stop
+   is the Run tab's, where the run's output is.
 10. **Gates for the build.** The use-case table has no GUI rows. *Recommendation:* gate the build on section
     11's tests, the frozen L4 list through the panel's API with the same outcomes as the core, and GX; the
     version after the build is 0.7.0.
@@ -692,3 +719,44 @@ surprising reading was taken:
     and `do_POST`, after `Handler._refused`, so they get the same Host, Origin, Sec-Fetch-Site and JSON checks;
     SiCoPR's `tests\test_gui_server.py` and this repository's `tests\test_gui_api.py` check that a cross-site request
     to a panel is refused before the panel's `handle()` (or the core) is reached.
+
+## 16. As built (Phase V2-8, 18 October 2026)
+
+Decision 24 of the build prompt, after the maintainer's third session with the GUI: "For displaying the run command
+output, I'd prefer it to use the GUI Output area that has more screen space rather than forcing output to Assist
+window. I really want the GUI to be used just like non-Assist SiCoPR, but with Assist you can type commands to get
+what you want." Rows GF01 to GF05 of the use-case table specify the phrasings; the page events are in section 4.1 and
+SiCoPR's `gui/README.md`, *Panels*. Where the decision was silent, the least surprising reading was taken:
+
+1. **Who decides "in the middle of editing in Config".** The page does: `sicopr:show` gained `unless_editing`, and the
+   page leaves the tab alone while a field of the Config view has the focus or an edit is unsaved. The panel cannot
+   see SiCoPR's unsaved edits, and asking the page keeps the panel free of SiCoPR's element ids.
+2. **Stop.** The Run tab's Stop, while its Output shows a panel's run that is not done, sends `sicopr:stop-request
+   {job}` and does not call SiCoPR's `/api/exec/stop`; the panel answers it with its own `stop` endpoint, the same as
+   its former Stop button. The panel has no Stop of its own any more.
+3. **The job.** `sicopr:output`'s `job` is `SiCoPR-Assist #<seq>`, the history record of the command; the status line
+   is `SiCoPR-Assist #<seq> running, <n> s` (and `..., no output for <n> s` when quiet), then
+   `SiCoPR-Assist #<seq> finished (ok) in <n> s`, or `(failed)` or `(stopped)`, in the form of SiCoPR's own. A page reload in the middle of a run sends the whole buffer again
+   under the same job, so the Output is filled again from the start of the buffer.
+4. **What goes to the Output.** Only a plan that runs something (COM, a batch, the `.mat` export, a download) sends
+   output; a plan that only writes a setting or a file shows its few lines in the panel's reply, as before.
+5. **After the run.** As after a run of SiCoPR's own: the page stays on the Run tab after a plain run, and after an
+   export run goes to Results, dynamic and builds the dashboard, which is what SiCoPR does after its own run with Output
+   dynamic results ticked. The panel's reply is the headline (`api.headline`: COM of each package case, `pass` or
+   `fail` against COM Pass threshold, or how many cases pass), the two Results buttons, and the summary under
+   `details`. The tutor's lines show in the card of a PLAN too, since the plan's later lines are in the Run tab.
+6. **A batch.** Each point's lines are headed by the status line the runner already gives (`point n of N (values)`),
+   so nothing was added to the runner for it; the panel's running line names the run and its point. The reply is a
+   short table (`GET batch` gives `rows`), with the batch's lines, the comparison and the CSV path under `details`.
+7. **The run record.** Decision 17's lines are unchanged and still go to `run.log`; the `run` end record now also keeps
+   the status lines of the plan (`detail.lines`, at most 400), so a session can be reviewed from the history alone.
+   The engine's own lines are not copied into the history: they are in each run's `run.log`.
+8. **The phrasings (rows GF01 to GF05).** "the current settings", "the current setup", "settings captured", "what I
+   have set up", "what I've set up" and "as it is set up" are the setup in the Run tab, as "the command" is.
+   "thru-only and xtalk" (both flags in one phrase, or "with and without crosstalk", "without and with crosstalk") is
+   the two cases of one THRU, `core._xtalk_compare`: the working config kept, the THRU of the last run (or the Run
+   tab's THRU when the phrase names the GUI's setup and one is handed over), its crosstalk by Decision 19, each case
+   reused by Decision 6; "compare" or a summary adds `diff_results`, which gives each case against the thru-only one.
+   Without "compare" the pair is still run, with no comparison step. "two cases" (or runs, points, results) and "both
+   cases" are placed only in such a request; anywhere else they are asked about (Rule 4). Several sentences were
+   already read as one request; only their words were missing.

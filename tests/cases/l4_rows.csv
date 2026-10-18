@@ -654,3 +654,8 @@ RT01,Case1; Case3,run,must,PLAN,chain,validate_inputs > validate_config > run_co
 RT03,Case1; Case3,run,must,QUESTION,options,re-run the last run | cancel
 RT04,Case1; Case3,run,must,PLAN,chain,validate_inputs > validate_config > run_com > summarize
 RT05,Case1; Case3,run,must,PLAN,chain,export_mat > render_dashboard > open_report
+GF01,Case1; Case3,run,must,PLAN,chain,validate_inputs > validate_config > run_com > summarize
+GF02,Case1; Case3,run,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+GF03,Case1; Case3,run,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+GF04,Case1; Case3,run,must,PLAN,chain,build_matrix > validate_config > run_batch > batch_summary > diff_results
+GF05,Case1; Case3,run,must,QUESTION,options,name the files | cancel

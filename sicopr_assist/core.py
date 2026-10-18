@@ -646,6 +646,10 @@ def _plan(text, ctx, mods):
                      'run (Show me the summary again), statistics of a result over the last set of runs, and how a '
                      'parameter relates to a result.', **base)
     low = text.lower()
+    # the thru-only case and the crosstalk case of the THRU in use, together: "thru-only and xtalk", "with and without
+    # crosstalk" (Decision 24, rows GF02 to GF05); a channel download that asks for both plans its own matrix
+    if {'thru_only', 'crosstalk'} <= set(req['flags']) and 'fetch' not in acts:
+        return _xtalk_compare(req, ctx, mods, base)
     # the setup in the Run tab of the GUI (Decision 23, rows RT01 to RT04): "run the command", "run what is in the
     # Run tab"; "run it" means it only where there is a Run tab, and keeps its meaning on the command line (row R3)
     if 'run_it' in req['flags']:
@@ -3330,6 +3334,128 @@ def _add_crosstalk(req, ctx, mods, base):
         lines.append('they replace the %d aggressor%s of the last run' % (len(old), '' if len(old) == 1 else 's'))
     lines.append('the engine is given the THRU, then the FEXT files, then the NEXT files, with their counts')
     return _swap_plan(req, ctx, mods, base, wc, swaps, new, lines)
+
+
+XTALK_CASES = (('thru_only', 'thru-only'), ('xtalk', 'with crosstalk'))
+AGAINST_THRU_ONLY = 'the thru-only case'
+
+
+def _xtalk_compare(req, ctx, mods, base):
+    """The thru-only case and the crosstalk case of one THRU, as a batch of two points (Decision 24, rows GF02 to
+    GF05): "thru-only and xtalk", "with and without crosstalk", "compare thru-only with xtalk". The working config is
+    kept with its overrides. The THRU is the one in the Run tab when the phrase names the setup in the GUI ("with
+    settings captured") and the GUI handed one over, else the THRU of the last run; its crosstalk files are the ones
+    that belong to it by Decision 19. Each point is reused when an earlier run had the same inputs (Decision 6), so a
+    last run with crosstalk is one of the two points and does not stop the request. "compare" (or a summary) adds
+    diff_results, which gives each case against the thru-only one. No crosstalk to be found asks (row GF05)."""
+    flags = set(req['flags'])
+    acts = set(req['actions'])
+    if acts - {'run', 'rerun', 'compare', 'summary'} or req['sets'] or req['sweeps'] or req['files'] or \
+            req['packages'] or req['attempts'] or flags & {'example', 'these_files', 'this_config', 'selection',
+                                                            'last_channels', 'last_run'}:
+        return _ask('The thru-only case and the crosstalk case of the THRU in use are run as a pair on their own, and this '
+                    'phrase also asks for something else, so nothing runs. Ask for the pair alone: Run thru-only and '
+                    'with xtalk and compare results.', [CANCEL], {CANCEL: None}, **base)
+    if req['unplaced'] and not mods.get('ignore_unplaced'):
+        return _unplaced_only(req, base)
+    wc = ctx.wc
+    if ctx.last is None or wc is None:
+        return _no_history(ctx, base)
+    sel = ctx.selection
+    rid = ctx.last_run_id()
+    if 'run_tab' in flags and sel is not None and sel.get('thru'):
+        thru, where = sel['thru'], 'the THRU in the Run tab'
+    else:
+        thru = next((p for p, _, r in ctx.channels() if (r or 'thru') == 'thru'), None)
+        where = 'the THRU of the last run (%s)' % rid
+    if thru is None or not os.path.isfile(ctx.path(thru)):
+        return _stop('%s is not on disk any more, so its thru-only and crosstalk cases cannot be run. Nothing runs.'
+                     % (thru or 'The THRU of the last run'), **base)
+    folder = os.path.dirname(thru)
+    m = match_crosstalk(thru, os.listdir(os.path.dirname(ctx.path(thru))))
+    name_it = 'name the files'
+    answers = {name_it: {'stop': 'Name each file with its role: Re-run with FEXT <file> and NEXT <file>. Then Re-run '
+                                 'thru-only. gives the other case.'}, CANCEL: None}
+    if not m['fext'] and not m['next']:                                        # row GF05
+        if m['rule'] == 'name':
+            why = ('%s holds more than one THRU (%s) and no FEXT or NEXT file name matches %s once the role words are '
+                   'removed' % (folder or 'The project folder', ', '.join(m['thrus']), os.path.basename(thru)))
+        else:
+            why = ('No FEXT or NEXT file belongs to %s: it is the only THRU in %s, and no FEXT or NEXT file is there'
+                   % (thru, folder or 'the project folder'))
+        return _ask('%s, so there is no crosstalk case to compare with the thru-only one. Nothing runs.' % why,
+                    [name_it, CANCEL], answers, **base)
+    fext = [os.path.join(folder, n) for n in m['fext']]
+    nxt = [os.path.join(folder, n) for n in m['next']]
+    with_xt = [(thru, 'thru')] + [(p, 'fext') for p in fext] + [(p, 'next') for p in nxt]
+    fields, err = config_model.loaded_fields(wc)
+    if err:
+        return _stop('The config does not load: %s. Nothing runs.' % err, **base)
+    sic = engine.engine_sha256()
+    prior = ctx.runs
+    points, new_fps = [], []
+    for (mode, _), chans in zip(XTALK_CASES, ([(thru, 'thru')], with_xt)):
+        pt = {'values': {'channel': os.path.basename(thru), 'mode': mode}, 'writes': {},
+              'channels': [[p, r] for p, r in chans], 'new': False, 'reused_from': None, 'skipped': None}
+        stops, _ = input_check(wc, [(ctx.path(p), r) for p, r in chans], with_notes=False)
+        if stops:
+            pt['skipped'] = 'validate_inputs fails: %s' % stops[0]
+            points.append(pt)
+            continue
+        fp = _fingerprint(fields, channel_keys((r, _sha(ctx.path(p))) for p, r in chans), sic)
+        hit = next((r for r, f in prior if _same_fingerprint(f, fp)), None)
+        if hit is not None:
+            pt['reused_from'] = hit
+        elif any(_same_fingerprint(f, fp) for f in new_fps):
+            pt['reused_from'] = 'earlier point of this batch'
+        else:
+            pt['new'] = True
+            new_fps.append(fp)
+        points.append(pt)
+    n_new = sum(1 for p in points if p['new'])
+    n_reused = sum(1 for p in points if p['reused_from'])
+    skipped = [p for p in points if p['skipped']]
+    fields_out = dict(points=points, new_runs=n_new, reused_runs=n_reused, **base)
+    label = dict(XTALK_CASES)
+    if len(skipped) == len(points):
+        return _stop('Neither case can be run: %s.' % '; '.join('%s: %s' % (label[p['values']['mode']], p['skipped'])
+                                                                for p in skipped), **fields_out)
+    diff = bool(acts & {'compare', 'summary'})
+    steps = []
+    if n_new:
+        steps += [_step('build_matrix', modes=[mode for mode, _ in XTALK_CASES], points=len(points)),
+                  _step('validate_config'), _step('run_batch', new_runs=n_new)]
+    steps.append(_step('batch_summary'))
+    if diff:
+        steps.append(_step('diff_results', against=AGAINST_THRU_ONLY))
+
+    def said(p):
+        if p['new']:
+            return '1 new run (%s)' % label[p['values']['mode']]
+        if p['reused_from']:
+            return '1 reused from %s (%s)' % ('the last run' if p['reused_from'] == rid else p['reused_from'],
+                                              label[p['values']['mode']])
+        return '1 skipped (%s)' % label[p['values']['mode']]
+    lines = ['the thru-only case and the crosstalk case of %s: %s, with the working config of the last run and its '
+             'overrides' % (where, thru),
+             '%d points: %s' % (len(points), ', '.join(said(p) for p in points))]
+    if m['rule'] == 'only_thru':
+        lines.append('the crosstalk case takes every FEXT and NEXT file in %s, since %s is the only THRU there'
+                     % (folder or 'the project folder', os.path.basename(thru)))
+    else:
+        lines.append('the crosstalk case takes the FEXT and NEXT files whose names equal %s once the role words are '
+                     'removed' % os.path.basename(thru))
+    lines += ['FEXT %s' % p for p in fext] + ['NEXT %s' % p for p in nxt]
+    for p in points:
+        if p['reused_from']:
+            lines.append('%s is reused from %s: its inputs are the same' % (label[p['values']['mode']], p['reused_from']))
+        if p['skipped']:
+            lines.append('%s is skipped: %s' % (label[p['values']['mode']], p['skipped']))
+    if not n_new:
+        lines.append('both cases were already run, so no new run is needed')
+    if diff:
+        lines.append('the results of the two cases are compared: COM of each against %s' % AGAINST_THRU_ONLY)
+    return outcome('PLAN', steps=steps, announce=lines + _context_lines(ctx, [], wc), **fields_out), {}
 
 
 def channel_roles(chans):

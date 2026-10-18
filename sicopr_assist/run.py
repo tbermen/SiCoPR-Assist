@@ -837,7 +837,11 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
             path, rows = summary.write_batch_summary(project, rec['seq'], points)
             lines += summary.batch_lines(rows) + ['one row per point added to %s' % project.relative(path)]
         elif op == 'diff_results':
-            lines += _diff_lines(project, base_run, points)
+            if a.get('against') == core.AGAINST_THRU_ONLY:   # the two cases of a THRU (Decision 24): the first is it
+                lines += _diff_lines(project, (points[0] if points else {}).get('run_id'), points,
+                                     against=core.AGAINST_THRU_ONLY)
+            else:
+                lines += _diff_lines(project, base_run, points)
         elif op == 'export_xlsx':
             src = ctx.source_path
             if not src:
@@ -907,8 +911,9 @@ def _failed(project, rec, message):
     return {'status': 'failed', 'run_ids': [], 'points': [], 'lines': ['nothing ran: %s' % message]}
 
 
-def _diff_lines(project, base_run, points):
-    """COM of each point against the run the batch started from."""
+def _diff_lines(project, base_run, points, against='the last run before the batch'):
+    """COM of each point against the run the batch started from (or, for the thru-only and crosstalk cases of a THRU,
+    against its thru-only case)."""
     def com(rid):
         try:
             cases = project.read_result(rid).get('cases') or []
@@ -917,8 +922,9 @@ def _diff_lines(project, base_run, points):
         return cases[0].get(summary.COM_FIELD) if cases else None
     ref = com(base_run) if base_run else None
     if ref is None:
-        return ['no earlier run to compare with']
-    out = ['differences in COM against the last run before the batch (%s, COM %s dB):' % (base_run, summary.fmt(ref))]
+        return ['no earlier run to compare with' if against != core.AGAINST_THRU_ONLY else
+                'the thru-only case has no COM result, so the two cases cannot be compared']
+    out = ['differences in COM against %s (%s, COM %s dB):' % (against, base_run, summary.fmt(ref))]
     for i, p in enumerate(points, 1):
         v = com(p['run_id']) if p.get('run_id') else None
         out.append('%d. %s: %s' % (i, ', '.join('%s = %s' % (validate.name_of(k) if str(k).startswith('/') else k,

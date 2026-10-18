@@ -21,7 +21,8 @@ read(phrase, names, blocks) returns a plain dictionary:
     flags       set of plain markers: again, this_config, these_files, example, thru_only, crosstalk,
                 different, instead, all, diff, both, last_config, last_run, and selection with sel_config and
                 sel_channel (the config and the channel files selected in the GUI's tabs, Decision 20); run_tab
-                (the setup in the Run tab: "the command", "what is in the Run tab", "the Run tab"), run_it ("run it"
+                (the setup in the Run tab: "the command", "what is in the Run tab", "the Run tab", and since Decision 24
+                "the current settings", "settings captured", "what I have set up", "as it is set up"), run_it ("run it"
                 alone, which the core reads as the Run tab only where there is one) and last_channels ("the last
                 config and channel files"), Decision 23
     runs        run ids named (run_0004), for the dashboard of that run; in any other request they are unplaced
@@ -331,6 +332,7 @@ class _Reader:
         while i < self.n:
             j = self._clause(i)
             i = j if j > i else i + 1
+        self._two_cases()
         self._attempts()
         if o['runs'] and 'dashboard' not in o['actions'] and not any(
                 ACTION_WORDS.get(m[1]) == 'dashboard' for k, m in enumerate(self.marks) if m[0] == 'word'):
@@ -364,6 +366,16 @@ class _Reader:
                 o['unplaced'].append(self.toks[i]['text'])
         o['pattern'] = self._pattern()
         return o
+
+    def _two_cases(self):
+        """In a request for the thru-only case and the crosstalk case together (Decision 24, row GF03), "[the] two
+        cases" (or runs, points, results) and "both cases" name those two cases and are placed; in any other request
+        they are left where they are, and asked about."""
+        if not {'thru_only', 'crosstalk'} <= set(self.out['flags']):
+            return
+        for i in range(self.n - 1):
+            if self._low(i) in ('two', 'both') and self._low(i + 1) in ('cases', 'runs', 'points', 'results'):
+                self.take(i, i + 1)
 
     def flag(self, f):
         if f not in self.out['flags']:
@@ -452,6 +464,14 @@ class _Reader:
         if w in ('example', 'sample', 'demo'):
             self.flag('example')
             self.take(i)
+            return i + 1
+        # with and without crosstalk, without and with crosstalk: both, the thru-only case and the crosstalk case
+        # (Decision 24, row GF02)
+        if w in ('crosstalk', 'xtalk') and self.word(i - 2) == 'and' and \
+                {self.word(i - 1), self.word(i - 3)} == {'with', 'without'} and not self.used[i - 3]:
+            self.flag('thru_only')
+            self.flag('crosstalk')
+            self.take(i - 3, i - 2, i - 1, i)
             return i + 1
         if w in ('crosstalk', 'xtalk') and self.word(i - 1) == 'without' or w == 'thru-only' \
                 or (w == 'thru' and self.word(i + 1) == 'only'):
@@ -594,7 +614,10 @@ class _Reader:
             return i + 1
         k = i + (low(i) in ('the', 'my'))
         end = i
-        if low(k) == 'command':
+        setup = self._setup_words(i)
+        if setup > i:                            # the GUI's setup in other words (Decision 24, row GF01)
+            end = setup
+        elif low(k) == 'command':
             end = tab(k + 1)
             end = k + 1 if end == k + 1 else end
         elif low(i) == "what's" or (low(i) == 'what' and low(i + 1) == 'is'):
@@ -608,6 +631,32 @@ class _Reader:
         self.flag('run_tab')
         self.take(*range(i, end))
         return end
+
+    def _setup_words(self, i):
+        """The setup in the GUI said in other words (Decision 24, row GF01), the same as "the command":
+
+            [the] current settings | [the] current setup     run with the current settings
+            [the] settings captured                          run with settings captured
+            what I have set up | what I've set up            run what I have set up
+            as it is set up | as it's set up                 run it as it is set up
+
+        The index after the form, or i. "set" in these forms is not the action set."""
+        low = self._low
+        k = i + (low(i) == 'the')
+        if low(k) == 'current' and low(k + 1) in ('settings', 'setup'):
+            return k + 2
+        if low(k) == 'settings' and low(k + 1) == 'captured':
+            return k + 2
+        if low(i) == 'what' and low(i + 1) == 'i' and low(i + 2) == 'have' and low(i + 3) == 'set' \
+                and low(i + 4) == 'up':
+            return i + 5
+        if low(i) == 'what' and low(i + 1) == "i've" and low(i + 2) == 'set' and low(i + 3) == 'up':
+            return i + 4
+        if low(i) == 'as' and low(i + 1) == 'it' and low(i + 2) == 'is' and low(i + 3) == 'set' and low(i + 4) == 'up':
+            return i + 5
+        if low(i) == 'as' and low(i + 1) == "it's" and low(i + 2) == 'set' and low(i + 3) == 'up':
+            return i + 4
+        return i
 
     def _selection(self, i):
         """The config and the channel files selected in the GUI's tabs (Decision 20), in these forms, where S is

@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.10.0 (18 October 2026)
+
+Version 2, Phase V2-8: GUI first, after the maintainer's third GUI session. "For displaying the run command output, I'd
+prefer it to use the GUI Output area that has more screen space rather than forcing output to Assist window. I really
+want the GUI to be used just like non-Assist SiCoPR, but with Assist you can type commands to get what you want." The
+same session found three phrasings that missed; the language-model layer is deferred (decisions of 18 October), so
+they are rules. Rows GF01 to GF05 (on existing prior states) specify them; the table has 876 rows. It needs SiCoPR's
+branch `gui-panel-slot` with `sicopr:output`.
+
+- **A run's output is in the Run tab (Decision 24).** A run the panel carries out streams its lines to the Run tab's
+  Output (the page event `sicopr:output`), shown as a run of the Run tab is: its status line, follow output, and Stop,
+  which stops the panel's run (`sicopr:stop-request`). When a run starts the page shows the Run tab
+  (`sicopr:show` with `unless_editing`), unless the user is in the middle of an edit in Config; when it ends the page
+  stays there and the run is in the Results tabs, as after a run of SiCoPR's own. A batch streams every point in
+  order, each headed with its point.
+- **The panel keeps short replies.** The plan's steps as a short list, questions with buttons, one line while a plan
+  runs (`run_0006 running: output in the Run tab`), then the headline result (COM, pass or fail against COM Pass
+  threshold) with the Results buttons, or a batch's short table; long text (announcements, a run's summary) folds
+  behind a details toggle. The panel has no progress area of its own any more. `GET job` gives `runs` and
+  `running_line`, `GET result` the `headline`, `GET batch` its `rows`; the `run` end record keeps the status lines.
+- **"the current settings"**, "settings captured", "what I have set up" and "as it is set up" mean the setup in the GUI,
+  as "the command" does (row GF01; the maintainer's `Run with current settings.`).
+- **The thru-only and the crosstalk case together.** "thru-only and xtalk", "with and without crosstalk" (and
+  `Compare thru-only with xtalk`) are a batch of two points on the same config and THRU, without and with the
+  crosstalk that belongs to the THRU (Decision 19), with `diff_results` against the thru-only case when "compare" is
+  said (rows GF02 to GF04). Points already run are reused, so a last run with crosstalk no longer stops it (the
+  maintainer's `Run config thru-only and xtalk and compare results.`). No crosstalk to find asks (row GF05).
+- **Several sentences are one request** when they describe one run or batch (row GF03): "two cases" (or both cases)
+  is placed beside the two cases of a THRU, and the maintainer's `Run with settings captured.  Run thru-only and with
+  xtalk.  Compare results of two cases.` gives the plan of GF02.
+- Tests: `tests\test_gui_first.py` (new), gate V8.2 in `tests\test_use_cases.py`, and new checks in
+  `tests\test_crosstalk.py` and `tests\test_gui_static.py`. The frozen L4 list has 660 rows (GF01 to GF05 added), the
+  review list 216, unchanged.
+
 ## 0.9.0 (17 October 2026)
 
 Version 2, Phase V2-7: what the maintainer's second GUI session asked for. "The Run Tab will have the command

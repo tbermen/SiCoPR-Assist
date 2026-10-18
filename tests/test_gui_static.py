@@ -30,10 +30,10 @@ from check import check, finish  # noqa: E402
 STATIC = os.path.join(ROOT, 'sicopr_assist', 'panel', 'static')
 JS = os.path.join(STATIC, 'panel.js')
 CSS = os.path.join(STATIC, 'panel.css')
-# the panel contract, API 1 (GUI_DESIGN.md section 4.1): the page sends the first seven and hears the last six
-# (run-request and set-run were added in Phase V2-7, Decision 23)
-CONTRACT = {'config', 'edit', 'view', 'run', 'browsed', 'channels', 'run-request', 'open-config', 'overlay',
-            'clear-edits', 'show', 'browse', 'set-run'}
+# the panel contract, API 1 (GUI_DESIGN.md section 4.1): the page sends the first eight and hears the last seven
+# (run-request and set-run were added in Phase V2-7, Decision 23; stop-request and output in Phase V2-8, Decision 24)
+CONTRACT = {'config', 'edit', 'view', 'run', 'browsed', 'channels', 'run-request', 'stop-request', 'open-config',
+            'overlay', 'clear-edits', 'show', 'browse', 'set-run', 'output'}
 
 src = io.open(JS, encoding='utf-8').read()
 css = io.open(CSS, encoding='utf-8').read()
@@ -100,8 +100,8 @@ named = set(re.findall(r"sicopr:([a-z-]+)", src))
 check('every event panel.js sends or hears is one of the panel contract\'s', (sent | heard | named) <= CONTRACT
       and sent and heard, 'not in the contract: %s' % sorted((sent | heard | named) - CONTRACT))
 check('panel.js sends only events the page hears, and hears only events the page sends',
-      sent <= {'open-config', 'overlay', 'clear-edits', 'show', 'browse', 'set-run'}
-      and heard <= {'config', 'edit', 'view', 'run', 'browsed', 'channels', 'run-request'},
+      sent <= {'open-config', 'overlay', 'clear-edits', 'show', 'browse', 'set-run', 'output'}
+      and heard <= {'config', 'edit', 'view', 'run', 'browsed', 'channels', 'run-request', 'stop-request'},
       'sent %s, heard %s' % (sorted(sent), sorted(heard)))
 try:
     from sicopr_assist import engine
@@ -261,5 +261,47 @@ check('a run made with Output dynamic results ticked opens in Results, dynamic, 
 check('Results, dynamic opened on a run with no .mat export says so and offers the phrase that makes one',
       "if (view === 'dynamic' && !r.export_mat) noDynamic(rid, r.dynamic_phrase);" in rcard
       and 'fillBox(phrase)' in fn('noDynamic') and 'nothing' in fn('noDynamic'), rcard[:600])
+
+
+# ---- GUI first (Decision 24; gate V8.3)
+#
+# The maintainer's third session: the run's output belongs in the GUI's Output area, which has the room, and the GUI is
+# used as without Assist. These read the handlers; the real page is driven in the walk-through of gate V8.4.
+poll_fn, trt, bt, stop_ev = fn('poll'), fn('toRunTab'), fn('batchTable'), heard_body('stop-request')
+check("a run's output goes to the Run tab: every poll hands the new lines to sicopr:output, with the job, its status "
+      "line and whether it is done",
+      'toRunTab(st);' in poll_fn and "emit('output', { job: 'SiCoPR-Assist #' + st.seq, lines, status: runState(st), "
+                                     "done: !st.running });" in trt
+      and 'const lines = st.lines.map((x) => x[1]);' in trt and 'if (!st.runs) return;' in trt, trt[:700])
+check("a run's output does not go to the panel: it has no area for it, and only toRunTab reads the job's lines",
+      'alines' not in tpl and 'aLines' not in src and 'aProgress' not in src
+      and len(re.findall(r'\bst\.lines\b', src)) == 1 and 'st.lines' in trt, re.findall(r'.*\bst\.lines\b.*', src))
+check('the Run tab is shown once when a run starts, unless the user is in the middle of an edit in Config',
+      "emit('show', { view: 'run', unless_editing: true });" in trt and 'if (!SHOWN_RUN) {' in trt
+      and 'SHOWN_RUN = true;' in trt and 'SHOWN_RUN = false;' in fn('startJob'), trt[:500])
+check('while a plan runs the panel shows one line, the running line the server gives, and no progress',
+      "$a('#aRunning').hidden = !on;" in fn('busyUi')
+      and "$a('#aRunLine').textContent = st.runs ? st.running_line : " in poll_fn
+      and re.search(r'<div id="aRunning" class="arunning" hidden>', tpl)
+      and re.search(r'\.arunning\[hidden\]\s*\{\s*display:\s*none', css), fn('busyUi'))
+check('after a run the panel shows the headline result, with the buttons that open it in Results, and the rest under '
+      'details',
+      "box.appendChild(el('div', 'aheadline', r.headline));" in rcard
+      and "details(box, (more || r.lines || []));" in rcard
+      and "for (const line of r.lines) box.appendChild" not in rcard and "['results', 'Results, static']" in rcard
+      and "resultCard(rid, done.lines)" in fin and "note(line, 'aout')" not in fin, rcard[:700])
+check('Stop in the Run tab stops the panel\'s run: sicopr:stop-request for its own job calls stop',
+      "if (!String(d.job || '').startsWith('SiCoPR-Assist #')) return;" in stop_ev and "call('stop', {})" in stop_ev
+      and "'SiCoPR-Assist #' + st.seq" in trt, stop_ev[:400])
+check('a batch\'s reply is a short table, one row per point, with its lines under details',
+      'box.appendChild(batchTable(b));' in fin and 'for (const r of b.rows || [])' in bt
+      and "for (const h of ['#', 'case', 'status', 'run', 'COM dB'])" in bt
+      and 'details(box, (done.lines || []).concat([b.csv]));' in fin
+      and "for (const line of b.lines) box.appendChild" not in fin, fin[:900])
+cd = fn('card')
+check('the long text of a reply (its announcements) folds behind a details toggle; the plan is a short list',
+      'details(box, out.announce);' in cd and "for (const line of out.announce" not in cd
+      and "const d = el('details', 'adetails');" in fn('details') and "el('summary', '', 'details ('" in fn('details')
+      and "ol.appendChild(el('li', '', s.op || s));" in cd, cd[:800])
 
 finish()

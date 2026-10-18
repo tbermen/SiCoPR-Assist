@@ -332,7 +332,27 @@ def result(project, rid):
         mat = bool(project.read_result(rid).get('export_mat'))
     except (OSError, ValueError):
         mat = False
-    return dict(got, folder=project.run_dir(rid), export_mat=mat, dynamic_phrase=core.dynamic_phrase(project, rid))
+    return dict(got, folder=project.run_dir(rid), export_mat=mat, dynamic_phrase=core.dynamic_phrase(project, rid),
+                headline=headline(got))
+
+
+def headline(got):
+    """The one result line the panel shows after a run (Decision 24): COM of each package case, pass or fail against
+    COM Pass threshold. run_0006: COM 8.80571 dB, pass (COM Pass threshold 3 dB)."""
+    rid = got.get('run_id')
+    if got.get('status') != 'complete':
+        return '%s: the run did not complete' % rid
+    coms = [c.get(summary.COM_FIELD) for c in got.get('cases') or []]
+    nums = [c for c in coms if summary.is_number(c) and c == c]
+    if not coms or len(nums) != len(coms):
+        return '%s: no COM value in the result' % rid
+    thr = got.get('threshold')
+    verdict = ''
+    if thr is not None:
+        passed = sum(1 for c in nums if c >= thr)
+        word = 'pass' if passed == len(nums) else ('fail' if not passed else '%d of %d cases pass' % (passed, len(nums)))
+        verdict = ', %s (COM Pass threshold %s dB)' % (word, summary.fmt(thr))
+    return '%s: COM %s dB%s' % (rid, ', '.join(summary.fmt(c) for c in nums), verdict)
 
 
 def batch(project, seq):
@@ -341,7 +361,11 @@ def batch(project, seq):
     if rec is None:
         raise ValueError('no history record %s' % seq)
     rows = summary.batch_rows(project, rec['seq'], rec.get('points') or [])
-    return {'seq': rec['seq'], 'lines': summary.batch_lines(rows),
+    # the short table of the panel's reply (Decision 24): one row per point
+    table = [{'point': r['point'], 'values': r['values'], 'status': r['status'], 'run_id': r['run_id'],
+              'com': ' '.join(summary.fmt(float(x)) for x in str(r.get(summary.COM_FIELD) or '').split())}
+             for r in rows]
+    return {'seq': rec['seq'], 'lines': summary.batch_lines(rows), 'rows': table,
             'csv': os.path.join(project.runs_dir, 'batch_summary.csv'),
             'folders': [project.run_dir(r) for r in rec.get('run_ids') or []]}
 
@@ -438,13 +462,21 @@ def _has_runs(out):
 
 
 # ----------------------------------------------------------------------------- the panel behind SiCoPR's GUI
+_STARTED = re.compile(r'(?:: point (\d+) of (\d+) \([^\n]*\))?: (run_\d{4,}) started$')
+RUNNING = '%s running: output in the Run tab'      # the one line the panel shows while a plan runs (Decision 24)
+MAX_STATUS = 400                 # status lines a run record keeps (the engine's lines are in each run.log)
+
+
 class Job:
-    """A PLAN carried out in a worker thread, its progress lines kept in a bounded buffer polled by since."""
+    """A PLAN carried out in a worker thread, its progress lines kept in a bounded buffer polled by since. The page
+    sends those lines to the Run tab's Output (sicopr:output, Decision 24); the panel itself shows only the running
+    line: the run under way, and for a batch its point."""
 
     def __init__(self, seq, out):
         self.seq = seq
         self.out = out
         self.lines = collections.deque(maxlen=MAX_LINES)
+        self.statuses = collections.deque(maxlen=MAX_STATUS)
         self.count = 0
         self.started = time.time()
         self.last = self.started
@@ -455,6 +487,7 @@ class Job:
         self.cancel = threading.Event()
         self.error = None
         self.runs = _has_runs(out)
+        self.current = None                      # the run under way, as the running line names it
         self._lock = threading.Lock()
 
     def add(self, kind, text):
@@ -462,6 +495,15 @@ class Job:
             self.lines.append((self.count, kind, run.line_text(kind, text)))
             self.count += 1
             self.last = time.time()
+            if kind == 'status':
+                self.statuses.append(text)
+                m = _STARTED.search(text)
+                if m:
+                    self.current = m.group(3) + (' (point %s of %s)' % (m.group(1), m.group(2)) if m.group(1) else '')
+
+    def running_line(self):
+        """run_0006 running: output in the Run tab (the plan, before its first run starts)."""
+        return RUNNING % (self.current or 'the plan of #%s' % self.seq)
 
     def status(self, since=0):
         with self._lock:
@@ -471,7 +513,8 @@ class Job:
             return {'seq': self.seq, 'running': self.finished is None, 'lines': lines, 'next': self.count,
                     'resync': resync, 'quiet': time.time() - self.last,
                     'elapsed': (self.finished or time.time()) - self.started, 'done': self.done,
-                    'outcomes': list(self.outcomes), 'pages': list(self.pages), 'error': self.error}
+                    'outcomes': list(self.outcomes), 'pages': list(self.pages), 'error': self.error,
+                    'runs': self.runs, 'running_line': self.running_line(), 'stopped': self.cancel.is_set()}
 
 
 class Panel:
@@ -618,10 +661,12 @@ class Panel:
                 job.finished = time.time()
                 d = job.done or {}
                 if job.runs:
+                    # the status lines of Decision 17 go with the run record (the engine's own are in each run.log)
                     log(p, 'run', {'event': 'end', 'command': seq, 'run_ids': d.get('run_ids') or [],
                                    'status': 'stopped' if job.cancel.is_set() else (d.get('status') or 'failed'),
                                    'elapsed': round(job.finished - job.started, 1),
-                                   'reason': run.STOPPED if job.cancel.is_set() else job.error})
+                                   'reason': run.STOPPED if job.cancel.is_set() else job.error,
+                                   'lines': list(job.statuses)})
         threading.Thread(target=work, daemon=True).start()
         return job
 

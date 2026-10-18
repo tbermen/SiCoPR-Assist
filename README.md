@@ -156,6 +156,11 @@ How the files are chosen:
   to name the files: `Re-run with FEXT <file> and NEXT <file>`.
 - If the last run already had exactly those files, it is a STOP: the results would equal the last run.
 - `Re-run thru only` after a crosstalk run runs the THRU alone with the same config.
+- Both cases at once: `Run thru-only and with xtalk and compare results.` (also "with and without
+  crosstalk", `Compare thru-only with xtalk`) is a batch of two points on the same config and THRU,
+  without and with its crosstalk files. A case already run is reused, so after a crosstalk run only the
+  thru-only case runs, and the other way round. "compare" adds the comparison: COM of each case against
+  the thru-only one. With no crosstalk file for the THRU, the tool asks you to name the files.
 
 A word the tool cannot place is never dropped. `Add widget files and re-run.` asks, and nothing runs.
 
@@ -325,14 +330,14 @@ nothing itself and makes no network connection for feedback. You can also open a
 
 ## How it is tested
 
-The behaviour is specified by a table of 871 use cases (`tests\cases\sicopr_use_cases.csv`), written
+The behaviour is specified by a table of 876 use cases (`tests\cases\sicopr_use_cases.csv`), written
 and checked against SiCoPR before any code; rows were added after the maintainer's first use (CH01 to
 CH08, 6 October 2026), his second session (XT01 to XT06 and SM16), the reading of the IEEE tools
-page (F11 and F12, 7 October), his first GUI session (SL01 to SL05 and EX01, 10 October) and his second
-(RT01 to RT06, 17 October). Each row gives a phrase, the state of the project before it, and the expected
+page (F11 and F12, 7 October), his first GUI session (SL01 to SL05 and EX01, 10 October), his second
+(RT01 to RT06, 17 October) and his third (GF01 to GF05, 18 October). Each row gives a phrase, the state of the project before it, and the expected
 outcome; for the SL and RT rows that state holds what is selected in the GUI's tabs and the Run tab's
 options, which the harness hands to the core as data. The harness runs every row on each starting
-workbook it applies to (2470 row and config pairs) and scores
+workbook it applies to (2480 row and config pairs) and scores
 four levels:
 
 | level | what is compared |
@@ -384,7 +389,8 @@ files in the roles they were selected in, and the example in an empty folder (wi
 
 ## The GUI
 
-SiCoPR-Assist adds a panel on the right of SiCoPR's own GUI, where the same phrases are typed. Its
+SiCoPR-Assist adds a panel on the right of SiCoPR's own GUI, where the same phrases are typed. SiCoPR's
+GUI stays the tool, used as without SiCoPR-Assist; the panel is a way to drive it by typing. Its
 design is `docs\GUI_DESIGN.md`. It needs a SiCoPR whose GUI has the panel slot (`gui\README.md` of
 SiCoPR, *Panels*); SiCoPR 1.1.2 does not have it yet (the slot is on SiCoPR's branch `gui-panel-slot`, based on
 1.1.2), and `sicopr-assist gui` says so and stops.
@@ -399,9 +405,17 @@ It starts SiCoPR's `gui\app.py` with the project folder opened and made the run 
 SiCoPR's GUI directly also shows the panel, which then asks for the project folder (Browse).
 
 - **The panel** shows the project, the working config, and the conversation: each phrase with its
-  PLAN, QUESTION or STOP as on the command line, a question's options as buttons, the tutor's lines with
-  their example phrases as links, live progress while a plan runs (Stop terminates it), and each run's
-  summary with buttons that show it in SiCoPR's Results tabs.
+  PLAN, QUESTION or STOP as on the command line, in short: the plan's steps as a list, a question's
+  options as buttons, the tutor's lines with their example phrases as links, and the long text (what a
+  plan announces, a run's summary) behind a **details** toggle. While a plan runs the panel shows one
+  line (`run_0006 running: output in the Run tab`); at the end, the headline result (COM, pass or fail
+  against COM Pass threshold) with buttons that show the run in SiCoPR's Results tabs, or for a batch a
+  short table, one row per point.
+- **A run's output is in the Run tab.** A run the panel carries out streams its lines to the Run tab's
+  Output, as a run of the Run tab does: its status line, follow output, and Stop, which stops the
+  panel's run. The page shows the Run tab when the run starts, unless you are in the middle of an edit
+  in Config, and stays there when it ends; the run is then in the Results tabs. A batch streams every
+  point in order, each headed with its point.
 - **The command box** is the block at the bottom of the panel, under the label `Type a command`: a text
   area of three lines that grows with what you type. Enter sends, Shift+Enter starts a new line, Up and
   Down recall earlier phrases. Under it are up to four phrases that work right now (`Run the example.`
@@ -424,10 +438,12 @@ SiCoPR's GUI directly also shows the panel, which then asks for the project fold
   back into the selection line and the command, and `Run the command.` (or `Run it.`,
   `Run what is in the Run tab`, `Run the Run tab`) runs exactly that setup through the panel, with
   history and reuse. While the Run tab is assembled this way, its **Run sicopr.py** button does the same
-  as `Run the command.`: one history record, the same plan, the same progress. Output dynamic results
+  as `Run the command.`: one history record, the same plan, its output in the Run tab. Output dynamic results
   makes the run an export run (`--export-mat`), and when it ends the run opens in Results, dynamic,
   where its dashboard is built. The two options are part of what decides reuse. On the command line
-  there is no Run tab, so `Run the command.` asks (re-run the last run, or cancel).
+  there is no Run tab, so `Run the command.` asks (re-run the last run, or cancel). "the current
+  settings", "settings captured", "what I have set up" and "as it is set up" mean the same as "the
+  command": `Run with current settings.`
 - **Results, dynamic.** "dynamic results", "results, dynamic" and "the dynamic results of the last run"
   mean the dashboard (`Show the dynamic results of the last run.`, or of `run_0004` by its id). Opening
   Results, dynamic on a run that has no `.mat` export says so in the panel and offers that phrase.
@@ -456,7 +472,8 @@ SiCoPR's GUI directly also shows the panel, which then asks for the project fold
 Version 2 was built in phases: the tutor and feedback export (above) in 0.4.0, the dashboard in 0.5.0,
 channel download in 0.6.0, and the GUI in 0.7.0. Version 0.8.0 follows the first GUI session: the
 selection in the tabs, the command box, and the example that runs from an empty folder. Version 0.9.0
-follows the second: the Run tab and the panel as one.
+follows the second: the Run tab and the panel as one. Version 0.10.0 follows the third: GUI first, with a
+run's output in the Run tab, and three phrasings of that session.
 
 ## What is known to be incomplete
 
@@ -465,7 +482,7 @@ follows the second: the Run tab and the panel as one.
 - A re-run with another channel file replaces one THRU, or one FEXT or NEXT file. When the last run
   had several FEXT (or NEXT) files, naming one of them stops and asks for the whole set with its
   config.
-- 216 of the 871 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
+- 216 of the 876 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
   They are scored at L1 (and L2 and L3 where those apply) and listed for a person to review.
 - Four behaviours are assumptions not yet confirmed by the maintainer: matching a typo in an action
   or filler word (`agian` read as `again`, never for a parameter name); the trouble thresholds of

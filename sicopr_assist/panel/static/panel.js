@@ -17,7 +17,14 @@
  * files, its two options, and in its command box the command the panel will run, which is the working config's run
  * CSV and not the workbook. A change made in the Run tab comes back with sicopr:channels (files and options), is part
  * of the selection, and updates that command. "Run the command." runs exactly that setup; while the panel has the Run
- * tab assembled, the Run tab's own Run button is handed here (sicopr:run-request) and is that phrase. */
+ * tab assembled, the Run tab's own Run button is handed here (sicopr:run-request) and is that phrase.
+ *
+ * GUI first (Decision 24). SiCoPR's GUI is the tool, used as without the panel; the panel drives it by typing. A run
+ * the panel carries out streams its lines to the Run tab's Output (sicopr:output), with its status line and Stop
+ * there (sicopr:stop-request), and the page shows the Run tab when it starts, unless the user is in the middle of an
+ * edit in Config. The panel keeps short replies: the plan as a short list with the long text folded behind details,
+ * a question with its buttons, one line while a plan runs, then the headline result (or a batch's short table) with
+ * the buttons that open it in Results. */
 (function () {
   const API = '/panel/assist/api/';
   const ROOT = document.getElementById('panel-assist');
@@ -30,10 +37,9 @@
     </div>
     <div id="aWorking" class="amuted"></div>
     <div id="aConv" class="aconv"></div>
-    <div id="aProgress" class="aprogress" hidden>
-      <div class="arow"><span id="aProgState" class="amuted"></span>
-        <button id="aStop" class="ghost asmall">Stop</button></div>
-      <pre id="aLines" class="alines"></pre>
+    <div id="aRunning" class="arunning" hidden>
+      <span id="aRunLine"></span>
+      <button id="aToRun" class="ghost asmall">Run tab</button>
     </div>
     <div id="aPending" class="apending" hidden></div>
     <div id="aCommand" class="acommand">
@@ -66,6 +72,7 @@
   let SINCE = 0;
   let POLL = null;
   let FAILS = 0;
+  let SHOWN_RUN = false;    // the Run tab was asked for once for the plan being carried out
   let EDITS = Promise.resolve();   // edits being taken in; a phrase waits for them
   // a workbook the user opened in the Config view is being followed, or its keep-or-start question is open: the
   // view stays on it, and nothing here pulls it back to the source of the working config meanwhile
@@ -130,10 +137,19 @@
     c.scrollTop = c.scrollHeight;
   }
 
-  /* A card for an outcome: the plan with its steps, the question with a button per option, or the stop. */
+  /* Long text (the announcements, a run's summary lines) folded behind a details toggle (Decision 24). */
+  function details(box, lines) {
+    if (!(lines || []).length) return;
+    const d = el('details', 'adetails');
+    d.appendChild(el('summary', '', 'details (' + lines.length + ' line' + (lines.length === 1 ? '' : 's') + ')'));
+    for (const line of lines) d.appendChild(el('div', 'aann', line));
+    box.appendChild(d);
+  }
+
+  /* A card for an outcome: the plan as a short list of its steps, the question with a button per option, or the stop;
+   * what the outcome announces is under details. */
   function card(out, opts) {
     const box = el('div', 'acard t' + out.type.toLowerCase());
-    for (const line of out.announce || []) box.appendChild(el('div', 'aann', line));
     if (out.type === 'STOP') {
       box.appendChild(el('div', 'astop', 'STOP: ' + (out.reason || '')));
     } else if (out.type === 'QUESTION') {
@@ -153,7 +169,8 @@
       for (const s of out.steps || []) ol.appendChild(el('li', '', s.op || s));
       box.appendChild(ol);
     }
-    if (out.type !== 'PLAN') tutorLines(box, out.tutor);
+    details(box, out.announce);
+    tutorLines(box, out.tutor);       // for a PLAN too: its run's lines are in the Run tab, not here
     return box;
   }
 
@@ -338,18 +355,39 @@
     $a('#aCmd').disabled = on;
     $a('#aSend').disabled = on;
     $a('#aRunSel').disabled = on;
-    $a('#aExamples').hidden = on;       // no phrase can be sent while a plan runs; the room goes to its progress
-    $a('#aProgress').hidden = !on && !$a('#aLines').textContent;
-    $a('#aStop').disabled = !on;
+    $a('#aExamples').hidden = on;       // no phrase can be sent while a plan runs
+    $a('#aRunning').hidden = !on;       // the one line the panel shows while it runs; its output is in the Run tab
   }
 
   function startJob() {
     SINCE = 0;
     FAILS = 0;
-    $a('#aLines').textContent = '';
+    SHOWN_RUN = false;
+    $a('#aRunLine').textContent = 'starting';
     busyUi(true);
-    $a('#aProgress').hidden = false;
     poll();
+  }
+
+  /* The Run tab's status line for the panel's run, in the form SiCoPR gives its own. */
+  function runState(st) {
+    const quiet = st.running && st.quiet > 20 ? ', no output for ' + Math.round(st.quiet) + ' s' : '';
+    if (st.running) return 'SiCoPR-Assist #' + st.seq + ' running, ' + Math.round(st.elapsed) + ' s' + quiet;
+    return 'SiCoPR-Assist #' + st.seq + ' finished ('
+      + (st.stopped ? 'stopped' : (st.done || {}).status || (st.error ? 'failed' : 'ok')) + ') in '
+      + Math.round(st.elapsed) + ' s';
+  }
+
+  /* The lines of a plan that runs go to the Run tab's Output (Decision 24), as a run of the Run tab's own; when it
+   * starts the page shows the Run tab, unless the user is in the middle of an edit in Config. */
+  function toRunTab(st) {
+    if (!st.runs) return;
+    if (!SHOWN_RUN) {
+      SHOWN_RUN = true;
+      emit('show', { view: 'run', unless_editing: true });
+    }
+    const lines = st.lines.map((x) => x[1]);
+    if (st.resync) lines.unshift('[SiCoPR-Assist] earlier lines were dropped; the whole output is in run.log');
+    emit('output', { job: 'SiCoPR-Assist #' + st.seq, lines, status: runState(st), done: !st.running });
   }
 
   async function poll() {
@@ -362,46 +400,58 @@
       // a failed poll retries with backoff and never ends the loop, as SiCoPR's run poller does
       FAILS += 1;
       const wait = Math.min(30000, 900 * Math.pow(2, FAILS));
-      $a('#aProgState').textContent = 'status unavailable (' + FAILS + 'x), retrying in ' + Math.round(wait / 1000) + ' s';
+      $a('#aRunLine').textContent = 'status unavailable (' + FAILS + 'x), retrying in ' + Math.round(wait / 1000) + ' s';
       POLL = setTimeout(poll, wait);
       return;
     }
     if (st.idle) { busyUi(false); return; }
-    const pre = $a('#aLines');
-    if (st.resync) pre.textContent = '';
-    if (st.lines.length) {
-      const keep = (pre.textContent ? pre.textContent.split('\n') : []).concat(st.lines.map((x) => x[1]));
-      pre.textContent = keep.slice(-2000).join('\n');
-      pre.scrollTop = pre.scrollHeight;
-    }
+    toRunTab(st);
     SINCE = st.next;
-    const quiet = st.running && st.quiet > 20 ? ', no output for ' + Math.round(st.quiet) + ' s' : '';
-    $a('#aProgState').textContent = st.running ? 'running, ' + Math.round(st.elapsed) + ' s' + quiet
-      : 'finished in ' + Math.round(st.elapsed) + ' s';
+    $a('#aRunLine').textContent = st.runs ? st.running_line : 'carrying out the plan of #' + st.seq;
     if (st.running) { POLL = setTimeout(poll, 900); return; }
     busyUi(false);
     await finished(st);
+  }
+
+  /* A batch's reply: its short table, one row per point (Decision 24). */
+  function batchTable(b) {
+    const t = el('table', 'atable');
+    const head = el('tr');
+    for (const h of ['#', 'case', 'status', 'run', 'COM dB']) head.appendChild(el('th', '', h));
+    t.appendChild(head);
+    for (const r of b.rows || []) {
+      const tr = el('tr');
+      for (const v of [r.point, r.values, r.status, r.run_id, r.com]) tr.appendChild(el('td', '', String(v)));
+      t.appendChild(tr);
+    }
+    return t;
   }
 
   async function finished(st) {
     for (const o of st.outcomes || []) entry('(the plan made from the download)', o, 'next');
     if (st.error) note('the plan could not be carried out: ' + st.error, 'abad');
     const done = st.done || {};
-    for (const line of done.lines || []) note(line, 'aout');
+    if (st.stopped) note('stopped: the run under way was terminated and nothing after it started', 'abad');
     const runs = [...new Set(done.run_ids || [])];
     const batchSeq = (done.points || []).length ? st.seq : null;
+    if (!runs.length && !batchSeq) {
+      const box = el('div', 'acard aresult');
+      for (const line of (done.lines || []).slice(0, 3)) box.appendChild(el('div', 'aann', line));
+      details(box, (done.lines || []).slice(3));
+      if ((done.lines || []).length) $a('#aConv').appendChild(box);
+    }
     if (batchSeq) {
       const b = await call('batch?seq=' + batchSeq);
       if (!b.error) {
         const box = el('div', 'acard aresult');
         box.appendChild(el('div', 'aplan', 'batch of ' + (done.points || []).length + ' points'));
-        for (const line of b.lines) box.appendChild(el('div', 'aann', line));
-        box.appendChild(el('div', 'amuted', b.csv));
+        box.appendChild(batchTable(b));
+        details(box, (done.lines || []).concat([b.csv]));
         $a('#aConv').appendChild(box);
       }
     } else {
       for (const rid of runs) {
-        const r = await resultCard(rid);
+        const r = await resultCard(rid, done.lines);
         // a run made with Output dynamic results ticked opens in Results, dynamic, which builds its dashboard there,
         // as a run started from the Run tab with that box ticked does (Decision 23)
         if (r && r.export_mat && JOB_TAB && JOB_TAB.options && JOB_TAB.options.export_mat
@@ -424,11 +474,13 @@
     focusBox(0);
   }
 
-  async function resultCard(rid) {
+  /* A run's reply: the headline result (COM, pass or fail), the buttons that open it in Results, and the summary
+   * under details. */
+  async function resultCard(rid, more) {
     const r = await call('result?run=' + encodeURIComponent(rid));
     if (r.error) return null;
     const box = el('div', 'acard aresult');
-    for (const line of r.lines) box.appendChild(el('div', 'aann', line));
+    box.appendChild(el('div', 'aheadline', r.headline));
     const row = el('div', 'aopts');
     for (const [view, label] of [['results', 'Results, static'], ['dynamic', 'Results, dynamic']]) {
       const b = el('button', 'ghost asmall', label);
@@ -440,6 +492,7 @@
       row.appendChild(b);
     }
     box.appendChild(row);
+    details(box, (more || r.lines || []));
     $a('#aConv').appendChild(box);
     return r;
   }
@@ -534,6 +587,15 @@
     send(RUN_COMMAND, 'Run button').catch((x) => note(x.message, 'abad'));
   });
 
+  /* Stop in the Run tab while its Output shows this panel's run (Decision 24): the plan is stopped here. */
+  window.addEventListener('sicopr:stop-request', (e) => {
+    const d = e.detail || {};
+    if (!String(d.job || '').startsWith('SiCoPR-Assist #')) return;
+    call('stop', {}).then((r) => {
+      if (!r.stopped) note('nothing was running', 'amuted');
+    }).catch(() => {});
+  });
+
   window.addEventListener('sicopr:edit', (e) => {
     const d = e.detail || {};
     EDITS = EDITS.then(async () => {
@@ -578,10 +640,7 @@
     emit('browse', { purpose: 'assist-project', title: 'Choose the SiCoPR-Assist project folder (where .sicopr is)' });
   });
   $a('#aSend').addEventListener('click', () => send($a('#aCmd').value).catch((x) => note(x.message, 'abad')));
-  $a('#aStop').addEventListener('click', () => call('stop', {}).then((r) => {
-    note(r.stopped ? 'stop requested: the run under way is terminated and nothing after it starts'
-      : 'nothing was running', 'amuted');
-  }));
+  $a('#aToRun').addEventListener('click', () => emit('show', { view: 'run' }));
   $a('#aRunSel').addEventListener('click', () => send(RUN_PHRASE).catch((x) => note(x.message, 'abad')));
   $a('#aCmd').addEventListener('input', fitBox);
   $a('#aCmd').addEventListener('keydown', (e) => {

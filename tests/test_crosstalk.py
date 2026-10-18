@@ -11,6 +11,10 @@ drop   no phrase shape drops a word. A known word that means something only insi
        tx, three, back, ...) and that no clause took is unplaced and asked about. Checked on the reader for every
        such word in several phrase shapes, and on the core: the phrase with the word never gives the same PLAN as
        the phrase without it (the maintainer's "Add xtalk files and re-run." once replayed the last command).
+GF     after the third GUI session (18 October, Decision 24): the phrasings of rows GF01 to GF03 on the reader ("the
+       current settings" and its forms; "with and without crosstalk"; "two cases" placed only beside both cases), and
+       the two cases of a THRU carried out with the stand-in child: the thru-only case reused, the crosstalk case run
+       with its 3 FEXT and 4 NEXT files, compared against the thru-only case; asked again, nothing runs.
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
@@ -145,6 +149,72 @@ def n3_questions(fx):
           and o['question']['options'] == ['name the files', 'cancel'], o.get('question'))
 
 
+def gf_reader(names, blocks):
+    """The phrasings of the third GUI session (Decision 24, rows GF01 to GF03), on the reader."""
+    for ph in ('Run with current settings.', 'Run with the current settings', 'Run with settings captured.',
+               'Run what I have set up', "Run what I've set up", 'Run it as it is set up', "Run it as it's set up"):
+        o = parse.read(ph, names, blocks)
+        check('GF01: %r is the setup in the GUI (flag run_tab), the action run alone, no word left' % ph,
+              'run_tab' in o['flags'] and o['actions'] == ['run'] and not o['unplaced'] and not o['attempts'], o)
+    for ph in ('Run with and without crosstalk and compare the results', 'Run without and with xtalk',
+               'Run config thru-only and xtalk and compare results.', 'Compare thru-only with xtalk'):
+        o = parse.read(ph, names, blocks)
+        check('GF02: %r names both cases (flags thru_only and crosstalk), no word left' % ph,
+              {'thru_only', 'crosstalk'} <= set(o['flags']) and not o['unplaced'], o)
+    o = parse.read('Run with settings captured.  Run thru-only and with xtalk.  Compare results of two cases.', names,
+                   blocks)
+    check('GF03: the three sentences are one request: run, compare, both cases, the setup, no word left',
+          {'thru_only', 'crosstalk', 'run_tab'} <= set(o['flags']) and set(o['actions']) == {'run', 'compare'}
+          and not o['unplaced'], o)
+    o = parse.read('Compare results of two cases.', names, blocks)
+    check('GF03: "two cases" is placed only beside the two cases of a THRU; alone it is asked about',
+          'two' in o['unplaced'] and 'cases' in o['unplaced'], o['unplaced'])
+    o = parse.read('Re-run with settings.', names, blocks)
+    check('GF01: "settings" alone is not the setup in the GUI, and is asked about',
+          'run_tab' not in o['flags'] and 'settings' in o['unplaced'], o)
+
+
+def gf_run(fx):
+    """The two cases of a THRU carried out (Decision 24, rows GF02 and GF04): after a thru-only run, the thru-only
+    case is reused and the crosstalk case runs, with the THRU, its 3 FEXT and its 4 NEXT files; the comparison is
+    against the thru-only case; the history record holds both points. Then the same request again runs nothing."""
+    p = Project(fx.project('Case1'))
+    names = [n for n in AKINWALE if '_BPK_1200mm_' in n or '_BPK_300mm_' in n]
+    for n in names:
+        fixtures.link_or_copy(fx.thru, os.path.join(p.root, 'ch', n))
+    thru = os.path.join('ch', 'Tx_NPC_250mm_32AWG_BPK_1200mm_27AWG_BPK_250mm_32AWG_NPC_Rx_thru1.s4p')
+    run.carry_out(p, core.handle(r'Run COM on %s with data\config.xlsx' % thru, p), child=STANDIN)
+    argv = os.path.join(tempfile.mkdtemp(), 'argv.jsonl')
+    os.environ['SICOPR_ASSIST_STANDIN_ARGV'] = argv
+    try:
+        out = core.handle('Run thru-only and with xtalk and compare results.', p)
+        done = run.carry_out(p, out, child=STANDIN) if out['type'] == 'PLAN' else {'run_ids': [], 'lines': []}
+    finally:
+        del os.environ['SICOPR_ASSIST_STANDIN_ARGV']
+    got = [json.loads(line) for line in open(argv, encoding='utf-8')] if os.path.exists(argv) else []
+    a = got[0] if len(got) == 1 else []
+    check('GF04 run: one child run, the crosstalk case: --thru THRU --fext 3 files --next 4 files',
+          len(got) == 1 and '--fext' in a and '--next' in a and a.index('--next') - a.index('--fext') == 4
+          and a[a.index('--thru') + 1].endswith('_BPK_1200mm_27AWG_BPK_250mm_32AWG_NPC_Rx_thru1.s4p'), got)
+    check('GF04 run: the thru-only case is the first run, reused; the crosstalk case is the new run',
+          [(pt.get('values') or {}).get('mode') for pt in done.get('points') or []] == ['thru_only', 'xtalk']
+          and done.get('run_ids') == ['run_0001', 'run_0002']
+          and done['points'][0].get('reused_from') == 'run_0001' and done['points'][1].get('new'),
+          (done.get('run_ids'), done.get('points')))
+    diff = [ln for ln in done.get('lines') or [] if ln.startswith('differences in COM')]
+    check('GF04 run: the results are compared against the thru-only case (run_0001)',
+          diff == [diff[0]] and 'against the thru-only case (run_0001' in diff[0], done.get('lines'))
+    rec = next(r for r in reversed(p.read_history()) if r.get('kind') in (None, 'phrase'))
+    check('GF04 run: the history record holds both points and both run ids',
+          len(rec.get('points') or []) == 2 and rec.get('run_ids') == ['run_0001', 'run_0002'],
+          (rec.get('points'), rec.get('run_ids')))
+    o = core.handle('Run with and without crosstalk and compare the results.', p)
+    check('GF02 again: both cases were already run, so nothing runs: batch_summary > diff_results',
+          o['type'] == 'PLAN' and [s['op'] for s in o['steps'] if s['op'] != 'show_tutor'] ==
+          ['batch_summary', 'diff_results'] and o['new_runs'] == 0 and o['reused_runs'] == 2,
+          (o['type'], o['steps'], o.get('question')))
+
+
 SHAPES = ('{w} and re-run.', 'Add {w} files and re-run.', 'Re-run with {w}.', 'Re-run, but with the {w} files added',
           'Same setup, but with the {w}')
 
@@ -209,7 +279,9 @@ def main():
         wc = fx.working_config('Case1')
         ctx_names = core.Context(Project(fx.project('Case1'))).names(wc)
         no_drop_reader(ctx_names, list(wc['packages']))
+        gf_reader(ctx_names, list(wc['packages']))
         n3_run(fx)
+        gf_run(fx)
         n3_questions(fx)
         no_drop_core(fx)
     finish()
