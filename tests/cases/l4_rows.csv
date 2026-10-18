@@ -650,3 +650,7 @@ SL03,Case1; Case3,run,must,QUESTION,options,select one in the run tab | name a f
 SL04,Case1; Case3,run,must,QUESTION,options,provide files | cancel
 SL05,Case1; Case3,run,must,PLAN,chain,set_channel > validate_inputs > validate_config > run_com > summarize
 EX01,any,run,must,PLAN,chain,import_config > validate_inputs > run_com > summarize
+RT01,Case1; Case3,run,must,PLAN,chain,validate_inputs > validate_config > run_com > summarize
+RT03,Case1; Case3,run,must,QUESTION,options,re-run the last run | cancel
+RT04,Case1; Case3,run,must,PLAN,chain,validate_inputs > validate_config > run_com > summarize
+RT05,Case1; Case3,run,must,PLAN,chain,export_mat > render_dashboard > open_report

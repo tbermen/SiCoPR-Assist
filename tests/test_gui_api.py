@@ -506,7 +506,7 @@ def main():
         check('a selected file outside the project folder and the opened directories is left out and never reaches the '
               'core (the question of row SL03), and is taken once its directory is opened',
               r.get('selection') == {'config': os.path.abspath(selected(c4)['config']), 'thru': None, 'fext': [],
-                                     'next': []}
+                                     'next': [], 'options': {'export_mat': False, 'eye_under_mlse': False}}
               and (g.get('outcome') or {}).get('type') == 'QUESTION'
               and g['outcome']['question']['options'][0] == core.SELECT_IN_RUN_TAB
               and r2.get('selection', {}).get('thru') == os.path.abspath(stray) and len(r2['selection']['fext']) == 2,
@@ -743,6 +743,23 @@ def main():
                     stt = json.loads(resp.read())
                 check('SiCoPR\'s server lists the Assist panel and routes its state', listed['panels'][0]['name'] ==
                       'assist' and os.path.normcase(stt['project'] or '') == os.path.normcase(ctx.root), (listed, stt))
+                # SiCoPR 1.1.2's request guard covers the panel's routes: a POST another site makes is refused before
+                # it reaches the core, so nothing is recorded (Phase V2-7, gate V7.1)
+                n_hist = len(Project(ctx.root).read_history(log=True))
+                xsite = []
+                for hdr in ({'Sec-Fetch-Site': 'cross-site'}, {'Origin': 'http://attacker.example'},
+                            {'Host': 'attacker.example:%s' % base.rsplit(':', 1)[1]}):
+                    req = urllib.request.Request(base + '/panel/assist/api/handle', method='POST',
+                                                 data=json.dumps({'phrase': 'Re-run.'}).encode(),
+                                                 headers=dict({'Content-Type': 'application/json'}, **hdr))
+                    try:
+                        with urllib.request.urlopen(req, timeout=20) as resp:
+                            xsite.append(resp.status)
+                    except urllib.error.HTTPError as e:
+                        xsite.append(e.code)
+                check('SiCoPR\'s server refuses a cross-site POST to the Assist panel, and the core never sees it',
+                      xsite == [403, 403, 403] and len(Project(ctx.root).read_history(log=True)) == n_hist,
+                      (xsite, len(Project(ctx.root).read_history(log=True)) - n_hist))
                 got = post('/panel/assist/api/handle', {'phrase': 'Re-run with DER_0 = 6e-5.'})
                 time.sleep(1.5)
                 refused = post('/api/exec/start', {'config': '', 'thru': ''})

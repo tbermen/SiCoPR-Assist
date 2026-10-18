@@ -30,7 +30,7 @@ history exists,1,S2,settings or history,history.jsonl holding exactly the comman
 project folder with no history,3,"CH05, FB07, S3",files only,"history.jsonl holding exactly the commands described (or none); the files named, and nothing else",no
 last run has COM below the pass threshold,1,X1,run complete,"a history record of the run, its working config, and a seeded result file",seeded
 any,7,"FB03, TU03, TU04, TU06, TU07, TU08, X2",files only,"the files named, and nothing else",no
-run complete with the starting config and data\thru.s4p,719,"CB01, CB02, CB03, CB04, CB05, CB06, CB07, CB08, CB09, CB10, CB11, CB12 and 579 more",run complete,"a history record of the run, its working config, and a seeded result file",seeded
+run complete with the starting config and data\thru.s4p,721,"CB01, CB02, CB03, CB04, CB05, CB06, CB07, CB08, CB09, CB10, CB11, CB12 and 581 more",run complete,"a history record of the run, its working config, and a seeded result file",seeded
 run complete with one active override: DER_0 = 1e-4,2,"CB14, SX19",run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
 "run complete with two active overrides: DER_0 = 1e-4, SNR_TX = 32.5",2,"CB15, CB16",run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
 "run complete with data\config.xlsx, data\thru.s4p and crosstalk files",1,CB18,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
@@ -105,3 +105,7 @@ no history; the GUI selection holds the starting config as data\config.xlsx and 
 no history; both files exist; there is no GUI selection (the command line),1,SL04,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
 run complete with the starting config and data\thru.s4p; the GUI selection holds that config and the THRU data\thru2.s4p,1,SL05,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
 "empty project folder: no config, no channel file, no history",1,EX01,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
+run complete with the starting config and data\thru.s4p; the Run tab holds the same files with Output dynamic results ticked,1,RT01,seeded run,"the run-complete state, plus the Run tab state handed to the core as data",no
+run complete with the starting config and data\thru.s4p; the Run tab holds the same files and options as that run,1,RT02,seeded run,"the run-complete state, plus the Run tab state handed to the core as data",no
+run complete with the starting config and data\thru.s4p; the Run tab holds the same files with --eye-under-mlse ticked,1,RT04,seeded run,"the run-complete state, plus the Run tab state handed to the core as data",no
+run complete with the starting config and data\thru.s4p; there is no Run tab (the command line),1,RT03,seeded run,"the run-complete state, plus the Run tab state handed to the core as data",no

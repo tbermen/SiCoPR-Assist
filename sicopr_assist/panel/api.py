@@ -323,11 +323,16 @@ def history(project, limit=200):
 
 
 def result(project, rid):
-    """GET result: one run's summary card (summary.run_summary), and its folder."""
+    """GET result: one run's summary card (summary.run_summary), its folder, whether it has the engine's .mat export
+    (Results, dynamic shows only a run that has it), and the phrase that shows its dynamic results (Decision 23)."""
     if not re.fullmatch(r'run_\d{4,}', str(rid or '')):
         raise ValueError('not a run id: %s' % rid)
     got = summary.run_summary(project, rid)
-    return dict(got, folder=project.run_dir(rid))
+    try:
+        mat = bool(project.read_result(rid).get('export_mat'))
+    except (OSError, ValueError):
+        mat = False
+    return dict(got, folder=project.run_dir(rid), export_mat=mat, dynamic_phrase=core.dynamic_phrase(project, rid))
 
 
 def batch(project, seq):
@@ -354,7 +359,8 @@ RUN_SELECTION = core.RUN_SELECTION
 def clean_selection(project, sel, roots):
     """The selection the page reports (the config of the Config tab from sicopr:config, the THRU, FEXT and NEXT
     files of the Run tab from sicopr:channels), as the core takes it (Decision 20): absolute paths, and only those
-    inside the project folder or a directory opened in the GUI. A path from anywhere else is left out, so it never
+    inside the project folder or a directory opened in the GUI, and the Run tab's two options, each on only when the
+    page says true (Decision 23). A path from anywhere else is left out, so it never
     reaches the core. None when the page reports no selection at all."""
     if not isinstance(sel, dict):
         return None
@@ -364,19 +370,26 @@ def clean_selection(project, sel, roots):
 
     def many(ps):
         return [x for x in (one(p) for p in (ps if isinstance(ps, list) else [])) if x]
+    opts = sel.get('options') if isinstance(sel.get('options'), dict) else {}
     return {'config': one(sel.get('config')), 'thru': one(sel.get('thru')), 'fext': many(sel.get('fext')),
-            'next': many(sel.get('next'))}
+            'next': many(sel.get('next')), 'options': {k: opts.get(k) is True for k in core.RUN_OPTIONS}}
+
+
+OPTION_NAMES = {'export_mat': 'Output dynamic results', 'eye_under_mlse': '--eye-under-mlse'}
 
 
 def selection_line(sel):
-    """The line above the command box: Selected: <config>; THRU <file>; 3 FEXT, 4 NEXT."""
+    """The line above the command box: Selected: <config>; THRU <file>; 3 FEXT, 4 NEXT; and the Run tab's options
+    that are on (Decision 23)."""
     sel = sel or {}
     cfg = os.path.basename(sel['config']) if sel.get('config') else 'no config'
+    on = [OPTION_NAMES[k] for k in core.RUN_OPTIONS if (sel.get('options') or {}).get(k)]
+    tail = '; %s' % ', '.join(on) if on else ''
     if not sel.get('thru'):
-        return 'Selected: %s; %s' % (cfg, NO_CHANNEL)
+        return 'Selected: %s; %s%s' % (cfg, NO_CHANNEL, tail)
     fx, nx = len(sel.get('fext') or []), len(sel.get('next') or [])
-    return 'Selected: %s; THRU %s%s' % (cfg, os.path.basename(sel['thru']),
-                                        '; %d FEXT, %d NEXT' % (fx, nx) if fx or nx else '')
+    return 'Selected: %s; THRU %s%s%s' % (cfg, os.path.basename(sel['thru']),
+                                          '; %d FEXT, %d NEXT' % (fx, nx) if fx or nx else '', tail)
 
 
 def selection(project, sel, roots):
@@ -527,6 +540,9 @@ class Panel:
             return selection(p, body.get('selection'), roots)
         if path == 'examples' and method == 'POST':
             return examples(p, clean_selection(p, body.get('selection'), roots))
+        if path == 'runtab' and method == 'POST':
+            # the Run tab changed while the panel has it assembled: the command for its files and options now
+            return run.run_tab_preview(p, clean_selection(p, body.get('selection'), roots)) or {'command': None}
         if path == 'job':
             j = self.job
             return {'idle': True} if j is None else j.status(int(q.get('since') or 0))
@@ -555,7 +571,9 @@ class Panel:
     # ---- commands
     def phrase(self, p, phrase, host, selection=None):
         """POST handle: core.handle, then a PLAN carried out in the worker. selection: what is selected in the tabs
-        (clean_selection), handed to the core as data with every phrase (Decision 20)."""
+        (clean_selection), handed to the core as data with every phrase (Decision 20). A PLAN with one COM run also
+        gives run_tab, the setup it runs as the Run tab shows it (run.run_tab_setup), which the page is sent as
+        sicopr:set-run (Decision 23); it is made before the plan starts, so it names the run id the plan takes."""
         if not phrase.strip():
             return {'error': 'type a command'}
         if self.running():
@@ -568,8 +586,9 @@ class Panel:
         if _has_runs(out) and host is not None and host.com_running():
             p.update_history(seq, status='failed', reason=RUN_TAB_BUSY)
             return dict(res, refused=RUN_TAB_BUSY)
+        tab = run.run_tab_setup(p, out)
         self.start(p, seq, out)
-        return dict(res, job=True)
+        return dict(res, job=True, run_tab=tab)
 
     def start(self, p, seq, out):
         job = Job(seq, out)

@@ -327,9 +327,28 @@ class Context:
                         continue
                     out.append((rid, _fingerprint(fields, channel_keys((c.get('role'), c.get('sha256'))
                                                                         for c in res.get('channels') or []),
-                                                  res.get('sicopr_sha256'), res.get('export_mat'))))
+                                                  res.get('sicopr_sha256'), res.get('export_mat'),
+                                                  res.get('eye_under_mlse'))))
             return out
         return self._get('runs', make)
+
+    def run_setup(self, rid):
+        """(working config, [(path, role)], record) of run rid: its working config file, and the channel files of the
+        history record that made it, and that record. Raises ValueError when rid is not a run of this project."""
+        rec = next((r for r in reversed(self.history) if rid in (r.get('run_ids') or [])), None)
+        if rec is None:
+            raise ValueError('%s is not a run of this project' % rid)
+        return (self.project.read_working_config(rid),
+                [(c['path'], c.get('role') or 'thru') for c in rec.get('channels') or []], rec)
+
+    def options_of(self, rid):
+        """{'export_mat', 'eye_under_mlse'}: the options run rid was made with (its result file), both off when it
+        has none or cannot be read."""
+        try:
+            res = self.project.read_result(rid) if rid else {}
+        except (OSError, ValueError):
+            res = {}
+        return {'export_mat': bool(res.get('export_mat')), 'eye_under_mlse': bool(res.get('eye_under_mlse'))}
 
     def last_run_id(self):
         rec = next((r for r in reversed(self.history) if r.get('run_ids')), None)
@@ -347,10 +366,15 @@ def _sha(path):
         return hashlib.sha256(f.read()).hexdigest()
 
 
+RUN_OPTIONS = ('export_mat', 'eye_under_mlse')       # the two check boxes of the Run tab (Decision 23)
+
+
 def selection_of(selection, root):
-    """The selection of a GUI's tabs (Decision 20) in the form the core reads: {'config', 'thru', 'fext', 'next'},
-    each path relative to the project folder when it is inside it, as a phrase would name it, and absolute
-    otherwise. None stays None: there is no selection (the command line)."""
+    """The selection of a GUI's tabs (Decision 20) in the form the core reads: {'config', 'thru', 'fext', 'next',
+    'options'}, each path relative to the project folder when it is inside it, as a phrase would name it, and
+    absolute otherwise. options are the Run tab's two check boxes (Decision 23), {'export_mat': Output dynamic
+    results, 'eye_under_mlse': --eye-under-mlse}, each off unless the selection says it is on. None stays None:
+    there is no selection, and no Run tab (the command line)."""
     if selection is None:
         return None
 
@@ -363,9 +387,20 @@ def selection_of(selection, root):
         except ValueError:                           # another drive
             return full
         return full if r.startswith('..') else r
+    opts = selection.get('options') if isinstance(selection.get('options'), dict) else {}
     return {'config': rel(selection.get('config')), 'thru': rel(selection.get('thru')),
             'fext': [x for x in (rel(p) for p in selection.get('fext') or []) if x],
-            'next': [x for x in (rel(p) for p in selection.get('next') or []) if x]}
+            'next': [x for x in (rel(p) for p in selection.get('next') or []) if x],
+            'options': {k: opts.get(k) is True for k in RUN_OPTIONS}}
+
+
+def inside_folder(path, folder):
+    """Whether path is folder or inside it (case and separators as the system compares them)."""
+    a, b = os.path.normcase(os.path.abspath(path)), os.path.normcase(os.path.abspath(folder))
+    try:
+        return os.path.commonpath([a, b]) == b
+    except ValueError:                           # another drive
+        return False
 
 
 def channel_keys(pairs):
@@ -375,20 +410,22 @@ def channel_keys(pairs):
     return ['%s:%s' % (role or 'thru', sha or '') for role, sha in pairs]
 
 
-def _fingerprint(fields, channel_shas, sicopr_sha, export_mat=False):
+def _fingerprint(fields, channel_shas, sicopr_sha, export_mat=False, eye_under_mlse=False):
     """What decides reuse: the loaded fields (without where output goes), the channel files each in its role
-    (channel_keys), the engine, and whether the engine's .mat export was on (the dashboard needs it)."""
+    (channel_keys), the engine, whether the engine's .mat export was on (the dashboard needs it), and whether the eye
+    plots were drawn under MLSE (--eye-under-mlse, Decision 23)."""
     keep = {k: v for k, v in fields.items() if not k.endswith('RESULT_DIR')}
-    return keep, sorted(s or '' for s in channel_shas), sicopr_sha, bool(export_mat)
+    return keep, sorted(s or '' for s in channel_shas), sicopr_sha, bool(export_mat), bool(eye_under_mlse)
 
 
 def _same_fingerprint(have, want):
     """Whether a run made with the fingerprint have serves a run asked for with want: the same inputs and engine,
-    and a .mat export when want asks for one. A run with the export serves a run without it (its results are the
-    same); a run without it never serves an export."""
-    fa, ca, sa, ma = have
-    fb, cb, sb, mb = want
-    if ca != cb or sa != sb or set(fa) != set(fb) or (mb and not ma):
+    a .mat export when want asks for one, and the same --eye-under-mlse. A run with the export serves a run without
+    it (its results are the same); a run without it never serves an export. --eye-under-mlse changes the eye plots
+    the run leaves, so only a run with the same setting serves."""
+    fa, ca, sa, ma, ea = have
+    fb, cb, sb, mb, eb = want
+    if ca != cb or sa != sb or set(fa) != set(fb) or (mb and not ma) or bool(ea) != bool(eb):
         return False
     return all(config_model.field_equal(fa[k], fb[k]) for k in fa)
 
@@ -423,7 +460,8 @@ def handle(phrase, project, origin='cli', selection=None):
     _note_writers(out, ctx, edit=view_edit)
     shown = [] if view_edit else _with_tutor(phrase, out, ctx)
     more = {'detail': ctx._c.get('edit_info')} if view_edit else {}
-    if not view_edit and ctx.selection is not None and 'selection' in (out.get('pattern') or '').split('; '):
+    if not view_edit and ctx.selection is not None and \
+            {'selection', 'run tab'} & set((out.get('pattern') or '').split('; ')):
         # a phrase that spoke of the selection: the record keeps what was selected then, so the session can be
         # reviewed later (GUI_DESIGN.md section 7a)
         more = {'detail': {'selection': ctx.selection}}
@@ -608,6 +646,15 @@ def _plan(text, ctx, mods):
                      'run (Show me the summary again), statistics of a result over the last set of runs, and how a '
                      'parameter relates to a result.', **base)
     low = text.lower()
+    # the setup in the Run tab of the GUI (Decision 23, rows RT01 to RT04): "run the command", "run what is in the
+    # Run tab"; "run it" means it only where there is a Run tab, and keeps its meaning on the command line (row R3)
+    if 'run_it' in req['flags']:
+        req = dict(req, flags=[f for f in req['flags'] if f != 'run_it'] +
+                   (['run_tab'] if ctx.selection is not None else []))
+        if ctx.selection is not None:
+            base = dict(base, pattern=base['pattern'] + '; run tab')
+    if 'run_tab' in req['flags']:
+        return _run_tab_request(req, ctx, mods, base)
     # the config and the channel files selected in the tabs of the GUI (Decision 20, rows SL01 to SL05)
     if 'selection' in req['flags']:
         return _selection_request(req, ctx, mods, base)
@@ -803,6 +850,13 @@ def _dashboard_request(req, ctx, base):
     rs, _, why = dashboard_tools()
     if why:
         return _no_dashboard(ctx, why, base)
+    named = list(dict.fromkeys(req.get('runs') or []))
+    if len(named) > 1:
+        return _ask('The dashboard shows one run, and this phrase names %d (%s), so nothing runs. Ask for one at a '
+                    'time: %s' % (len(named), ', '.join(named), dynamic_phrase(ctx.project, named[0])), [CANCEL],
+                    {CANCEL: None}, **base)
+    if named and named[0] != ctx.last_run_id():
+        return _dashboard_of(named[0], ctx, rs, base)
     if ctx.last is None:
         o1, o2 = 'run the example setup then build the dashboard', 'point to an existing results file'
         return _ask('No results exist in this project yet, so there is nothing to build a dashboard from. The dashboard '
@@ -820,6 +874,52 @@ def _dashboard_request(req, ctx, base):
                      'repeated with the .mat export. Nothing runs.' % gone[0], **base)
     steps, lines = _dashboard_steps(ctx, rs, in_plan=False)
     return outcome('PLAN', steps=steps, announce=lines, **base), {}
+
+
+def dynamic_phrase(project, rid):
+    """The phrase that shows the dynamic results of run rid (the vocabulary of Decision 23): of the last run when rid
+    is the last run, else of rid by its id."""
+    last = Context(project).last_run_id()
+    return 'Show the dynamic results of %s.' % ('the last run' if rid == last else rid)
+
+
+def _dashboard_of(rid, ctx, rs, base):
+    """The dashboard of run rid, an earlier run named by its id: its working config is run again on its channel files
+    with the .mat export on (or a run that had it is reused), then as row D1."""
+    rec = next((r for r in reversed(ctx.history) if rid in (r.get('run_ids') or [])), None)
+    try:
+        res = ctx.project.read_result(rid) if rec is not None else None
+    except (OSError, ValueError):
+        res = None
+    if rec is None or res is None:
+        return _stop('%s is not a run of this project folder, so there is nothing to build a dashboard from. The runs '
+                     'are in .sicopr\\runs.' % rid, **base)
+    if res.get('status') != 'complete':
+        return _stop('%s did not complete, so there is nothing to build a dashboard from: %s' % (rid, res.get('message')),
+                     **base)
+    if not os.path.exists(ctx.project.working_config_path(rid)):
+        return _stop('The working config of %s is not in .sicopr\\configs any more, so it cannot be run again with the '
+                     '.mat export. Nothing runs.' % rid, **base)
+    chans = [(c['path'], c.get('role') or 'thru') for c in rec.get('channels') or []]
+    gone = [p for p, _ in chans if not os.path.isfile(ctx.path(p))]
+    if gone:
+        return _stop('%s, a channel file of %s, is not in the project folder any more, so the run cannot be repeated '
+                     'with the .mat export. Nothing runs.' % (gone[0], rid), **base)
+    wc = ctx.project.read_working_config(rid)
+    fields, err = config_model.loaded_fields(wc)
+    reuse = None
+    if not err:
+        want = _fingerprint(fields, channel_keys((r, _sha(ctx.path(p))) for p, r in chans), engine.engine_sha256(), True)
+        reuse = next((r for r, fp in ctx.runs if _same_fingerprint(fp, want)), None)
+    lines = ['export_mat: %s was run with the .mat export on and the same inputs, so its .mat is reused and nothing '
+             'runs' % reuse if reuse else
+             'export_mat re-runs the working config of %s on its channel files with the engine\'s .mat export on '
+             '(--export-mat): a full COM run, as long as that run took' % rid]
+    lines += ['render_dashboard: Rscript (%s) runs SiCoPR\'s R\\com_analysis.R on each .mat of that run, in the run\'s '
+              'own folder; the page (<run>_caseNN_report.html) and its lib folder are written beside the .mat' % rs,
+              'open_report: the page opens in the browser']
+    return outcome('PLAN', steps=[_step('export_mat', run=rid, reuse=reuse), _step('render_dashboard', script='com_analysis.R'),
+                                  _step('open_report')], announce=lines, **dict(base, unplaced=[])), {}
 
 
 def _with_dashboard(out, ctx, base, asked):
@@ -1433,6 +1533,17 @@ def _plan_v1(text, req, ctx, mods, base):
         if ctx.last is None:
             return _no_history(ctx, base)
         return _add_crosstalk(req, ctx, mods, base)
+
+    # the config and the channel files of the last run, named as such (vocabulary of Decision 23, row RT06): the
+    # setup of the last run again, with any change the phrase also asks for
+    if 'last_channels' in req['flags']:
+        if req['files'] or req['sweeps'] or {'example', 'these_files', 'this_config'} & set(req['flags']):
+            return _ask('The last config and channel files are the setup of the last run, and this phrase also names '
+                        'files or a sweep, so nothing runs. Ask for one of them at a time.', [CANCEL], {CANCEL: None},
+                        **base)
+        if ctx.last is None or wc is None:
+            return _no_history(ctx, base)
+        return _setup_swap(req, ctx, mods, base, [(p, r or 'thru') for p, _, r in ctx.channels()], said='last')
 
     # a channel file named without a config: after a run, only that channel changes and the config of the last
     # run is kept (Decision 18); with no run yet, a re-run of it asks for a config, as row S3 does (row CH05)
@@ -2608,7 +2719,24 @@ def _sweep(req, ctx, mods, base_fields):
 
 
 # ----------------------------------------------------------------------------- runs from files
-def _first_run(req, ctx, mods, base, roles=None, lead=()):
+def _option_args(options):
+    """The run_com arguments of the Run tab's options that are on (Decision 23): export_mat, eye_under_mlse."""
+    return {k: True for k in RUN_OPTIONS if (options or {}).get(k)}
+
+
+def _option_lines(options, where='in the Run tab'):
+    """The announcement of each option that is on."""
+    out = []
+    if (options or {}).get('export_mat'):
+        out.append('Output dynamic results is ticked %s: the run has the engine\'s .mat export on (--export-mat), so its '
+                   'results can be shown in Results, dynamic' % where)
+    if (options or {}).get('eye_under_mlse'):
+        out.append('--eye-under-mlse is ticked %s: the eye plots are drawn under MLSE as well; it changes the eye plots '
+                   'and no reported value' % where)
+    return out
+
+
+def _first_run(req, ctx, mods, base, roles=None, lead=(), options=None):
     """Run COM on a channel file with a config file (or the files in the folder). roles: the role of each channel
     file, when the caller knows them (the selection in the GUI's tabs, Decision 20); otherwise they are read from
     the order and the names (channel_roles). lead: lines that open the announcement.
@@ -2715,6 +2843,7 @@ def _first_run(req, ctx, mods, base, roles=None, lead=()):
         return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in changes], announce=announce, **base)
     announce += notes
     given = {'roles': [r for _, r in pairs]} if roles else {}      # the roles as selected, not as the names say
+    given.update(_option_args(options))                           # the Run tab's options (Decision 23)
     steps += [_step('validate_inputs', channels=chans), _step('run_com', channels=chans, thru_only=len(chans) <= 1,
                                                               **given), _step('summarize')]
     return outcome('PLAN', steps=steps, changes=changes, announce=announce, **base), {}
@@ -2845,7 +2974,7 @@ def _channel_swap(req, ctx, mods, base):
     return _swap_plan(req, ctx, mods, base, wc, swaps, new, lines + notes)
 
 
-def _swap_plan(req, ctx, mods, base, wc, swaps, new, lines):
+def _swap_plan(req, ctx, mods, base, wc, swaps, new, lines, run_args=None):
     """The PLAN of a re-run with other channels and the config of the last run: the set_channel steps, a change of a
     parameter in the same phrase planned as a re-run would plan it (row CH06), then validate_inputs on the new
     channels [(path, role)], validate_config, run_com and summarize. lines open the announcement."""
@@ -2868,7 +2997,7 @@ def _swap_plan(req, ctx, mods, base, wc, swaps, new, lines):
         return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in changes], announce=lines, **base)
     thru_only = bool(mods.get('thru_only') or 'thru_only' in req['flags'])
     steps = swaps + pre + [_step('validate_inputs', channels=[p for p, _ in new]), _step('validate_config'),
-                           _step('run_com', thru_only=thru_only), _step('summarize')]
+                           _step('run_com', thru_only=thru_only, **(run_args or {})), _step('summarize')]
     return outcome('PLAN', steps=steps, changes=changes, announce=lines + more + warn, **base), {}
 
 
@@ -2878,9 +3007,48 @@ SELECT_IN_CONFIG_TAB = 'select one in the Config tab'
 NAME_A_FILE = 'name a file'
 PROVIDE_FILES = 'provide files'
 RUN_SELECTION = 'Run the selected config and channels.'       # the phrase of the panel's Run selection button
+RUN_COMMAND = 'Run the command.'      # what the Run tab's Run button is, handed to the panel (Decision 23)
+RERUN_LAST = 're-run the last run'
+# where the files of a setup were taken from, as the announcement says it
+_WHERE = {'selection': 'selected in the tabs', 'run tab': 'in the Run tab', 'last': 'of the last run'}
 
 
-def _selection_request(req, ctx, mods, base):
+def _run_tab_request(req, ctx, mods, base):
+    """A run of the setup in the Run tab of the GUI (Decision 23, rows RT01 to RT04): "run the command", "run it",
+    "run what is in the Run tab", "run the Run tab". ctx.selection is the Run tab's state, handed over as data: its
+    THRU, FEXT and NEXT files and its two options. The working config is kept, with its overrides and what was done
+    in the Config view, and it runs on those files with those options; with no working config yet, the workbook in the
+    Config tab is imported, as for the selection (row SL01). A setup equal to the last run is a STOP (row RT02). With
+    no Run tab (the command line) it asks (row RT03). Any other request in the same phrase asks."""
+    flags = set(req['flags'])
+    acts = set(req['actions'])
+    if acts - {'run', 'rerun'} or req['sets'] or req['sweeps'] or req['files'] or req['packages'] or \
+            req['attempts'] or flags & {'example', 'these_files', 'this_config', 'crosstalk', 'thru_only', 'last_run',
+                                        'selection', 'last_config', 'last_channels'}:
+        return _ask('The setup in the Run tab is run on its own, so nothing runs. Change the files or the options in '
+                    'the Run tab, or with a phrase, then: %s' % RUN_COMMAND, [CANCEL], {CANCEL: None}, **base)
+    if req['unplaced'] and not mods.get('ignore_unplaced'):
+        return _unplaced_only(req, base)
+    if ctx.selection is None:                                                   # row RT03
+        if mods.get('rerun_last'):
+            out, answers = _plan('Re-run.', ctx, {})
+            return out, answers
+        if ctx.last is None:
+            return _ask('There is no Run tab outside the GUI: the command is the setup the Run tab of the GUI '
+                        '(sicopr-assist gui) shows. Name the files instead, for example: Run COM on data\\thru.s4p with '
+                        'data\\config.xlsx.', [PROVIDE_FILES, CANCEL],
+                        {PROVIDE_FILES: {'stop': 'Name the files: Run COM on <channel> with <config>.'}, CANCEL: None},
+                        **base)
+        return _ask('There is no Run tab outside the GUI: the command is the setup the Run tab of the GUI (sicopr-assist '
+                    'gui) shows, so nothing runs. Re-run the last run instead (Re-run.), or name the files: Run COM on '
+                    '<channel> with <config>.', [RERUN_LAST, CANCEL], {RERUN_LAST: {'rerun_last': True}, CANCEL: None},
+                    **base)
+    more = ['selection', 'sel_channel'] + (['sel_config'] if ctx.wc is None else [])
+    return _selection_request(dict(req, actions=['run'], flags=list(req['flags']) + more), ctx, mods, base,
+                              said='run tab')
+
+
+def _selection_request(req, ctx, mods, base, said='selection'):
     """A run of what is selected in the tabs of the GUI (Decision 20, rows SL01 to SL05). ctx.selection is the data
     the GUI handed over with the phrase: the config of the Config tab and the THRU, FEXT and NEXT files of the Run
     tab, with the roles the user gave them there.
@@ -2891,7 +3059,9 @@ def _selection_request(req, ctx, mods, base):
       <channels> with <config> would be (rows SL01, SL02);
     - otherwise the working config is kept, with its overrides and what was done in the Config view, and only the
       channel files change to the selected ones: Decision 18's swap with the files from the selection (row SL05).
-    Nothing is guessed: a selected file that is not on disk stops, and any other request in the phrase asks."""
+    Nothing is guessed: a selected file that is not on disk stops, and any other request in the phrase asks.
+    The options of the Run tab (Output dynamic results, --eye-under-mlse) come with the selection and are part of the
+    run (Decision 23). said: 'run tab' when the phrase asked for the setup in the Run tab (_run_tab_request)."""
     flags = set(req['flags'])
     acts = set(req['actions'])
     sel = ctx.selection
@@ -2931,7 +3101,7 @@ def _selection_request(req, ctx, mods, base):
     same_cfg = bool(cfg and src.get('path') and _same_file(ctx.path(src['path']), ctx.path(cfg)))
     names_cfg = 'sel_config' in flags and 'last_config' not in flags
     if rec is not None and ctx.wc is not None and (same_cfg or not names_cfg or not cfg):
-        return _selection_swap(req, ctx, mods, base, chans)
+        return _setup_swap(req, ctx, mods, base, chans, options=sel['options'], said=said)
     if not names_cfg:                              # Re-run with the selected channel, and no run to re-run
         return _no_history(ctx, base, channel=sel['thru'])
     if not cfg:
@@ -2943,8 +3113,9 @@ def _selection_request(req, ctx, mods, base):
                      CANCEL: None}, **base)
     if not os.path.isfile(ctx.path(cfg)):
         return _stop('%s, the config selected in the tabs, does not exist. Nothing runs.' % cfg, **base)
-    lines = ['the config and the channel file%s are the ones selected in the tabs' % ('' if len(chans) == 1 else 's'),
-             'config: %s' % cfg] + _selection_lines(chans)
+    lines = ['the config and the channel file%s are the ones selected in the tabs' % ('' if len(chans) == 1 else 's')
+             if said == 'selection' else 'the setup is the one in the Run tab, on the config of the Config tab',
+             'config: %s' % cfg] + _selection_lines(chans) + _option_lines(sel['options'])
     if rec is not None and src.get('path'):
         n = len(rec.get('overrides') or [])
         lines.append('the selected config is another file than the source of the working config (%s), so it is '
@@ -2953,7 +3124,7 @@ def _selection_request(req, ctx, mods, base):
     files = [{'text': cfg, 'ext': parse._ext(cfg), 'role': None}] + \
             [{'text': p, 'ext': 'channel', 'role': r} for p, r in chans]
     return _first_run(dict(req, files=files, flags=[f for f in req['flags'] if not f.startswith('sel')]), ctx, mods,
-                      base, roles=[r for _, r in chans], lead=lines)
+                      base, roles=[r for _, r in chans], lead=lines, options=sel['options'])
 
 
 def _selection_lines(chans):
@@ -2966,10 +3137,12 @@ def _selection_lines(chans):
     return out
 
 
-def _selection_swap(req, ctx, mods, base, chans):
-    """The working config is kept and the channel files become the selected ones (Decision 18's swap with the files
-    from the selection, row SL05): one set_channel step for the THRU when it changes, one for the aggressors when
-    they change. With nothing changed since a run, nothing runs (as row CH07)."""
+def _setup_swap(req, ctx, mods, base, chans, options=None, said='selection'):
+    """The working config is kept and the channel files become chans [(path, role)] (Decision 18's swap): one
+    set_channel step for the THRU when it changes, one for the aggressors when they change. said says where chans
+    come from: the selection in the tabs (row SL05), the Run tab (rows RT01, RT04), or the last run (row RT06).
+    options are the Run tab's (Decision 23): those that are on go to run_com; None keeps those of the last run. With
+    nothing changed since a run, files and options alike, nothing runs (as row CH07; rows RT02, RT06)."""
     rec = ctx.last
     wc = ctx.wc
     last = [(p, r or 'thru') for p, _, r in ctx.channels()]
@@ -2992,12 +3165,46 @@ def _selection_swap(req, ctx, mods, base, chans):
     viewed = rec.get('kind') in ('edit', 'open')         # something was done in the Config view since the last run
     after_run = bool(rec.get('run_ids')) and not viewed and rec.get('status') == 'ok'
     rid = ctx.last_run_id()
-    if not swaps and not has_change and after_run:
+    was = ctx.options_of(rid)
+    opts = was if options is None else {k: bool(options.get(k)) for k in RUN_OPTIONS}
+    # an option is a change when it asks for what the last run did not have: the .mat export (a run with it serves
+    # one without), or another --eye-under-mlse
+    opt_change = (opts['export_mat'] and not was['export_mat']) or opts['eye_under_mlse'] != was['eye_under_mlse']
+    where = _WHERE[said]
+    if not swaps and not has_change and not opt_change and after_run:
+        if said == 'run tab':
+            return _stop('The Run tab holds the setup of the last run (%s): its working config, its channel file%s and '
+                         'its options are unchanged, so nothing changed and the results would equal the last run. '
+                         'Nothing runs.' % (rid, '' if len(chans) == 1 else 's'), **base)
+        if said == 'last':
+            return _stop('The last config and channel file%s are those of the last run (%s), unchanged: nothing '
+                         'changed, so the results would equal the last run. Nothing runs.'
+                         % ('' if len(chans) == 1 else 's', rid), **base)
         return _stop('The channel file%s selected in the tabs %s already the one%s of the last run (%s), and its config '
                      'is unchanged: nothing changed, so the results would equal the last run. Nothing runs.'
                      % ((('', 'is', '') if len(chans) == 1 else ('s', 'are', 's')) + (rid,)), **base)
     what = _and([{'thru': 'THRU', 'crosstalk': 'FEXT and NEXT files'}[s['args']['role']] for s in swaps])
-    if after_run:
+    files = 'channel file%s %s' % ('' if len(chans) == 1 else 's', where)
+    if said == 'run tab':
+        head = 'the setup is the one in the Run tab: '
+        if after_run and swaps:
+            lines = [head + 'the config of the last run (%s) is kept, and the %s change%s, taken from the Run tab'
+                     % (rid, what, 's' if 'files' in what else '')]
+        elif after_run:
+            lines = [head + 'the working config of the last run (%s), its channel file%s, and the options ticked in the '
+                     'Run tab' % (rid, '' if len(chans) == 1 else 's')]
+        elif viewed:
+            lines = [head + 'the working config as it is, with what was done in the config view, on the %s' % files]
+        else:
+            lines = [head + 'the config of the last run (%s, which did not complete), on the %s' % (rid, files)]
+    elif said == 'last':
+        if viewed:
+            lines = ['the last config and channel files: the working config as it is, with what was done in the '
+                     'config view, on the %s' % files]
+        else:
+            lines = ['the last config and channel files: the config of the last run (%s%s) and its channel file%s'
+                     % (rid, '' if after_run else ', which did not complete', '' if len(chans) == 1 else 's')]
+    elif after_run:
         lines = ['the config of the last run (%s) is kept, and only the %s change%s, taken from the selection in the '
                  'tabs' % (rid, what or 'parameter named', 's' if len(swaps) < 2 and 'files' not in what else '')]
     elif viewed:
@@ -3016,7 +3223,9 @@ def _selection_swap(req, ctx, mods, base, chans):
             lines += ['%s: %s' % (r.upper(), p) for p, r in new_x]
     if not swaps:
         lines.append('the channel files are those of the last run, unchanged: %s' % ', '.join(p for p, _ in chans))
-    return _swap_plan(req, ctx, mods, base, wc, swaps, list(chans), lines)
+    if options is not None:
+        lines += _option_lines(opts, 'in the Run tab' if said == 'run tab' else 'with the selection')
+    return _swap_plan(req, ctx, mods, base, wc, swaps, list(chans), lines, run_args=_option_args(opts))
 
 
 # ----------------------------------------------------------------------------- crosstalk (Decision 19)

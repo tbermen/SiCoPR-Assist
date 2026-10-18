@@ -8,6 +8,7 @@
     python tests\\test_use_cases.py --gate V2.1                         version 2, Phase V2-2: the dashboard
     python tests\\test_use_cases.py --gate V3.1                         version 2, Phase V2-3: channel download
     python tests\\test_use_cases.py --gate V6.2                         version 2, Phase V2-6: the selection, the example
+    python tests\\test_use_cases.py --gate V7.3                         version 2, Phase V2-7: the Run tab and Assist as one
     $env:SICOPR_ASSIST_FULL = "1"                   L3 on every pair (default: Case1 and the variants)
 
 It fails on a defect of the harness itself: a prior state with no builder, a builder that does not
@@ -37,7 +38,8 @@ import fixtures  # noqa: E402
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2', 'V1.1', 'V2.1', 'V3.1', 'V6.2'],
+    ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2', 'V1.1', 'V2.1', 'V3.1', 'V6.2',
+                                         'V7.3'],
                     action='append',
                     default=[],
                     help='check a gate condition as well (may be given more than once)')
@@ -116,6 +118,8 @@ def main(argv=None):
         gate_v31(rows, results, full)
     if 'V6.2' in args.gate:
         gate_v62(rows, results, full)
+    if 'V7.3' in args.gate:
+        gate_v73(rows, results, full)
     if 'G1.3' in args.gate:
         stop = [r for r in applicable if _type(rows, r) == 'STOP']
         other = [r for r in applicable if _type(rows, r) != 'STOP']
@@ -489,8 +493,9 @@ def gate_v62(rows, results, full):
     with open(scoring.FROZEN, newline='', encoding='utf-8') as f:
         lines = f.read().splitlines()
     ids = [ln.split(',')[0] for ln in lines[1:]]
-    check('V6.2: the frozen list has 651 rows: the 645 it had, unchanged, then SL01 to SL05 and EX01',
-          len(ids) == 651 and ids[645:] == list(NEW_ROWS_V6)
+    # the list has grown since (gate V7.3 pins the 651 rows it had then and what came after them)
+    check('V6.2: the frozen list had 651 rows: the 645 it had, unchanged, then SL01 to SL05 and EX01',
+          len(ids) >= 651 and ids[645:651] == list(NEW_ROWS_V6)
           and hashlib.sha256('\n'.join(lines[:646]).encode('utf-8')).hexdigest() == FROZEN_645_SHA256,
           (len(ids), ids[643:]))
     sl01 = next(r for r in rows if r['id'] == 'SL01')
@@ -514,6 +519,90 @@ def gate_v62(rows, results, full):
                   and plans[1] == plans[0] and plans[2] == plans[0]
                   and 'thru.s4p' in plans[0][1][2]['args'].get('channels', ''),
                   [(t, [s['op'] for s in st]) for t, st in plans])
+
+
+NEW_ROWS_V7 = ('RT01', 'RT02', 'RT03', 'RT04', 'RT05', 'RT06')
+# the maintainer's phrases of records 25 and 35 of the maintainer's own session history (17 October), as typed
+MAINTAINER_RT = {'RT06': 'Re-run last config and channel.', 'RT05': "I'd like results, dynamic for the last run."}
+# the frozen list as it was before Phase V2-7: its header and 651 rows, joined with a line feed; the review list's 214
+FROZEN_651_SHA256 = '107b0da80ca1387c35cf32595aa4fa746e67968b5ea7d833d17d347ea420f115'
+REVIEW_214_SHA256 = '39419e96cae17a1c1d5bab7b0cda86c78ce30afffff293f84f9fe408dd22f5d1'
+
+
+def gate_v73(rows, results, full):
+    """Gate V7.3 (the second GUI session, 17 October): every must RT row passes L1 and every other level that applies
+    (the harness hands each row's Run tab, its files and options, to the core as the selection); the maintainer's
+    phrases of records 25 and 35 give RT06's and RT05's outcomes, on the command line and with a Run tab beside them;
+    only the new rows entered the frozen list."""
+    import hashlib
+    import scoring
+    import prior_states
+    from sicopr_assist import core
+    want = sum(len(scoring.labels_of(r)) for r in rows if r['id'] in NEW_ROWS_V7 and r['priority'] == 'must')
+    got = [r for r in results if r['applies'] == 'yes' and r['id'] in NEW_ROWS_V7 and r['priority'] == 'must']
+    check('V7.3: the must RT rows were scored (%d pairs)' % want, want == 12 and len(got) == want, len(got))
+    check('V7.3: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
+    board(got, 'V7.3: the RT rows')
+    bad = [r for r in got if r['L1'] != 'PASS' or 'FAIL' in (r['L2'], r['L3'], r['L4'])]
+    check('V7.3: every must RT pair passes L1, and L2, L3 and L4 where they apply', not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][:160]) for r in bad])
+    print('V7.3: %d pairs; L3 on %d and L4 on %d of them' % (len(got), sum(1 for r in got if r['L3'] in ('PASS', 'FAIL')),
+                                                             sum(1 for r in got if r['L4'] in ('PASS', 'FAIL'))))
+    check('V7.3: RT01, RT03, RT04 and RT05 are scored at L4 (they are in the frozen list); RT02 and RT06 are STOP rows '
+          'on the review list',
+          all(r['L4'] == 'PASS' for r in got if r['id'] in ('RT01', 'RT03', 'RT04', 'RT05'))
+          and all(r['L4'] == 'review' for r in got if r['id'] in ('RT02', 'RT06')),
+          [(r['id'], r['L4']) for r in got])
+    handed = [r['id'] for r in rows if r['id'] in NEW_ROWS_V7 and 'the Run tab holds' in r['prior_state']]
+    check('V7.3: the prior states of RT01, RT02 and RT04 hold a Run tab, and RT03, RT05 and RT06 none',
+          handed == ['RT01', 'RT02', 'RT04'], handed)
+    check('V7.3: no row is excused by an open dispute', not open_disputes(), sorted(open_disputes()))
+    with open(scoring.FROZEN, newline='', encoding='utf-8') as f:
+        lines = f.read().splitlines()
+    ids = [ln.split(',')[0] for ln in lines[1:]]
+    check('V7.3: the frozen list has 655 rows: the 651 it had, unchanged, then RT01, RT03, RT04 and RT05',
+          len(ids) == 655 and ids[651:] == ['RT01', 'RT03', 'RT04', 'RT05']
+          and hashlib.sha256('\n'.join(lines[:652]).encode('utf-8')).hexdigest() == FROZEN_651_SHA256,
+          (len(ids), ids[649:]))
+    with open(scoring.REVIEW, newline='', encoding='utf-8') as f:
+        rlines = f.read().splitlines()
+    check('V7.3: the review list has 216 rows: the 214 it had, unchanged, then RT02 and RT06',
+          len(rlines) == 217 and [ln.split(',')[0] for ln in rlines[215:]] == ['RT02', 'RT06']
+          and hashlib.sha256('\n'.join(rlines[:215]).encode('utf-8')).hexdigest() == REVIEW_214_SHA256,
+          len(rlines) - 1)
+    by_id = {r['id']: r for r in rows}
+    with fixtures.Fixtures() as fx:
+        for rid, phrase in sorted(MAINTAINER_RT.items()):
+            row = by_id[rid]
+            check('V7.3: the maintainer\'s phrase of record %s is the phrase of %s' % (25 if rid == 'RT06' else 35, rid),
+                  row['phrase'] == phrase)
+            for label in scoring.labels_of(row):
+                for tab in (None, {'export_mat': False, 'eye_under_mlse': False}):
+                    ctx = prior_states.Ctx(fx, label)
+                    prior_states.build(row['prior_state'], ctx)
+                    if tab is not None:          # as in his session: the GUI hands the Run tab over with the phrase
+                        prior_states.run_tab(ctx)
+                    old = {k: os.environ.get(k) for k in ctx.env}
+                    os.environ.update(ctx.env)
+                    try:
+                        o = core.handle(phrase, ctx.project, selection=ctx.selection)
+                    finally:
+                        for k, v in old.items():
+                            if v is None:
+                                os.environ.pop(k, None)
+                            else:
+                                os.environ[k] = v
+                    steps = [s['op'] for s in o['steps'] if s['op'] != 'show_tutor']
+                    if rid == 'RT05':
+                        ok = o['type'] == 'PLAN' and steps == ['export_mat', 'render_dashboard', 'open_report'] \
+                            and not o['unplaced']
+                    else:
+                        ok = o['type'] == 'STOP' and 'nothing changed' in (o['reason'] or '') and not o['unplaced']
+                    check('V7.3 %s, %s: %r gives the outcome of %s (%s)' % (
+                        label, 'with a Run tab' if tab else 'on the command line', phrase, rid,
+                        o['type'] + (': ' + ' > '.join(steps) if steps else '')), ok,
+                          (o['type'], steps, o.get('reason'), o.get('question')))
+                    fx.remove_project(ctx.root)
 
 
 _types = {}

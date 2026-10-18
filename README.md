@@ -325,13 +325,14 @@ nothing itself and makes no network connection for feedback. You can also open a
 
 ## How it is tested
 
-The behaviour is specified by a table of 865 use cases (`tests\cases\sicopr_use_cases.csv`), written
+The behaviour is specified by a table of 871 use cases (`tests\cases\sicopr_use_cases.csv`), written
 and checked against SiCoPR before any code; rows were added after the maintainer's first use (CH01 to
 CH08, 6 October 2026), his second session (XT01 to XT06 and SM16), the reading of the IEEE tools
-page (F11 and F12, 7 October) and his first GUI session (SL01 to SL05 and EX01, 10 October). Each row
-gives a phrase, the state of the project before it, and the expected outcome; for the SL rows that
-state holds what is selected in the GUI's tabs, which the harness hands to the core as data. The
-harness runs every row on each starting workbook it applies to (2458 row and config pairs) and scores
+page (F11 and F12, 7 October), his first GUI session (SL01 to SL05 and EX01, 10 October) and his second
+(RT01 to RT06, 17 October). Each row gives a phrase, the state of the project before it, and the expected
+outcome; for the SL and RT rows that state holds what is selected in the GUI's tabs and the Run tab's
+options, which the harness hands to the core as data. The harness runs every row on each starting
+workbook it applies to (2470 row and config pairs) and scores
 four levels:
 
 | level | what is compared |
@@ -385,7 +386,8 @@ files in the roles they were selected in, and the example in an empty folder (wi
 
 SiCoPR-Assist adds a panel on the right of SiCoPR's own GUI, where the same phrases are typed. Its
 design is `docs\GUI_DESIGN.md`. It needs a SiCoPR whose GUI has the panel slot (`gui\README.md` of
-SiCoPR, *Panels*); SiCoPR 1.1.1 does not have it yet, and `sicopr-assist gui` says so and stops.
+SiCoPR, *Panels*); SiCoPR 1.1.2 does not have it yet (the slot is on SiCoPR's branch `gui-panel-slot`, based on
+1.1.2), and `sicopr-assist gui` says so and stops.
 
 ```powershell
 cd C:\my\project
@@ -414,6 +416,23 @@ SiCoPR's GUI directly also shows the panel, which then asks for the project fold
   `Re-run with the selected channel.` keeps the config and changes only the channel files. With no
   channel picked, the tool asks. On the command line there is no selection, so those phrases ask for
   files.
+- **The Run tab is the setup the panel runs.** A plan that runs COM fills SiCoPR's Run tab: its THRU,
+  FEXT and NEXT files are selected, Output dynamic results and `--eye-under-mlse` are set as the plan
+  runs them, and the command box shows the command the panel runs, which is the working config's run
+  CSV (`.sicopr\configs\run_NNNN.csv`) and not the workbook, with a line saying so. The Run tab's own
+  controls stay live: what you change there (a file, Output dynamic results, `--eye-under-mlse`) comes
+  back into the selection line and the command, and `Run the command.` (or `Run it.`,
+  `Run what is in the Run tab`, `Run the Run tab`) runs exactly that setup through the panel, with
+  history and reuse. While the Run tab is assembled this way, its **Run sicopr.py** button does the same
+  as `Run the command.`: one history record, the same plan, the same progress. Output dynamic results
+  makes the run an export run (`--export-mat`), and when it ends the run opens in Results, dynamic,
+  where its dashboard is built. The two options are part of what decides reuse. On the command line
+  there is no Run tab, so `Run the command.` asks (re-run the last run, or cancel).
+- **Results, dynamic.** "dynamic results", "results, dynamic" and "the dynamic results of the last run"
+  mean the dashboard (`Show the dynamic results of the last run.`, or of `run_0004` by its id). Opening
+  Results, dynamic on a run that has no `.mat` export says so in the panel and offers that phrase.
+  "the last config and channels" are the last run's config and channel files: `Re-run last config and
+  channel.` with nothing changed since says so and runs nothing.
 - **The Config view shows the working config.** Every value that differs from the workbook is shown in
   place with where it came from (`Assist #12`, `edited here #13`, `linked`, `proposed`, `option 2`) and
   the workbook value beside it. SiCoPR's Save as is off while the panel is in use: save the working
@@ -425,8 +444,9 @@ SiCoPR's GUI directly also shows the panel, which then asks for the project fold
 - **Another workbook opened in the Config view is followed:** SiCoPR-Assist imports it as the new
   source, keeps the channel files of the last run, and asks once whether to keep your overrides.
 - **One COM run at a time** across both: SiCoPR's Run tab is refused while a plan from the panel runs,
-  and the panel waits for a Run-tab run. Runs started from the Run tab are not tracked by SiCoPR-Assist;
-  the panel offers the phrase that brings them in.
+  and the panel waits for a Run-tab run. A run started from the Run tab before the panel has assembled it
+  (no plan yet) runs the workbook as saved and is not tracked by SiCoPR-Assist; the panel offers the phrase
+  that brings it in.
 - **Everything the GUI does is in the history** (`.sicopr\history.jsonl`), each record marked
   `origin: gui` with its kind: phrases, answers, edits, workbooks opened, runs started and ended, Stop,
   what was shown, and errors of the panel and the page. The feedback export lists them, masked.
@@ -435,7 +455,8 @@ SiCoPR's GUI directly also shows the panel, which then asks for the project fold
 
 Version 2 was built in phases: the tutor and feedback export (above) in 0.4.0, the dashboard in 0.5.0,
 channel download in 0.6.0, and the GUI in 0.7.0. Version 0.8.0 follows the first GUI session: the
-selection in the tabs, the command box, and the example that runs from an empty folder.
+selection in the tabs, the command box, and the example that runs from an empty folder. Version 0.9.0
+follows the second: the Run tab and the panel as one.
 
 ## What is known to be incomplete
 
@@ -444,7 +465,7 @@ selection in the tabs, the command box, and the example that runs from an empty 
 - A re-run with another channel file replaces one THRU, or one FEXT or NEXT file. When the last run
   had several FEXT (or NEXT) files, naming one of them stops and asks for the whole set with its
   config.
-- 214 of the 865 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
+- 216 of the 871 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
   They are scored at L1 (and L2 and L3 where those apply) and listed for a person to review.
 - Four behaviours are assumptions not yet confirmed by the maintainer: matching a typo in an action
   or filler word (`agian` read as `again`, never for a parameter name); the trouble thresholds of

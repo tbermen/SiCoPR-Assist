@@ -30,9 +30,10 @@ from check import check, finish  # noqa: E402
 STATIC = os.path.join(ROOT, 'sicopr_assist', 'panel', 'static')
 JS = os.path.join(STATIC, 'panel.js')
 CSS = os.path.join(STATIC, 'panel.css')
-# the panel contract, API 1 (GUI_DESIGN.md section 4.1): the page sends the first six and hears the last five
-CONTRACT = {'config', 'edit', 'view', 'run', 'browsed', 'channels', 'open-config', 'overlay', 'clear-edits', 'show',
-            'browse'}
+# the panel contract, API 1 (GUI_DESIGN.md section 4.1): the page sends the first seven and hears the last six
+# (run-request and set-run were added in Phase V2-7, Decision 23)
+CONTRACT = {'config', 'edit', 'view', 'run', 'browsed', 'channels', 'run-request', 'open-config', 'overlay',
+            'clear-edits', 'show', 'browse', 'set-run'}
 
 src = io.open(JS, encoding='utf-8').read()
 css = io.open(CSS, encoding='utf-8').read()
@@ -99,8 +100,8 @@ named = set(re.findall(r"sicopr:([a-z-]+)", src))
 check('every event panel.js sends or hears is one of the panel contract\'s', (sent | heard | named) <= CONTRACT
       and sent and heard, 'not in the contract: %s' % sorted((sent | heard | named) - CONTRACT))
 check('panel.js sends only events the page hears, and hears only events the page sends',
-      sent <= {'open-config', 'overlay', 'clear-edits', 'show', 'browse'}
-      and heard <= {'config', 'edit', 'view', 'run', 'browsed', 'channels'},
+      sent <= {'open-config', 'overlay', 'clear-edits', 'show', 'browse', 'set-run'}
+      and heard <= {'config', 'edit', 'view', 'run', 'browsed', 'channels', 'run-request'},
       'sent %s, heard %s' % (sorted(sent), sorted(heard)))
 try:
     from sicopr_assist import engine
@@ -224,5 +225,41 @@ check('the examples are asked again when the config in view changes and when a c
       and 'await loadExamples()' in fn('init'), 'a call of loadExamples is missing')
 check('while a plan runs, the box, Send and Run selection are off together',
       all(("$a('#%s').disabled = on" % i) in fn('busyUi') for i in ('aCmd', 'aSend', 'aRunSel')), fn('busyUi'))
+
+
+# ---- the Run tab and the panel as one (Decision 23; gate V7.4)
+#
+# The maintainer's second session: he wanted the Run tab to show the command Assist assembles, and what he sets there
+# (Output dynamic results, the files) to be part of what "run the command" runs. These read the handlers; the real
+# page is driven in the walk-through of gate V7.5.
+send_fn, fin, rcard = fn('send'), fn('finished'), fn('resultCard')
+rr_ev = heard_body('run-request')
+check('a PLAN with one COM run fills the Run tab: the panel sends sicopr:set-run with the run_tab the server made',
+      'if (r.run_tab) assemble(r.run_tab);' in send_fn and "emit('set-run', tab);" in fn('assemble')
+      and 'ASSEMBLED = tab;' in fn('assemble') and 'return dict(res, job=True, run_tab=tab)' in
+      io.open(os.path.join(ROOT, 'sicopr_assist', 'panel', 'api.py'), encoding='utf-8').read(),
+      send_fn[:400])
+check('the options of the Run tab come with sicopr:channels into the selection, on only when the page says true',
+      'SELECTION.options = { export_mat: o.export_mat === true, eye_under_mlse: o.eye_under_mlse === true };' in ch_ev,
+      ch_ev[:500])
+check('a change made in the Run tab while it is assembled updates its command; a change the panel made does not',
+      "if (ASSEMBLED && d.cause !== 'panel' && STATE.project) await reassemble();" in ch_ev
+      and "call('runtab', { selection: SELECTION })" in fn('reassemble') and 'assemble(r);' in fn('reassemble'),
+      ch_ev[:600])
+check('the Run button is taken only while the panel has the Run tab assembled, with the files and options it was '
+      'pressed with, and is the phrase Run the command.',
+      0 <= rr_ev.find('if (!ASSEMBLED || !STATE || !STATE.project) return;') < rr_ev.find('e.preventDefault();')
+      and rr_ev.find('e.preventDefault();') >= 0
+      and 'SELECTION.thru = d.thru' in rr_ev and 'SELECTION.options = {' in rr_ev
+      and "send(RUN_COMMAND, 'Run button')" in rr_ev
+      and re.search(r"const RUN_COMMAND = '([^']*)';", src).group(1) == _core.RUN_COMMAND == 'Run the command.',
+      rr_ev[:600])
+check('a run made with Output dynamic results ticked opens in Results, dynamic, which builds its dashboard',
+      "emit('show', { view: 'dynamic', run: r.folder, build: true });" in fin
+      and 'r.export_mat && JOB_TAB && JOB_TAB.options && JOB_TAB.options.export_mat' in fin
+      and 'JOB_TAB = r.job ? (r.run_tab || null) : null;' in send_fn, fin[:900])
+check('Results, dynamic opened on a run with no .mat export says so and offers the phrase that makes one',
+      "if (view === 'dynamic' && !r.export_mat) noDynamic(rid, r.dynamic_phrase);" in rcard
+      and 'fillBox(phrase)' in fn('noDynamic') and 'nothing' in fn('noDynamic'), rcard[:600])
 
 finish()

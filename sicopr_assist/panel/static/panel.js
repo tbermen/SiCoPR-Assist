@@ -11,7 +11,13 @@
  * The page also tells the panel what is selected in its tabs: the workbook of the Config tab (sicopr:config) and the
  * THRU, FEXT and NEXT files of the Run tab (sicopr:channels). The panel keeps that selection, shows it in a line
  * above the command box, and hands it to the core with every phrase, so "the selected config and channels" means
- * those files. */
+ * those files.
+ *
+ * The Run tab and the panel work as one (Decision 23). A PLAN that runs COM fills the Run tab (sicopr:set-run): its
+ * files, its two options, and in its command box the command the panel will run, which is the working config's run
+ * CSV and not the workbook. A change made in the Run tab comes back with sicopr:channels (files and options), is part
+ * of the selection, and updates that command. "Run the command." runs exactly that setup; while the panel has the Run
+ * tab assembled, the Run tab's own Run button is handed here (sicopr:run-request) and is that phrase. */
 (function () {
   const API = '/panel/assist/api/';
   const ROOT = document.getElementById('panel-assist');
@@ -65,8 +71,12 @@
   // view stays on it, and nothing here pulls it back to the source of the working config meanwhile
   let FOLLOWING = false;
   // what is selected in the tabs: the workbook of the Config tab and the channel files of the Run tab (Decision 20)
-  const SELECTION = { config: null, thru: null, fext: [], next: [] };
+  const SELECTION = { config: null, thru: null, fext: [], next: [],
+    options: { export_mat: false, eye_under_mlse: false } };
   let RUN_PHRASE = 'Run the selected config and channels.';
+  const RUN_COMMAND = 'Run the command.';   // what the Run tab's Run button is, while the panel has it assembled
+  let ASSEMBLED = null;     // the setup this panel last put in the Run tab (sicopr:set-run), or null
+  let JOB_TAB = null;       // the Run tab setup of the plan being carried out, if it has one
   const BOX_MAX_PX = 220;   // the command box grows with its content up to here, then scrolls
 
   function emit(name, detail) {
@@ -285,8 +295,22 @@
     }
   }
 
+  /* --------------------------------------------------------- the Run tab */
+  /* The Run tab shows the setup the panel runs: a plan's files, options and command, or, after a change in the Run
+   * tab, the command for what it holds now (Decision 23). */
+  function assemble(tab) {
+    ASSEMBLED = tab;
+    emit('set-run', tab);
+  }
+
+  async function reassemble() {
+    const r = await call('runtab', { selection: SELECTION });
+    if (r.error || !r.command) return;
+    assemble(r);
+  }
+
   /* ------------------------------------------------------------ commands */
-  async function send(phrase) {
+  async function send(phrase, how) {
     phrase = String(phrase || '').replace(/\s*\n\s*/g, ' ').trim();
     if (!phrase) return;
     // a half-typed edit in the Config view is committed, and taken in, before the phrase is read
@@ -300,8 +324,10 @@
     if (!PHRASES.length || PHRASES[0] !== phrase) PHRASES.unshift(phrase);
     const r = await call('handle', { phrase, selection: SELECTION });
     if (r.error) { note(r.error, 'abad'); return; }
-    entry(phrase, r.outcome);
+    entry(phrase, r.outcome, how);
     if (r.refused) note(r.refused, 'abad');
+    JOB_TAB = r.job ? (r.run_tab || null) : null;
+    if (r.run_tab) assemble(r.run_tab);           // the Run tab shows what this plan runs
     await refresh();
     await syncOverlay((r.outcome.changes || []).map((c) => c.json_path));
     if (r.job) startJob();
@@ -374,8 +400,18 @@
         $a('#aConv').appendChild(box);
       }
     } else {
-      for (const rid of runs) await resultCard(rid);
+      for (const rid of runs) {
+        const r = await resultCard(rid);
+        // a run made with Output dynamic results ticked opens in Results, dynamic, which builds its dashboard there,
+        // as a run started from the Run tab with that box ticked does (Decision 23)
+        if (r && r.export_mat && JOB_TAB && JOB_TAB.options && JOB_TAB.options.export_mat
+            && !(st.pages || []).length) {
+          emit('show', { view: 'dynamic', run: r.folder, build: true });
+          viewed('run in Results, dynamic', { run: rid });
+        }
+      }
     }
+    JOB_TAB = null;
     for (const page of st.pages || []) {           // a dashboard: shown in Results, dynamic, not in a new tab
       const folder = page.replace(/[\\/][^\\/]*$/, '');
       emit('show', { view: 'dynamic', run: folder });
@@ -390,7 +426,7 @@
 
   async function resultCard(rid) {
     const r = await call('result?run=' + encodeURIComponent(rid));
-    if (r.error) return;
+    if (r.error) return null;
     const box = el('div', 'acard aresult');
     for (const line of r.lines) box.appendChild(el('div', 'aann', line));
     const row = el('div', 'aopts');
@@ -399,11 +435,27 @@
       b.addEventListener('click', () => {
         emit('show', { view, run: r.folder });
         viewed('run in ' + label, { run: rid });
+        if (view === 'dynamic' && !r.export_mat) noDynamic(rid, r.dynamic_phrase);
       });
       row.appendChild(b);
     }
     box.appendChild(row);
     $a('#aConv').appendChild(box);
+    return r;
+  }
+
+  /* Results, dynamic opened on a run with no .mat export has nothing to show: said here, with the phrase that makes
+   * one (Decision 23, the vocabulary). */
+  function noDynamic(rid, phrase) {
+    const box = el('div', 'anote amuted');
+    box.appendChild(document.createTextNode(rid + ' was run without the .mat export, so Results, dynamic has nothing '
+      + 'to show for it. This runs it again with the export and builds its dashboard: '));
+    const b = el('button', 'aexample', phrase);
+    b.type = 'button';
+    b.addEventListener('click', () => fillBox(phrase));
+    box.appendChild(b);
+    $a('#aConv').appendChild(box);
+    scrollDown();
   }
 
   /* --------------------------------------------------- the Config view */
@@ -428,6 +480,7 @@
         await refresh();
         if (r.outcome && r.outcome.type === 'PLAN') {
           await syncOverlay((r.outcome.changes || []).map((c) => c.json_path));
+          if (ASSEMBLED) await reassemble();      // the Run tab's command names the workbook followed
         } else if (r.outcome && r.outcome.type === 'STOP') {
           showSource();
         }
@@ -451,10 +504,34 @@
     SELECTION.thru = d.thru || null;
     SELECTION.fext = (d.fext || []).slice();
     SELECTION.next = (d.next || []).slice();
+    const o = d.options || {};
+    SELECTION.options = { export_mat: o.export_mat === true, eye_under_mlse: o.eye_under_mlse === true };
     (async () => {
       if (!STATE) await refresh();
       await syncSelection();
+      // a change the user made in the Run tab while it holds this panel's setup: its command follows (Decision 23);
+      // a change the panel made itself (cause panel) needs nothing more
+      if (ASSEMBLED && d.cause !== 'panel' && STATE.project) await reassemble();
     })().catch((x) => report('channels event', String(x.message || x)));
+  });
+
+  /* The Run tab's Run button, while this panel has the Run tab assembled (Decision 23): taken here and carried out as
+   * Run the command., with the files and options it was pressed with; one history record, the same plan, the same
+   * progress. Without an assembled Run tab the button is left to SiCoPR. */
+  window.addEventListener('sicopr:run-request', (e) => {
+    if (!ASSEMBLED || !STATE || !STATE.project) return;
+    e.preventDefault();
+    const d = e.detail || {};
+    SELECTION.thru = d.thru || null;
+    SELECTION.fext = (d.fext || []).slice();
+    SELECTION.next = (d.next || []).slice();
+    const o = d.options || {};
+    SELECTION.options = { export_mat: o.export_mat === true, eye_under_mlse: o.eye_under_mlse === true };
+    if ($a('#aCmd').disabled) {
+      note('a plan is being carried out; the Run button runs when it ends, or press Stop here', 'abad');
+      return;
+    }
+    send(RUN_COMMAND, 'Run button').catch((x) => note(x.message, 'abad'));
   });
 
   window.addEventListener('sicopr:edit', (e) => {

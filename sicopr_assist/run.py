@@ -93,14 +93,130 @@ def _record_of(project, out):
 def fingerprint_hash(fp):
     """A short text form of a run's fingerprint (loaded fields without RESULT_DIR, channel files, engine), kept in
     result.json for the record. Reuse compares the fingerprints themselves (core._same_fingerprint)."""
-    fields, chans, sic, mat = fp
+    fields, chans, sic, mat, eye = fp
     h = hashlib.sha256()
     for k in sorted(fields):
         v = fields[k]
         h.update(k.encode('utf-8'))
         h.update(repr(v.tolist() if hasattr(v, 'tolist') else v).encode('utf-8'))
-    h.update(repr((chans, sic) + ((True,) if mat else ())).encode('utf-8'))
+    h.update(repr((chans, sic) + ((True,) if mat else ()) + (('eye',) if eye else ())).encode('utf-8'))
     return h.hexdigest()
+
+
+def child_argv(project, rid, channels, export=False, eye=False, fp_hash=None, notes=(), child=None):
+    """The argument list of the child that runs rid: run_case.py on the run CSV of rid, its result.json, the channel
+    files in their roles (THRU, then the FEXT, then the NEXT files), and the options. The run itself and the command
+    the Run tab of SiCoPR's GUI shows (run_tab_command) are both made here, so what is shown is what runs."""
+    paths = [(os.path.abspath(core.Context(project).path(c)), r) for c, r in channels]
+    cmd = list(child or child_command()) + [project.run_csv_path(rid), project.result_path(rid), '--thru', paths[0][0]]
+    for role in ('fext', 'next'):
+        files = [c for c, r in paths[1:] if r == role]
+        if files:
+            cmd += ['--' + role] + files
+    if fp_hash:
+        cmd += ['--fingerprint', fp_hash]
+    for n in notes:
+        cmd += ['--note', n]
+    if export:
+        cmd.append('--export-mat')
+    if eye:
+        cmd.append('--eye-under-mlse')
+    return cmd
+
+
+def run_tab_command(project, channels, export=False, eye=False):
+    """The command a run of these channel files and options would be, as the Run tab shows it (Decision 23): the
+    child on the run CSV of the next run id, python first, paths under the project folder relative to it, without
+    the bookkeeping arguments (--fingerprint, --note) that are filled in when it starts."""
+    rid = project.next_run_id()
+    out = ['python']
+    for a in child_argv(project, rid, channels, export, eye)[1:]:
+        if os.path.isabs(a) and core.inside_folder(a, project.root):
+            a = os.path.relpath(a, project.root)
+        out.append('"%s"' % a if ' ' in a else a)
+    return rid, ' '.join(out)
+
+
+ASSEMBLED = 'assembled by SiCoPR-Assist from the working config'
+
+
+def _run_tab(project, ctx, channels, export, eye, source):
+    """The Run tab's detail of sicopr:set-run (SiCoPR gui/README.md, Panels): the files with absolute paths, the two
+    options, the command (run_tab_command) and the note that says what it is."""
+    def full(p):
+        return os.path.abspath(ctx.path(p))
+    rid, cmd = run_tab_command(project, channels, export, eye)
+    rec = ctx.last
+    n = len((rec or {}).get('overrides') or []) if ctx.wc is not None else 0
+    what = '%s%s' % (os.path.basename(source) if source else 'no workbook',
+                     ', %d override%s' % (n, '' if n == 1 else 's') if n else '')
+    note = ('%s (%s): it runs %s, written from the working config when the run starts, not the workbook; Run sicopr.py '
+            'hands it to the SiCoPR-Assist panel' % (ASSEMBLED, what, project.relative(project.run_csv_path(rid))))
+    return {'config': full(source) if source else None,
+            'thru': next((full(p) for p, r in channels if r == 'thru'), None),
+            'fext': [full(p) for p, r in channels if r == 'fext'], 'next': [full(p) for p, r in channels if r == 'next'],
+            'options': {'export_mat': bool(export), 'eye_under_mlse': bool(eye)}, 'command': cmd, 'note': note,
+            'run_id': rid}
+
+
+def run_tab_setup(project, out):
+    """What a PLAN runs, as the Run tab of SiCoPR's GUI shows it when the panel assembles it (Decision 23): the
+    detail of sicopr:set-run, or None when the plan has no single COM run (a batch, a plan that runs nothing, the
+    dashboard of an earlier run). Called before the plan is carried out: the command names the next run id."""
+    if out.get('type') != 'PLAN' or out.get('points'):
+        return None
+    steps = [(s['op'], s.get('args') or {}) for s in out.get('steps') or []]
+    ops = [op for op, _ in steps]
+    if 'run_batch' in ops or 'build_matrix' in ops or not {'run_com', 'export_mat'} & set(ops):
+        return None
+    ctx = core.Context(project)
+    exp = next((a for op, a in steps if op == 'export_mat'), None)
+    if exp is not None and 'run_com' not in ops and exp.get('run') != ctx.last_run_id():
+        return None
+    channels = plan_channels(ctx, steps)
+    if not channels:
+        return None
+    run_com = next((a for op, a in steps if op == 'run_com'), {})
+    imported = next((a for op, a in steps if op == 'import_config'), None)
+    source = (imported or {}).get('path') or ((ctx.last or {}).get('source') or {}).get('path')
+    return _run_tab(project, ctx, channels, bool(run_com.get('export_mat')) or exp is not None,
+                    bool(run_com.get('eye_under_mlse')), source)
+
+
+def run_tab_preview(project, selection):
+    """The Run tab's setup after the user changed a file or an option there, while the panel has it assembled: the
+    command that Run the command. would run on those files with those options and the working config (or, with none
+    yet, the workbook of the Config tab). None when no THRU is selected or there is no selection."""
+    ctx = core.Context(project, selection)
+    sel = ctx.selection
+    if sel is None or not sel['thru']:
+        return None
+    channels = [(sel['thru'], 'thru')] + [(p, 'fext') for p in sel['fext']] + [(p, 'next') for p in sel['next']]
+    source = ((ctx.last or {}).get('source') or {}).get('path') if ctx.wc is not None else sel['config']
+    return _run_tab(project, ctx, channels, sel['options']['export_mat'], sel['options']['eye_under_mlse'], source)
+
+
+def plan_channels(ctx, steps):
+    """[(path, role)]: the channel files the run of a plan uses, in order. Those of the last run; the files the plan
+    imports with its config (in the roles the plan gives them, the selection in the GUI's tabs, else from their
+    names); then each set_channel step; a thru-only run keeps the THRU alone."""
+    ops = [op for op, _ in steps]
+    last = ctx.last or {}
+    channels = [(c['path'], c.get('role') or 'thru') for c in last.get('channels') or []]
+    imported = next((a for op, a in steps if op == 'import_config'), None)
+    if imported is not None or 'clear_overrides' in ops:
+        named = next((a.get('channels') for op, a in steps if op in ('validate_inputs', 'run_com') and a.get('channels')),
+                     None)
+        if named:
+            roles = next((a.get('roles') for op, a in steps if op == 'run_com' and a.get('roles')), None)
+            channels = list(zip(named, roles)) if roles and len(roles) == len(named) else core.channel_roles(named)
+    for op, a in steps:
+        if op == 'set_channel':
+            channels = _apply_channel(channels, a)
+    run_com = next((a for op, a in steps if op == 'run_com'), None)
+    if run_com and run_com.get('thru_only'):
+        channels = channels[:1]
+    return channels
 
 
 def _with_result_dir(wc, folder):
@@ -145,17 +261,18 @@ class _Runner:
                 f.write(''.join(line + '\n' for line in self.held))
         self.held = []
 
-    def fingerprint(self, wc, channels, export=False):
+    def fingerprint(self, wc, channels, export=False, eye=False):
         fields, err = config_model.loaded_fields(wc)
         if err:
             return None, err
         keys = core.channel_keys((r, _sha(self.ctx.path(p))) for p, r in channels)
-        return core._fingerprint(fields, keys, self.sic, export), None
+        return core._fingerprint(fields, keys, self.sic, export, eye), None
 
-    def run_point(self, wc, channels, head, notes=(), export=False):
+    def run_point(self, wc, channels, head, notes=(), export=False, eye=False):
         """One point: reuse an equal earlier run, or run it. head starts its status line (the step, and for a batch
         the point n of N). export: the engine's .mat export is on (the dashboard needs it), and only a run that had it
-        is reused. Returns {'run_id', 'new', 'reused_from', 'skipped', 'status', 'message'}."""
+        is reused. eye: --eye-under-mlse (Decision 23), and only a run with the same setting is reused. Returns
+        {'run_id', 'new', 'reused_from', 'skipped', 'status', 'message'}."""
         if self.cancel is not None and self.cancel.is_set():
             self.say('status', '%s: skipped, %s' % (head, STOPPED))
             return {'run_id': None, 'new': False, 'reused_from': None, 'status': 'skipped', 'skipped': STOPPED,
@@ -170,7 +287,7 @@ class _Runner:
             self.say('status', '%s: skipped, validate_inputs fails: %s' % (head, stops[0]))
             return {'run_id': None, 'new': False, 'reused_from': None, 'status': 'skipped',
                     'skipped': 'validate_inputs fails: %s' % stops[0], 'message': stops[0]}
-        fp, err = self.fingerprint(wc, channels, export)
+        fp, err = self.fingerprint(wc, channels, export, eye)
         if fp is None:
             self.say('status', '%s: skipped, validate_config fails: %s' % (head, err))
             return {'run_id': None, 'new': False, 'reused_from': None, 'status': 'skipped',
@@ -188,26 +305,17 @@ class _Runner:
         self.project.write_working_config(rid, run_wc)
         csv_path = config_model.write_run_csv(run_wc, self.project.run_csv_path(rid))
         status, message = self._child(rid, csv_path, channels, fingerprint_hash(fp), list(notes) + list(more), head,
-                                      export)
+                                      export, eye)
         if status == 'complete':
             self.known.append((rid, fp))
         return {'run_id': rid, 'new': True, 'reused_from': None, 'skipped': None, 'status': status,
                 'message': message}
 
-    def _child(self, rid, csv_path, channels, fp_hash, notes, head, export=False):
+    def _child(self, rid, csv_path, channels, fp_hash, notes, head, export=False, eye=False):
         p = self.project
-        result = p.result_path(rid)
-        paths = [(os.path.abspath(self.ctx.path(c)), r) for c, r in channels]
-        cmd = self.child + [csv_path, result, '--thru', paths[0][0]]
-        for role in ('fext', 'next'):
-            files = [c for c, r in paths[1:] if r == role]
-            if files:
-                cmd += ['--' + role] + files
-        cmd += ['--fingerprint', fp_hash]
-        for n in notes:
-            cmd += ['--note', n]
-        if export:
-            cmd.append('--export-mat')
+        cmd = child_argv(p, rid, channels, export, eye, fp_hash, notes, child=self.child)
+        if cmd[len(self.child)] != csv_path:
+            raise ValueError('the run CSV of %s is %s, not %s' % (rid, cmd[len(self.child)], csv_path))
         # the child writes UTF-8, so the engine's lines reach run.log and the screen unchanged
         env = dict(os.environ, PYTHONUNBUFFERED='1', PYTHONDONTWRITEBYTECODE='1', PYTHONIOENCODING='utf-8')
         log = os.path.join(p.run_dir(rid), 'run.log')
@@ -236,12 +344,14 @@ class _Runner:
                 if self.cancel is not None and self.cancel.is_set():
                     msg = '%s after %s; no result of this run is kept' % (STOPPED, took)
                     p.write_result(rid, result_record(run_id=rid, status='failed', message=msg, sicopr_sha256=self.sic,
-                                                      config_csv=csv_path, fingerprint=fp_hash, export_mat=export))
+                                                      config_csv=csv_path, fingerprint=fp_hash, export_mat=export,
+                                                      eye_under_mlse=eye))
                     rec = {'status': 'failed', 'message': msg}
                 if rec is None:
                     msg = 'the run stopped with exit code %s and wrote no result: %s' % (code, ' / '.join(said[-3:]))
                     p.write_result(rid, result_record(run_id=rid, status='failed', message=msg, sicopr_sha256=self.sic,
-                                                      config_csv=csv_path, fingerprint=fp_hash, export_mat=export))
+                                                      config_csv=csv_path, fingerprint=fp_hash, export_mat=export,
+                                                      eye_under_mlse=eye))
                     rec = {'status': 'failed', 'message': msg}
                 if rec['status'] == 'complete':
                     self.say('status', '%s finished in %s: %s' % (rid, took, _headline(rec)))
@@ -561,7 +671,7 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
     last = ctx.last or {}
     source = dict(last.get('source') or {}) or None
     overrides = [dict(o) for o in last.get('overrides') or []]
-    channels = [(c['path'], c.get('role') or 'thru') for c in last.get('channels') or []]
+    channels = plan_channels(ctx, steps)
     base_run = ctx.last_run_id()
     imported = next((a for op, a in steps if op == 'import_config'), None)
     for k, op in enumerate(ops[:first_run]):
@@ -575,12 +685,6 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
                 path, '; '.join(i['text'] for i in config_model.stops(issues)) or 'no config'))
         source = {'path': _native(imported['path'] if imported else source['path']), 'sha256': _sha(path)}
         overrides = []
-        named = next((a.get('channels') for op, a in steps if op in ('validate_inputs', 'run_com') and a.get('channels')),
-                     None)
-        if named:
-            # the roles as the plan gives them (the selection in the GUI's tabs, Decision 20), else from the names
-            roles = next((a.get('roles') for op, a in steps if op == 'run_com' and a.get('roles')), None)
-            channels = list(zip(named, roles)) if roles and len(roles) == len(named) else core.channel_roles(named)
         synthetic = imported.get('example_channel') if imported else None
         if synthetic and not os.path.exists(ctx.path(synthetic)):
             # the example setup in a folder with no channel file (Decision 22): its synthetic THRU is written now
@@ -606,13 +710,9 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
             overrides = [o for o in overrides if o['json_path'] != c['json_path']]
             overrides.append({'json_path': c['json_path'], 'before': c['before'], 'after': c['after'],
                               'kind': c['kind']})
-    # another channel file, with the config of the last run (Decision 18)
-    for op, a in steps:
-        if op == 'set_channel':
-            channels = _apply_channel(channels, a)
+    # the channels (plan_channels): another channel file with the config of the last run (Decision 18), the files of
+    # an import in their roles (Decision 20), a thru-only run
     run_com = next((a for op, a in steps if op == 'run_com'), None)
-    if run_com and run_com.get('thru_only'):
-        channels = channels[:1]
     point_channels = any(pt.get('channels') for pt in out.get('points') or [])     # a fetched batch names its own
     if not channels and not point_channels and any(op in ops for op in ('run_com', 'run_batch', 'export_mat')):
         return _failed(project, rec, 'no channel file is known for this run')
@@ -657,7 +757,8 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
             status = 'failed'
             fields.update(status='failed', reason='%s; %d point%s left' % (STOPPED, left, '' if left == 1 else 's'))
     elif run_com is not None:
-        got = R.run_point(wc, channels, head, export=bool(run_com.get('export_mat')))
+        got = R.run_point(wc, channels, head, export=bool(run_com.get('export_mat')),
+                          eye=bool(run_com.get('eye_under_mlse')))
         if got['run_id']:
             run_ids.append(got['run_id'])
             fields.update(working_config=project.relative(project.working_config_path(got['run_id'])),
@@ -686,13 +787,20 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
                 no_page = 'the run did not happen, so there is no .mat export'
                 R.say('status', '%s: skipped, %s' % (at, no_page))
                 continue
-            got = R.run_point(wc, channels, at, export=True)
+            x_wc, x_channels, x_rec = wc, channels, None
+            if a.get('run') not in (None, 'run_com', base_run):
+                # the dashboard of an earlier run named by its id: its own working config and channel files
+                x_wc, x_channels, x_rec = ctx.run_setup(a['run'])
+            got = R.run_point(x_wc, x_channels, at, export=True)
             if got['run_id'] and got['status'] in ('complete', 'reused'):
                 mat_run = got['run_id']
                 if mat_run not in run_ids:
                     run_ids.append(mat_run)
+                    more = {} if x_channels is channels else {'channels': [
+                        {'path': _native(p), 'sha256': _sha(ctx.path(p)), 'role': r} for p, r in x_channels],
+                        'source': x_rec.get('source'), 'overrides': x_rec.get('overrides') or []}
                     project.update_history(rec['seq'], run_ids=run_ids, working_config=project.relative(
-                        project.working_config_path(mat_run)))
+                        project.working_config_path(mat_run)), **more)
             else:
                 no_page = 'the run with the .mat export did not complete: %s' % got['message']
         elif op == 'render_dashboard':

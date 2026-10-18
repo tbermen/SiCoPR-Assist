@@ -2,7 +2,7 @@
 reuse and run-folder checks (gate G6.3) run no COM.
 
     python standin_child.py CONFIG.csv RESULT.json --thru T [--fext F ...] [--next N ...]
-                            [--fingerprint HEX] [--note TEXT ...] [--export-mat]
+                            [--fingerprint HEX] [--note TEXT ...] [--export-mat] [--eye-under-mlse]
 
 The numbers are made up but fixed by the run CSV (without its RESULT_DIR row), so the same config gives the
 same numbers. The release is the one the config loads to (param.matlab_version), as the engine reports it.
@@ -39,6 +39,7 @@ def main(argv=None):
     ap.add_argument('--fingerprint')
     ap.add_argument('--note', action='append', default=[])
     ap.add_argument('--export-mat', action='store_true')
+    ap.add_argument('--eye-under-mlse', action='store_true')    # recorded in the result, as run_case.py records it
     a = ap.parse_args(argv)
     keep = os.environ.get('SICOPR_ASSIST_STANDIN_ARGV')
     if keep:                                     # a test reads back the arguments the runner gave (gate N3)
@@ -60,7 +61,8 @@ def main(argv=None):
     rec = result_record(run_id=os.path.basename(os.path.dirname(os.path.abspath(a.result))), status='complete',
                         release=fields['param.matlab_version'], sicopr_sha256=engine.engine_sha256(),
                         config_csv=a.config, channels=chans, fingerprint=a.fingerprint, cases=[case],
-                        message='\n'.join(a.note) or None, export_mat=a.export_mat)
+                        message='\n'.join(a.note) or None, export_mat=a.export_mat,
+                        eye_under_mlse=a.eye_under_mlse)
     if a.export_mat:
         stem = os.path.splitext(os.path.basename(a.config))[0]
         mat = os.path.join(os.path.dirname(os.path.abspath(a.result)), '%s_case01.mat' % stem)

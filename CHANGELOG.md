@@ -1,5 +1,44 @@
 # Changelog
 
+## 0.9.0 (17 October 2026)
+
+Version 2, Phase V2-7: what the maintainer's second GUI session asked for. "The Run Tab will have the command
+assembled as the Assist prompt gets user feedback. So if I notice that dynamic results is not selected, I can select it
+in the GUI and then tell Assist prompt to 'run the command' and all the information from the GUI is part of the Assist
+prompt." The same session found that `Re-run last config and channel.` asked about "channel", and that
+`I'd like results, dynamic for the last run.` was read as a result name. Rows RT01 to RT06 (four new prior states)
+specify it; the table has 871 rows. It needs SiCoPR's branch `gui-panel-slot`, now based on SiCoPR 1.1.2.
+
+- **The Run tab is the setup Assist runs (Decision 23).** A PLAN that runs COM fills SiCoPR's Run tab (the page event
+  `sicopr:set-run`): its files, Output dynamic results and `--eye-under-mlse` as the plan runs them, and in its command
+  box the command the panel runs, the working config's run CSV and not the workbook, with a note that says so. The
+  command is made by the same function as the run itself (`run.child_argv`), so what is shown is what runs.
+- **The Run tab to Assist.** `sicopr:channels` now carries the two options and is sent on every change of a file or an
+  option; the selection holds them, and the selection line names those that are on. A change in the Run tab while
+  the panel has it assembled updates its command (`POST runtab`).
+- **"Run the command."**, "Run it." (where there is a Run tab; on the command line it keeps its meaning), "Run what is in
+  the Run tab" and "Run the Run tab" run exactly the Run tab: the working config (with what was done in the Config
+  view), its files and its options; with no working config yet, the workbook of the Config tab. A setup equal to the
+  last run, options too, is a STOP. With no Run tab (the command line) it asks: re-run the last run, or cancel.
+- **The Run button runs through Assist** while the panel has assembled the Run tab (`sicopr:run-request`, which the
+  panel takes): the same phrase, one history record, the same plan and progress.
+- **The options are part of the run and of reuse.** Output dynamic results is `--export-mat` (an export run: its
+  `.mat` and dashboard are then available, and when it ends the run opens in Results, dynamic, which builds its
+  dashboard); `--eye-under-mlse` goes to the run child, which sets the engine's `EYE_PLOT_UNDER_MLSE` as
+  `sicopr.py --eye-under-mlse` does (it changes eye plots, no reported value), and is recorded in `result.json`. A run
+  is reused only by a run with the same `--eye-under-mlse`; a run with the export still serves one without it.
+- **Vocabulary.** "dynamic results", "results, dynamic" and "the dynamic results of the last run" are the dashboard
+  (rows D1, RT05); "I'd like" is placed. A run named by its id (`Show the dynamic results of run_0004.`) gives that
+  run's dashboard, on its own config and channel files; a run id anywhere else is asked about. "the last config and
+  channel(s)" are the config and channel files of the last run (row RT06). Opening Results, dynamic from the panel on a
+  run with no `.mat` export says so and offers the phrase that makes one.
+- Found by the new tests and fixed: the dashboard of an earlier run named by its id re-ran the last run's channel files;
+  it now runs that run's own config and channels, and its history record names them.
+- Tests: `tests\test_run_tab.py` (new), gate V7.3 in `tests\test_use_cases.py`, and new checks in
+  `tests\test_gui_api.py` (a cross-site POST to the panel is refused by SiCoPR's request guard before the core sees it)
+  and `tests\test_gui_static.py`. The frozen L4 list has 655 rows (RT01, RT03, RT04, RT05 added), the review list 216
+  (RT02, RT06).
+
 ## 0.8.0 (10 October 2026)
 
 Version 2, Phase V2-6: what the maintainer's first GUI session found. He picked a config and a channel in the

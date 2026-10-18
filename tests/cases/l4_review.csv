@@ -213,3 +213,5 @@ SC15,Case1; Case2; Case3; Case4,schema,must,STOP,review,STOP: whether the reason
 CH04,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 CH07,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 XT04,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+RT02,Case1; Case3,run,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+RT06,Case1; Case3,run,must,STOP,review,STOP: whether the reason names the same cause is read by a person

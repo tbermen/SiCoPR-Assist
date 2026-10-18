@@ -473,6 +473,13 @@ def select(ctx, thru=None, fext=(), nxt=(), config='config.xlsx'):
                      'fext': [ctx.data(n) for n in fext], 'next': [ctx.data(n) for n in nxt]}
 
 
+def run_tab(ctx, export_mat=False, eye_under_mlse=False):
+    """The Run tab as the panel hands it to the core after a run (Decision 23): the selection of the last run's files,
+    the THRU data\\thru.s4p and the config of the Config tab, with the Run tab's two options."""
+    select(ctx, thru='thru.s4p')
+    ctx.selection['options'] = {'export_mat': export_mat, 'eye_under_mlse': eye_under_mlse}
+
+
 def select_with_crosstalk(ctx):
     xtalk_folder(ctx)
     select(ctx, thru=os.path.join('ch', 'b300_thru1.s4p'), fext=[os.path.join('ch', n) for n in XT_FEXT],
@@ -836,6 +843,14 @@ BUILDERS = {
     r'run complete with the starting config and data\thru.s4p; the GUI selection holds that config and the THRU '
     r'data\thru2.s4p': lambda c: (seed_run(c), second_thru(c), select(c, thru='thru2.s4p')),
     'empty project folder: no config, no channel file, no history': empty_folder,
+    # the second GUI session (17 October): the Run tab's state handed to the core as data (Decision 23)
+    r'run complete with the starting config and data\thru.s4p; the Run tab holds the same files with Output dynamic '
+    r'results ticked': lambda c: (seed_run(c), run_tab(c, export_mat=True)),
+    r'run complete with the starting config and data\thru.s4p; the Run tab holds the same files and options as that '
+    r'run': lambda c: (seed_run(c), run_tab(c)),
+    r'run complete with the starting config and data\thru.s4p; the Run tab holds the same files with --eye-under-mlse '
+    r'ticked': lambda c: (seed_run(c), run_tab(c, eye_under_mlse=True)),
+    r'run complete with the starting config and data\thru.s4p; there is no Run tab (the command line)': seed_run,
 }
 
 

@@ -20,7 +20,11 @@ read(phrase, names, blocks) returns a plain dictionary:
     corrected   {typed: read as} for the typo rule
     flags       set of plain markers: again, this_config, these_files, example, thru_only, crosstalk,
                 different, instead, all, diff, both, last_config, last_run, and selection with sel_config and
-                sel_channel (the config and the channel files selected in the GUI's tabs, Decision 20)
+                sel_channel (the config and the channel files selected in the GUI's tabs, Decision 20); run_tab
+                (the setup in the Run tab: "the command", "what is in the Run tab", "the Run tab"), run_it ("run it"
+                alone, which the core reads as the Run tab only where there is one) and last_channels ("the last
+                config and channel files"), Decision 23
+    runs        run ids named (run_0004), for the dashboard of that run; in any other request they are unplaced
     pattern     a short text of how the phrase was read (goes to history)
 
 Nothing here reads a config or the engine: the caller passes the known names and block names.
@@ -85,6 +89,10 @@ CROSSTALK_VERBS = ('add', 'include')
 # forms _selection lists, and are not known words on their own: "selected" alone is still asked about.
 SELECT_WORDS = ('selected', 'specified', 'chosen')
 SELECT_THINGS = {'config': 'config', 'channel': 'channel', 'channels': 'channel', 'files': 'files'}
+# the dynamic results (Results, dynamic in SiCoPR's GUI) are the dashboard (Decision 23, rows D1 and RT05): "dynamic
+# results", "results, dynamic", "results dynamic"; "dynamic" alone is not placed
+RESULT_WORDS = ('results', 'result')
+RUN_ID = re.compile(r'run_\d{4,}')
 
 # Every word the reader can place: the typo rule reads a near miss of one of these as the word itself.
 KNOWN_WORDS = set(ACTION_WORDS) | FILLER | set(SIDES) | set(WORD_NUMBERS) | {
@@ -202,7 +210,9 @@ class _Reader:
         self.blocks = {b.lower(): b for b in blocks}
         self.longest = max([len(re.findall(r'\S+', n)) for n in names] + [1]) + 1
         self.out = {'phrase': phrase, 'actions': [], 'sets': [], 'sweeps': [], 'packages': [], 'files': [],
-                    'attempts': [], 'unplaced': [], 'corrected': {}, 'flags': [], 'edits': [], 'pattern': ''}
+                    'attempts': [], 'unplaced': [], 'corrected': {}, 'flags': [], 'edits': [], 'runs': [],
+                    'pattern': ''}
+        self.run_at = []                           # token index of each run id taken
         self.marks = [None] * self.n               # what each token was read as
         self.roles = {}                            # token index of a channel file: the role word before it
         self._mark_files()
@@ -322,6 +332,12 @@ class _Reader:
             j = self._clause(i)
             i = j if j > i else i + 1
         self._attempts()
+        if o['runs'] and 'dashboard' not in o['actions'] and not any(
+                ACTION_WORDS.get(m[1]) == 'dashboard' for k, m in enumerate(self.marks) if m[0] == 'word'):
+            # a run id means something only to the dashboard; anywhere else it is asked about, never dropped
+            for k in self.run_at:
+                self.used[k] = False
+            o['runs'] = []
         for i, m in enumerate(self.marks):
             if self.used[i]:
                 continue
@@ -371,7 +387,38 @@ class _Reader:
         if low in LAST_CONFIG_WORDS and self.word(i + 1) == 'config':
             self.flag('last_config')
             self.take(i, i + 1)
+            # "the last config and channel(s)": the config and the channel files of the last run (Decision 23)
+            k = i + 2
+            if self._low(k) == 'and':
+                j = k + 1
+                j += self._low(j) == 'the'
+                j += self._low(j) in LAST_CONFIG_WORDS
+                if self._low(j) in ('channel', 'channels'):
+                    j += 1
+                    j += self._low(j) in ('file', 'files')
+                    self.flag('last_channels')
+                    self.take(*range(k, j))
+                    return j
             return i + 2
+        # "I'd like", "I would like": a request, placed and carrying nothing (row RT05)
+        if low == "i'd" and self._low(i + 1) == 'like':
+            self.take(i, i + 1)
+            return i + 2
+        if low == 'i' and self._low(i + 1) == 'would' and self._low(i + 2) == 'like':
+            self.take(i, i + 1, i + 2)
+            return i + 3
+        # a run named by its id, for the dashboard of that run
+        if RUN_ID.fullmatch(low) and self.kind(i) == 'unknown':
+            self.out['runs'].append(low)
+            self.run_at.append(i)
+            self.take(i)
+            return i + 1
+        end = self._dynamic(i)
+        if end > i:
+            return end
+        end = self._run_tab(i)
+        if end > i:
+            return end
         # a role word before a channel file: FEXT data\fext1.s4p (Decision 18, row CH08)
         if low in CHANNEL_ROLES and self.kind(i + 1) == 'file' and CHANNEL_EXT.search(self.toks[i + 1]['low']):
             self.roles[i + 1] = CHANNEL_ROLES[low]
@@ -500,6 +547,67 @@ class _Reader:
         self.flag('crosstalk')
         self.take(*range(start, k))
         return k
+
+    def _low(self, k):
+        """The lower-case text of token k when it is a word not yet taken, else None."""
+        if 0 <= k < self.n and not self.used[k] and self.marks[k][0] in ('word', 'unknown'):
+            return self.toks[k]['low']
+        return None
+
+    def _dynamic(self, i):
+        """The dynamic results, which are the dashboard (Decision 23): [the] dynamic results, results[,] dynamic.
+        Adds the action dashboard; returns the index after it, or i."""
+        low = self._low
+        if low(i) == 'dynamic' and low(i + 1) in RESULT_WORDS:
+            end = i + 2
+        elif low(i) in RESULT_WORDS and low(i + 1) == 'dynamic':
+            end = i + 2
+        elif low(i) in RESULT_WORDS and self.kind(i + 1) == 'sep' and self.toks[i + 1]['text'] == ',' \
+                and low(i + 2) == 'dynamic':
+            end = i + 3
+        else:
+            return i
+        if 'dashboard' not in self.out['actions']:
+            self.out['actions'].append('dashboard')
+        self.take(*range(i, end))
+        return end
+
+    def _run_tab(self, i):
+        """The setup in the Run tab of the GUI (Decision 23), in these forms:
+
+            [the] command [in the Run tab]       run the command, run the command in the Run tab
+            what is in the Run tab               what's in the Run tab
+            [in] the Run tab                     run the Run tab
+            it, right after run, ending the phrase    run it (flag run_it: the core reads it as the Run tab only
+                                                       where there is one)
+
+        Sets the flag run_tab (or run_it); returns the index after it, or i."""
+        low = self._low
+
+        def tab(k):
+            j = k + (low(k) == 'in')
+            return j + 3 if low(j) == 'the' and low(j + 1) == 'run' and low(j + 2) == 'tab' else k
+        if low(i) == 'it' and i > 0 and self.toks[i - 1]['low'] == 'run' \
+                and all(self.kind(k) == 'sep' for k in range(i + 1, self.n)):
+            self.flag('run_it')
+            self.take(i)
+            return i + 1
+        k = i + (low(i) in ('the', 'my'))
+        end = i
+        if low(k) == 'command':
+            end = tab(k + 1)
+            end = k + 1 if end == k + 1 else end
+        elif low(i) == "what's" or (low(i) == 'what' and low(i + 1) == 'is'):
+            j = i + 1 + (low(i) == 'what')
+            if low(j) == 'in' and tab(j) > j:
+                end = tab(j)
+        elif tab(i) > i:
+            end = tab(i)
+        if end == i:
+            return i
+        self.flag('run_tab')
+        self.take(*range(i, end))
+        return end
 
     def _selection(self, i):
         """The config and the channel files selected in the GUI's tabs (Decision 20), in these forms, where S is
@@ -817,6 +925,9 @@ class _Reader:
         parts += ['file' for _ in o['files']]
         parts += ['crosstalk' for f in o['flags'] if f == 'crosstalk']
         parts += ['selection' for f in o['flags'] if f == 'selection']
+        parts += ['run tab' for f in o['flags'] if f == 'run_tab']
+        parts += ['last config and channels' for f in o['flags'] if f == 'last_channels']
+        parts += ['run %s' % r for r in o['runs']]
         parts += ['ask %s' % a['text'] for a in o['attempts']]
         return '; '.join(parts) or 'nothing matched'
 

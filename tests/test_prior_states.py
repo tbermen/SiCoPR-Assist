@@ -32,8 +32,9 @@ def main():
     states = prior_states.strings()
     # 91 from the table of 6 October, 3 added after the maintainer's first use (rows CH01 to CH08), and 4 after his
     # second session (rows XT01 to XT06), 2 with the fetch rows F11 and F12 (7 October, from the IEEE page), and 6
-    # after his first GUI session (rows SL01 to SL05 and EX01, 10 October)
-    check('the prior-state file lists 106 strings', len(states) == 106 and len(set(states)) == 106, len(states))
+    # after his first GUI session (rows SL01 to SL05 and EX01, 10 October), and 4 after his second (rows RT01 to RT04,
+    # the Run tab's state, 17 October)
+    check('the prior-state file lists 110 strings', len(states) == 110 and len(set(states)) == 110, len(states))
     in_table = {r['prior_state'] for r in rows}
     check('every prior_state in the table is in the prior-state file', in_table <= set(states),
           sorted(in_table - set(states))[:5])

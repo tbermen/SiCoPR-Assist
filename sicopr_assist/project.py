@@ -78,7 +78,8 @@ def is_command(rec):
     return rec.get('kind') in (None,) + COMMAND_KINDS
 
 RESULT_KEYS = ('format', 'run_id', 'status', 'release', 'sicopr_sha256', 'config_csv', 'channels',
-               'fingerprint', 'cases', 'message', 'export_mat')     # export_mat: the engine's .mat export was on
+               'fingerprint', 'cases', 'message', 'export_mat',     # export_mat: the engine's .mat export was on
+               'eye_under_mlse')            # eye_under_mlse: the eye plots were drawn under MLSE (Decision 23)
 RESULT_STATUSES = ('complete', 'failed')
 
 

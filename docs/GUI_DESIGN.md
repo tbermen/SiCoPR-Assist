@@ -10,6 +10,12 @@ GUI: the selection in the tabs (section 5a, and the event `sicopr:channels` in s
 (section 5, item 5), and the example that runs from an empty folder (section 7). Section 14 lists what was
 built and where it differs from what was written. The mock-up still shows the 0.7.0 panel.
 
+Changed in Phase V2-7 (17 October 2026, SiCoPR-Assist 0.9.0) after the maintainer's second session: the Run tab and
+the panel work as one (Decision 23). A PLAN assembles the Run tab (`sicopr:set-run`), the Run tab's changes come back
+with `sicopr:channels` (now with its two options), and while it is assembled the Run tab's Run button runs through the
+panel (`sicopr:run-request`); this replaces the answer to question 4 (section 12) for that case. The slot branch was
+rebased onto SiCoPR 1.1.2, whose request guard covers the panel routes. Section 15 lists what was built.
+
 Written against SiCoPR-Assist 0.6.0 (`f884c1f`) and SiCoPR `55c3f71` (1.1.1), whose GUI was read in full
 (`gui\app.py`, `config_io.py`, `runner.py`, `schematic.py`, `static\`, `README.md`) and run once from a
 temporary folder (`--no-browser --dir <temp> --run-dir <temp>`, port 8799) to see its layout, views and
@@ -118,10 +124,11 @@ On the page, SiCoPR and a panel talk through `CustomEvent`s on `window`. SiCoPR 
 | `sicopr:view` | `{view}` | the tab changed |
 | `sicopr:run` | `{returncode, command, cwd}` | a run started from the Run tab finished (once per run, under the existing `RUN_DONE` guard) |
 | `sicopr:browsed` | `{purpose, path}` | the Browse dialog was used for a panel (see `sicopr:browse`) |
-| `sicopr:channels` | `{thru, fext, next, cause}` | the channel files chosen in the Run tab changed (added in Phase V2-6, section 5a): `thru` a path, empty when none, `fext` and `next` lists of paths, as the page holds them. Sent once at start (`cause` `boot`; the lists are empty until the Run tab is first opened), on a pick in THRU, FEXT or NEXT (`user`), and when the lists are filled again and the selection differs (`list`: a directory, the filter, the first THRU taken by default) |
+| `sicopr:channels` | `{thru, fext, next, options, cause}` | the channel files chosen in the Run tab, or its two options, changed (added in Phase V2-6, section 5a; `options` in Phase V2-7, section 15): `thru` a path, empty when none, `fext` and `next` lists of paths, as the page holds them, `options` `{export_mat, eye_under_mlse}` (Output dynamic results and `--eye-under-mlse`). Sent once at start (`cause` `boot`; the lists are empty until the Run tab is first opened), on a pick in THRU, FEXT or NEXT or a tick of either box (`user`), when the lists are filled again and the selection differs (`list`: a directory, the filter, the first THRU taken by default), and after a panel's `sicopr:set-run` (`panel`) |
+| `sicopr:run-request` | `{thru, fext, next, options}` | Run was pressed while a panel has the Run tab assembled (Phase V2-7): sent cancelable; the panel that takes the run calls `preventDefault()`, and when none does the Run tab runs as always |
 
-The panel API number stays 1: an event was added and none changed, so a panel written for the ten events of
-0.7.0 works as before.
+The panel API number stays 1: events and fields were added and none changed, so a panel written for the ten events
+of 0.7.0 works as before.
 
 and listens for:
 
@@ -130,7 +137,8 @@ and listens for:
 | `sicopr:open-config` | `{path}` | selects and loads that workbook (with the usual discard-edits confirm) |
 | `sicopr:overlay` | `{source, title, cells: {key: {value, tag, note}}, save_hint, run_note, focus}` or `null` | shows each listed key with the overlay value in place of the workbook value, a tag (`tag` text), and the workbook value in the field's info line; marks the blocks that hold overlaid keys; shows `title` in the header; while an overlay is set, Save as is disabled with `save_hint` as its tooltip and the Run tab shows `run_note` under its config line. `focus` (a list of keys) selects their block when they all sit in one. `null` removes it |
 | `sicopr:clear-edits` | `{keys}` | drops those keys from `EDITS` (the panel took them) |
-| `sicopr:show` | `{view, run}` | switches tab; with `run`, selects that run folder in the Results tabs |
+| `sicopr:show` | `{view, run, build}` | switches tab; with `run`, selects that run folder in the Results tabs; with `build` (Phase V2-7), Results, dynamic builds the dashboard of that run's newest `.mat` export when it has none yet |
+| `sicopr:set-run` | `{config, thru, fext, next, options: {export_mat, eye_under_mlse}, command, note}` or `null` | Phase V2-7: the Run tab selects the files (choosing their directory), sets the two boxes, shows `command` in its command box and `note` (in place of an overlay's `run_note`) and `config` under Configuration; its controls stay live, and Run sends `sicopr:run-request`. `null` gives the Run tab back |
 | `sicopr:browse` | `{purpose, title}` | opens the Browse dialog; "Use this directory" opens the directory (`/api/open`, as today) and answers with `sicopr:browsed` |
 
 Keys are SiCoPR's own: `name` for a main keyword, `name#tx` and `name#rx` for the halves of a `[TX RX]` cell,
@@ -379,6 +387,11 @@ while an Assist plan runs (`a run started from SiCoPR-Assist is in progress`), a
 `host.com_running()` before carrying out a plan with runs and answers with a STOP-styled line if the Run tab
 is busy.
 
+**The Run tab assembled by the panel** (Phase V2-7, Decision 23; section 15). Once a PLAN that runs COM has been
+sent, the Run tab shows that setup and its command, and its Run button hands the run to the panel, which carries it
+out as `Run the command.`: in Assist's history, reused by Decision 6, with live progress in the panel. What follows
+holds for the Run tab before any such plan, which is the Run tab as SiCoPR has it.
+
 **A run started from the Run tab** is not in Assist's history, so Assist neither shows it in its history nor
 reuses it: reuse (Decision 6) needs a recorded working config, channel hashes and engine hash, and the Run
 tab runs a workbook file, not a working config. When the panel hears `sicopr:run`, it says one line: `a run
@@ -429,8 +442,9 @@ folder and `host.roots()`.
 |---|---|---|
 | `GET state` | the project line, the pending question, whether a plan is running | `Project`, `Project.read_pending`, `core.history_lines`, `core.Context(...).base` |
 | `POST project {path}` | change the project folder (a directory under `host.roots()`) | `Project` |
-| `POST handle {phrase, selection}` | resolve a phrase, with the selection in the tabs handed over as data (section 5a); carry out a PLAN in the worker | `core.handle`, then `run.carry_out` (and `core.fetch_followup` through `next`) |
+| `POST handle {phrase, selection}` | resolve a phrase, with the selection in the tabs (and the Run tab's options) handed over as data (sections 5a, 15); carry out a PLAN in the worker; with a PLAN of one COM run, also `run_tab`, the setup the page is sent as `sicopr:set-run` | `core.handle`, `run.run_tab_setup`, then `run.carry_out` (and `core.fetch_followup` through `next`) |
 | `POST selection {selection}` | the selection as the core will be handed it (paths outside the project folder and `host.roots()` left out), the line that shows it, and the phrase of the Run selection button | none of the core: `api.clean_selection`, `api.selection_line` |
+| `POST runtab {selection}` | the Run tab's setup for its files and options now, the working config kept (Phase V2-7): `{config, thru, fext, next, options, command, note, run_id}`, or `{command: null}` with no THRU | `run.run_tab_preview` (which uses `core.Context` and `run.run_tab_command`) |
 | `POST examples {selection}` | up to four phrases for under the command box, each one giving a PLAN now | `tutor.first_run`, `tutor.examples`, `core._resolve` through the tutor's own check |
 | `GET job?since=` | progress lines, running or done, the carry-out result | the worker's buffer, `run.line_text` |
 | `POST stop` | stop the plan in progress | the worker (new cancel hook, section 10) |
@@ -439,7 +453,7 @@ folder and `host.roots()`.
 | `POST open {path}` | follow another workbook opened in the Config view | `core.edit` with a source |
 | `POST log {kind}` | a view shown (`view`) or a page error (`error`), recorded | `Project.append_history` |
 | `GET history?limit=` | phrases for recall, and the conversation on reload | `Project.read_history` |
-| `GET result?run=` | one run's summary card | `summary.run_summary` |
+| `GET result?run=` | one run's summary card, whether it has the `.mat` export, and the phrase that shows its dynamic results | `summary.run_summary`, `core.dynamic_phrase` |
 | `GET batch?seq=` | a batch's table | `summary.batch_rows`, `summary.batch_lines` |
 | `GET settings` | the settings in force | `project.read_settings`, `core.settings_lines` |
 
@@ -527,7 +541,9 @@ follows" (below and section 6); and every GUI interaction is recorded in the his
    command?** *Recommendation: when committed*, one history record per edit. It is checked at once, the user
    sees `edited here #n` at once, the CLI sees it too, and there is no conflict window.
 4. **Should Assist track runs started from the Run tab?** *Recommendation: no, not in the first build.* Offer
-   the phrase that brings the same inputs into Assist; reuse then works through Decision 6 as usual.
+   the phrase that brings the same inputs into Assist; reuse then works through Decision 6 as usual. *Changed by the
+   maintainer, 17 October 2026:* while the panel is open and has assembled the Run tab, the Run tab's Run button runs
+   through Assist, the same as "run the command" (section 15). With no panel installed, the Run tab is unchanged.
 5. **Save as in the Config view while Assist is in use: disabled with a pointer to Assist's export?**
    *Recommendation: yes.* Enabled, it would write a workbook that silently leaves out every Assist override.
 6. **When the Config view is switched to another workbook, does Assist follow?** *Decided by the
@@ -625,3 +641,54 @@ by Decision 21 and section 5. Where a decision was silent, the least surprising 
 10. **`Run the example.` writes `data\example_thru.s4p` only when the plan is carried out**, creating `data` if
     it is not there; planning writes nothing in the project folder but the history. The step that carries it is
     `import_config(example)` with one more argument, so the chain of row EX01 is the chain of row R1.
+
+## 15. As built (Phase V2-7, 17 October 2026)
+
+Decision 23 of the build prompt, after the maintainer's second session with the GUI: "the Run Tab will have the
+command assembled as the Assist prompt gets user feedback". Rows RT01 to RT06 of the use-case table specify the core;
+the page events are in section 4.1 and SiCoPR's `gui\README.md`, *Panels*. Where the decision was silent, the least
+surprising reading was taken:
+
+1. **What the Run tab is, as data.** The selection (section 5a) gains `options`, `{export_mat, eye_under_mlse}`, each
+   on only when the page says `true`. `core.handle(phrase, project, selection=...)` is unchanged in form: the Run tab's
+   state is the selection. On the command line there is no selection, so there is no Run tab.
+2. **"Run the command."**, "Run the command in the Run tab", "Run what is in the Run tab", "Run the Run tab" and
+   "Run it." are the Run tab; "Run it." only where there is one (with no selection it keeps its meaning, rows R3 and
+   R4). The Run tab plans like the selection with the working config kept: the swap of row SL05 when the files differ,
+   no step when they do not, and the run carries the options that are on. With no working config yet the workbook of
+   the Config tab is imported, as row SL01. A setup equal to the last run is a STOP (row RT02): an option is a change
+   when it asks for the `.mat` export the last run did not have, or for another `--eye-under-mlse`. Unticking Output
+   dynamic results after an export run is no change, because the export run serves. The same options apply to
+   "Run the selected config and channels.", since the selection is the Run tab.
+3. **No Run tab** (row RT03) asks with two options; `re-run the last run` gives the plan of `Re-run.`. With no run at
+   all it asks for files instead, as row SL04.
+4. **The setup the page is sent** (`sicopr:set-run`) is made by `run.run_tab_setup` before the plan starts, from the
+   same `run.plan_channels` that `run.carry_out` uses, and its command by `run.child_argv`, the function that also
+   makes the run's own argument list: the run child on the run CSV of the next run id, the channel files in their
+   roles, and the options; the bookkeeping arguments (`--fingerprint`, `--note`) are left out of what is shown.
+   `config` is the source workbook of the working config, and the note says that the run CSV is run, not the
+   workbook. A batch, a plan that runs nothing, and the dashboard of an earlier run send no setup.
+5. **A change made in the Run tab while it is assembled** (cause `user` or `list`) updates its command through
+   `POST runtab`; what `sicopr:set-run` changed itself comes back with cause `panel` and is not sent again, so the
+   two cannot chase each other. A workbook followed in the Config view also updates the command.
+6. **The Run button** is handed to the panel only while the panel has assembled the Run tab; the page sends
+   `sicopr:run-request` cancelable, and the panel takes it with `preventDefault()` and sends `Run the command.` with
+   the files and options of the request, marked `Run button` in the conversation. The history record is that of the
+   phrase. Before any plan, and with no panel installed, the Run button runs the workbook as saved, as before.
+7. **The options are part of the run.** Output dynamic results is `--export-mat`; when the run ends the panel sends
+   `sicopr:show {view: 'dynamic', run, build: true}`, and Results, dynamic builds the dashboard, as a Run-tab run with
+   that box ticked does (SiCoPR's `autoBuildDynamic`). `--eye-under-mlse` goes to the run child, which sets
+   `sicopr.EYE_PLOT_UNDER_MLSE` as `sicopr.py --eye-under-mlse` does, and `result.json` records it. Reuse needs the
+   same `--eye-under-mlse` (it changes the eye plots a run leaves); the export rule of Decision 6 is unchanged.
+8. **Vocabulary.** "dynamic results", "results, dynamic" and "results dynamic" are the dashboard; "dynamic" alone is
+   not. "I'd like" and "I would like" are placed. A run id (`run_0004`) is taken only in a dashboard phrase, where it
+   gives that run's dashboard on its own working config and channel files; anywhere else it is asked about. "the
+   last config and channel(s)" (also "the same" or "the previous") are the config and channel files of the last run:
+   with nothing changed since, a STOP (row RT06), and after an edit in the Config view, a run of the working config.
+9. **Results, dynamic on a run with no `.mat`.** When the result card's Results, dynamic button is used on such a run,
+   the panel says so and offers `Show the dynamic results of the last run.` (or of the run by its id), as a button
+   that puts it in the command box.
+10. **The request guard.** The branch is rebased onto SiCoPR 1.1.2. The panel routes are dispatched inside `do_GET`
+    and `do_POST`, after `Handler._refused`, so they get the same Host, Origin, Sec-Fetch-Site and JSON checks;
+    SiCoPR's `tests\test_gui_server.py` and this repository's `tests\test_gui_api.py` check that a cross-site request
+    to a panel is refused before the panel's `handle()` (or the core) is reached.
