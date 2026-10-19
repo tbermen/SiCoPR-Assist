@@ -149,11 +149,19 @@ def source_of(project):
     return (p, 'workbook') if p else (None, None)
 
 
+def tutor_due(project):
+    """Whether the tutor still comes up on its own: the history holds fewer successful commands than
+    tutor_until_commands (tutor.after's rule). The panel shows its examples under the box only then (Decision 25)."""
+    from sicopr_assist import tutor
+    return tutor.successes(project.read_history()) < read_settings(project)['values']['tutor_until_commands']
+
+
 def state(project, running=False):
-    """GET state: the project line, the source workbook, the pending question, whether a plan is running."""
+    """GET state: the project line, the source workbook, the pending question, whether a plan is running, and whether
+    the examples under the box are due (tutor_due)."""
     if project is None:
         return {'version': __version__, 'project': None, 'line': 'no project folder: use Browse to choose one',
-                'source': None, 'source_kind': None, 'pending': None, 'running': False}
+                'source': None, 'source_kind': None, 'pending': None, 'running': False, 'tutor_due': False}
     try:
         pending = project.read_pending()
     except (OSError, ValueError):
@@ -161,7 +169,7 @@ def state(project, running=False):
     src, kind = source_of(project)
     q = (pending or {}).get('outcome') or None
     return {'version': __version__, 'project': project.root, 'line': working_line(project), 'source': src,
-            'source_kind': kind, 'running': running,
+            'source_kind': kind, 'running': running, 'tutor_due': tutor_due(project),
             'pending': None if q is None else {'seq': pending.get('seq'), 'phrase': pending.get('phrase'),
                                                'question': q.get('question'), 'changes': q.get('changes') or [],
                                                'announce': q.get('announce') or []}}

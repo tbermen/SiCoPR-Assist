@@ -380,8 +380,9 @@ child and a stand-in Rscript, so it needs no R. `tests\test_gui_api.py` drives t
 SiCoPR's GUI does, with a stand-in child (the frozen L4 rows through the panel give what the core gives,
 the Config-view round trip on the four workbooks, runs, Stop, paths, the history, following another
 workbook, the selection handed to the core), and `tests\test_gui_static.py` parses the panel's script
-and checks its ids, its `[hidden]` rules, its events, the command box and the selection line; the checks
+and checks its ids, its `[hidden]` rules, its events and the command box; the checks
 of SiCoPR's real server routing to the panel print SKIP when the SiCoPR in use has no panel slot.
+`tests/test_streamline.py` checks what the panel no longer shows and when it shows the rest (Decision 25).
 `tests\test_selection.py` checks how the selection is read and planned, that the engine is given the
 files in the roles they were selected in, and the example in an empty folder (with
 `SICOPR_ASSIST_E2E = 1`, through the real engine). The build scores are in
@@ -402,12 +403,18 @@ sicopr-assist gui D:\other\project --port 8790 --no-browser
 ```
 
 It starts SiCoPR's `gui\app.py` with the project folder opened and made the run folder. Starting
-SiCoPR's GUI directly also shows the panel, which then asks for the project folder (Browse).
+SiCoPR's GUI directly also shows the panel, which then opens its Settings and asks for the project folder
+(Browse).
 
-- **The panel** shows the project, the working config, and the conversation: each phrase with its
-  PLAN, QUESTION or STOP as on the command line, in short: the plan's steps as a list, a question's
-  options as buttons, the tutor's lines with their example phrases as links, and the long text (what a
-  plan announces, a run's summary) behind a **details** toggle. While a plan runs the panel shows one
+- **The panel shows only what the GUI does not.** Under its title (the slot's header) its top line,
+  once the project has a working config, is that config's short state (`working config run_0005, 2 overrides`); the project folder, Browse
+  and the version are in **Settings**. The conversation shows each phrase with its PLAN, QUESTION or
+  STOP, in short: a plan is one line that says where its effect can be seen (`2 changes, highlighted in
+  Config`, `running in the Run tab`, `3 points: output in the Run tab`, and `using the Run tab's setup`
+  when it ran what the Run tab holds), with its steps and what it announces behind a **details** toggle;
+  a question keeps its text and its options as buttons; a stop keeps its reason. The last three
+  exchanges stay in view; older ones are in **History**, newest first, one line each that opens to the
+  full reply (with every record of the project history folded below them). While a plan runs the panel shows one
   line (`run_0006 running: output in the Run tab`); at the end, the headline result (COM, pass or fail
   against COM Pass threshold) with buttons that show the run in SiCoPR's Results tabs, or for a batch a
   short table, one row per point.
@@ -418,14 +425,15 @@ SiCoPR's GUI directly also shows the panel, which then asks for the project fold
   point in order, each headed with its point.
 - **The command box** is the block at the bottom of the panel, under the label `Type a command`: a text
   area of three lines that grows with what you type. Enter sends, Shift+Enter starts a new line, Up and
-  Down recall earlier phrases. Under it are up to four phrases that work right now (`Run the example.`
-  in a new project; phrases written with the names of your config after that); a click puts one in the
-  box. The block stays in view while the conversation scrolls.
-- **The selection in the tabs.** The line above the command box says what is selected: the workbook of
-  the Config tab and the THRU, FEXT and NEXT files picked in the Run tab, for example
-  `Selected: config.xlsx; THRU thru.s4p; 3 FEXT, 4 NEXT`. `Run the selected config and channels.` (the
-  **Run selection** button sends it) runs exactly those files, in the roles you gave them in the Run
-  tab. "the selected", "the specified" or "the chosen" config, channel, channels or files, "in the tabs",
+  Down recall earlier phrases. While you are new (fewer successful commands than `tutor_until_commands`,
+  5) and the box is empty, up to four phrases that work right now are shown under it (`Run the example.`
+  in a new project; phrases written with the names of your config after that), and the tutor's examples
+  after a plan go there too; a click puts one in the box. After that they show only when you ask:
+  `What can I say?`. The block stays in view while the conversation scrolls.
+- **The selection in the tabs.** The workbook of the Config tab and the THRU, FEXT and NEXT files
+  picked in the Run tab are handed to the core with every phrase; the Run tab shows them, so the panel
+  does not. `Run the selected config and channels.` runs exactly those files, in the roles you gave them
+  in the Run tab. "the selected", "the specified" or "the chosen" config, channel, channels or files, "in the tabs",
   "the selection" and "what is selected" all mean that selection. After a run,
   `Re-run with the selected channel.` keeps the config and changes only the channel files. With no
   channel picked, the tool asks. On the command line there is no selection, so those phrases ask for
@@ -435,7 +443,7 @@ SiCoPR's GUI directly also shows the panel, which then asks for the project fold
   runs them, and the command box shows the command the panel runs, which is the working config's run
   CSV (`.sicopr\configs\run_NNNN.csv`) and not the workbook, with a line saying so. The Run tab's own
   controls stay live: what you change there (a file, Output dynamic results, `--eye-under-mlse`) comes
-  back into the selection line and the command, and `Run the command.` (or `Run it.`,
+  back into the command and what the panel hands the core, and `Run the command.` (or `Run it.`,
   `Run what is in the Run tab`, `Run the Run tab`) runs exactly that setup through the panel, with
   history and reuse. While the Run tab is assembled this way, its **Run sicopr.py** button does the same
   as `Run the command.`: one history record, the same plan, its output in the Run tab. Output dynamic results
@@ -473,7 +481,8 @@ Version 2 was built in phases: the tutor and feedback export (above) in 0.4.0, t
 channel download in 0.6.0, and the GUI in 0.7.0. Version 0.8.0 follows the first GUI session: the
 selection in the tabs, the command box, and the example that runs from an empty folder. Version 0.9.0
 follows the second: the Run tab and the panel as one. Version 0.10.0 follows the third: GUI first, with a
-run's output in the Run tab, and three phrasings of that session.
+run's output in the Run tab, and three phrasings of that session. Version 0.11.0 streamlines the panel: it shows
+only what SiCoPR's GUI does not.
 
 ## What is known to be incomplete
 

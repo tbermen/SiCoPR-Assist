@@ -9,9 +9,8 @@
  * a workbook opened there is followed (sicopr:config to /open). Every action is in the project's history.
  *
  * The page also tells the panel what is selected in its tabs: the workbook of the Config tab (sicopr:config) and the
- * THRU, FEXT and NEXT files of the Run tab (sicopr:channels). The panel keeps that selection, shows it in a line
- * above the command box, and hands it to the core with every phrase, so "the selected config and channels" means
- * those files.
+ * THRU, FEXT and NEXT files of the Run tab (sicopr:channels). The panel keeps that selection and hands it to the core
+ * with every phrase, so "the selected config and channels" means those files.
  *
  * The Run tab and the panel work as one (Decision 23). A PLAN that runs COM fills the Run tab (sicopr:set-run): its
  * files, its two options, and in its command box the command the panel will run, which is the working config's run
@@ -24,18 +23,21 @@
  * there (sicopr:stop-request), and the page shows the Run tab when it starts, unless the user is in the middle of an
  * edit in Config. The panel keeps short replies: the plan as a short list with the long text folded behind details,
  * a question with its buttons, one line while a plan runs, then the headline result (or a batch's short table) with
- * the buttons that open it in Results. */
+ * the buttons that open it in Results.
+ *
+ * The panel shows only what the GUI does not (Decision 25). No selection line: the Run tab shows its files and options,
+ * and a reply that used them says so. The project folder, Browse and the version are in Settings; the top line is
+ * only the working config (the title is the slot's header). A plan is one line that says where its effect can be seen, its steps and
+ * announcements under details. The examples under the box show only while it is empty and the user is new (fewer
+ * successful commands than tutor_until_commands), or after What can I say?. The last three exchanges stay in view;
+ * older ones go to History, newest first, one line each. */
 (function () {
   const API = '/panel/assist/api/';
   const ROOT = document.getElementById('panel-assist');
   if (!ROOT) return;
 
   ROOT.innerHTML = `
-    <div class="aline">
-      <span id="aProject" class="apath">no project folder</span>
-      <button id="aBrowse" class="ghost asmall">Browse&hellip;</button>
-    </div>
-    <div id="aWorking" class="amuted"></div>
+    <div id="aTop" class="atop" hidden><span id="aWorking" class="amuted"></span></div>
     <div id="aConv" class="aconv"></div>
     <div id="aRunning" class="arunning" hidden>
       <span id="aRunLine"></span>
@@ -43,10 +45,6 @@
     </div>
     <div id="aPending" class="apending" hidden></div>
     <div id="aCommand" class="acommand">
-      <div class="aselrow">
-        <span id="aSelLine" class="aselline">Selected: nothing yet</span>
-        <button id="aRunSel" class="ghost asmall">Run selection</button>
-      </div>
       <label for="aCmd" class="alabel">Type a command</label>
       <div class="abox">
         <textarea id="aCmd" rows="3" spellcheck="false" autocomplete="off"
@@ -54,10 +52,19 @@
         <button id="aSend">Send</button>
       </div>
       <div class="ahint">Enter sends. Shift+Enter starts a new line. Up and Down recall earlier commands.</div>
-      <div id="aExamples" class="aexamples"></div>
+      <div id="aExamples" class="aexamples" hidden></div>
     </div>
-    <details id="aSettings" class="afold"><summary>Settings</summary><pre id="aSetLines" class="aset"></pre></details>
-    <details id="aHistory" class="afold"><summary>History</summary><div id="aHistLines" class="aset"></div></details>
+    <details id="aSettings" class="afold"><summary>Settings</summary>
+      <div class="aline">
+        <span id="aProject" class="apath">no project folder</span>
+        <button id="aBrowse" class="ghost asmall">Browse&hellip;</button>
+      </div>
+      <div id="aVersion" class="amuted"></div>
+      <pre id="aSetLines" class="aset"></pre></details>
+    <details id="aHistory" class="afold"><summary>History</summary>
+      <div id="aOlder" class="aolder"></div>
+      <details id="aRecords" class="adetails"><summary>every record of the project's history</summary>
+        <div id="aHistLines" class="aset"></div></details></details>
     <details id="aLlm" class="afold"><summary>Language model</summary>
       <p class="amuted">none: this version is rules-based. A language model, when one is added, is configured here; it
       may turn loose wording into a phrase, and the core checks that phrase as it checks typed input.</p></details>`;
@@ -80,11 +87,17 @@
   // what is selected in the tabs: the workbook of the Config tab and the channel files of the Run tab (Decision 20)
   const SELECTION = { config: null, thru: null, fext: [], next: [],
     options: { export_mat: false, eye_under_mlse: false } };
-  let RUN_PHRASE = 'Run the selected config and channels.';
   const RUN_COMMAND = 'Run the command.';   // what the Run tab's Run button is, while the panel has it assembled
   let ASSEMBLED = null;     // the setup this panel last put in the Run tab (sicopr:set-run), or null
   let JOB_TAB = null;       // the Run tab setup of the plan being carried out, if it has one
   const BOX_MAX_PX = 220;   // the command box grows with its content up to here, then scrolls
+  const IN_VIEW = 3;        // exchanges kept in view; older ones go to the History fold (Decision 25)
+  let CUR = null;           // the exchange the replies of the last command go to
+  let TUTOR = null;         // the tutor of the last PLAN (new user, or What can I say?), shown under the box
+  // what the core's pattern holds when a phrase used the GUI's setup (the selection, or the Run tab)
+  const GUI_SETUP = ['selection', 'run tab'];
+  const RUN_OPS = ['run_com', 'run_batch', 'build_matrix', 'export_mat', 'download'];   // api.py _RUN_OPS
+  const SET_OPS = ['set_param', 'add_param'];
 
   function emit(name, detail) {
     window.dispatchEvent(new CustomEvent('sicopr:' + name, { detail }));
@@ -146,8 +159,35 @@
     box.appendChild(d);
   }
 
-  /* A card for an outcome: the plan as a short list of its steps, the question with a button per option, or the stop;
-   * what the outcome announces is under details. */
+  /* A plan in one line that says where its effect can be seen (Decision 25): 2 changes, highlighted in Config;
+   * running in the Run tab; 3 points: output in the Run tab. A plan that used the GUI's setup says so first. */
+  function planLine(out) {
+    const ops = (out.steps || []).map((s) => s.op || s);
+    const parts = [];
+    const n = Array.isArray(out.changes) ? out.changes.length : ops.filter((o) => SET_OPS.includes(o)).length;
+    if (n) parts.push(n + ' change' + (n === 1 ? '' : 's') + ', highlighted in Config');
+    const points = (out.points || []).length;
+    if (points) parts.push(points + ' points: output in the Run tab');
+    else if (ops.some((o) => RUN_OPS.includes(o))) parts.push('running in the Run tab');
+    // a new user's plans end with show_tutor; only a plan that is nothing else (What can I say?) is named by it
+    const own = ops.filter((o) => o !== 'show_tutor');
+    if (!parts.length) {
+      parts.push(own.length ? own.join(' > ') + ': its lines below' : 'examples under the command box');
+    }
+    const used = (out.pattern || '').split('; ').some((p) => GUI_SETUP.includes(p));
+    return (used ? "using the Run tab's setup; " : '') + parts.join('; ');
+  }
+
+  /* The short form of an outcome, for the one line of an exchange in History. */
+  function outLine(out) {
+    if (!out) return '';
+    if (out.type === 'STOP') return 'STOP: ' + (out.reason || '');
+    if (out.type === 'QUESTION') return 'QUESTION: ' + ((out.question || {}).text || '');
+    return planLine(out);
+  }
+
+  /* A card for an outcome: the plan as one line, with its steps and announcements under details; the question with a
+   * button per option; or the stop, with its reason. */
   function card(out, opts) {
     const box = el('div', 'acard t' + out.type.toLowerCase());
     if (out.type === 'STOP') {
@@ -164,13 +204,13 @@
       });
       box.appendChild(row);
     } else {
-      box.appendChild(el('div', 'aplan', 'PLAN:'));
-      const ol = el('ol', 'asteps');
-      for (const s of out.steps || []) ol.appendChild(el('li', '', s.op || s));
-      box.appendChild(ol);
+      box.appendChild(el('div', 'aoneline', planLine(out)));
     }
-    details(box, out.announce);
-    tutorLines(box, out.tutor);       // for a PLAN too: its run's lines are in the Run tab, not here
+    const steps = out.type === 'PLAN' ? (out.steps || []).map((s, i) => (i + 1) + '. ' + (s.op || s)) : [];
+    details(box, steps.concat(out.announce || []));
+    // a PLAN's tutor for a new user, and What can I say?, show under the command box; the tutor after a miss or on
+    // trouble stays with the reply it explains
+    if (out.type !== 'PLAN' || !out.tutor || out.tutor.why === 'trouble') tutorLines(box, out.tutor);
     return box;
   }
 
@@ -196,19 +236,42 @@
     box.appendChild(t);
   }
 
+  /* An exchange: what was said, its card, and later the replies to it (a result, a note). The last IN_VIEW stay in
+   * view; an older one goes to the History fold as one line that opens to its full reply, newest first. */
   function entry(said, out, how) {
     const e = el('div', 'aentry');
     const h = el('div', 'asaid' + (how ? ' aview' : ''), (how ? how + ': ' : '> ') + said);
     e.appendChild(h);
     if (out) e.appendChild(card(out));
+    e.dataset.line = h.textContent + (out ? ': ' + outLine(out) : '');
     $a('#aConv').appendChild(e);
+    CUR = e;
+    keepThree();
     scrollDown();
     return e;
   }
 
-  function note(text, cls) {
-    $a('#aConv').appendChild(el('div', 'anote ' + (cls || ''), text));
+  function keepThree() {
+    const conv = $a('#aConv');
+    const older = $a('#aOlder');
+    let shown = [...conv.children].filter((x) => x.classList.contains('aentry'));
+    while (shown.length > IN_VIEW) {
+      const e = shown.shift();
+      const d = el('details', 'aolditem');
+      d.appendChild(el('summary', '', e.dataset.line || ''));
+      d.appendChild(e);
+      older.insertBefore(d, older.firstChild);          // newest first
+    }
+  }
+
+  /* A reply to the last command goes into its exchange, so it moves to History with it. */
+  function reply(node) {
+    (CUR && CUR.parentNode === $a('#aConv') ? CUR : $a('#aConv')).appendChild(node);
     scrollDown();
+  }
+
+  function note(text, cls) {
+    reply(el('div', 'anote ' + (cls || ''), text));
   }
 
   function pinned(pending) {
@@ -224,10 +287,15 @@
   /* --------------------------------------------------------------- state */
   async function refresh() {
     STATE = await call('state');
+    // the project, Browse and the version are in Settings; the top line, only the working config
     $a('#aProject').textContent = STATE.project || 'no project folder: use Browse';
     $a('#aProject').title = STATE.project || '';
-    $a('#aWorking').textContent = 'SiCoPR-Assist ' + STATE.version + ' - ' + STATE.line;
+    $a('#aVersion').textContent = 'SiCoPR-Assist ' + STATE.version;
+    // (the title is the slot's own header, which SiCoPR's GUI gives every panel)
+    $a('#aWorking').textContent = STATE.project && /^working config /.test(STATE.line || '') ? STATE.line : '';
+    $a('#aTop').hidden = !$a('#aWorking').textContent;
     pinned(STATE.pending);
+    showExamples();
     return STATE;
   }
 
@@ -282,34 +350,48 @@
     const box = $a('#aCmd');
     box.value = text;
     fitBox();
+    showExamples();
     box.focus();
   }
 
-  /* The selection line follows the tabs. It is asked from the server, which says what the core will be handed. */
-  async function syncSelection() {
-    if (!STATE || !STATE.project) return;
-    const r = await call('selection', { selection: SELECTION });
-    if (r.error) return;
-    $a('#aSelLine').textContent = r.line;
-    $a('#aSelLine').title = [r.selection.config, r.selection.thru].concat(r.selection.fext, r.selection.next)
-      .filter(Boolean).join('\n');
-    RUN_PHRASE = r.phrase || RUN_PHRASE;
+  /* The examples under the box show only when they help (Decision 25): while the box is empty and the history holds
+   * fewer successful commands than tutor_until_commands (the server says so, tutor_due), and always after What can I
+   * say? (row TU03); never while a plan runs. */
+  function showExamples() {
+    const host = $a('#aExamples');
+    const asked = !!(TUTOR && TUTOR.why === 'asked');
+    const due = !!(STATE && STATE.tutor_due) && !$a('#aCmd').value;
+    host.hidden = $a('#aCmd').disabled || !host.childElementCount || !(asked || due);
   }
 
-  /* Up to four phrases that work now, under the command box; clicking one puts it in the box (Decision 21). */
+  /* Up to four phrases that work now, under the command box; clicking one puts it in the box (Decision 21). After a
+   * PLAN with the tutor's lines (a new user's, or What can I say?), those lines are shown here instead. */
   async function loadExamples() {
     if (!STATE || !STATE.project) return;
-    const r = await call('examples', { selection: SELECTION });
     const host = $a('#aExamples');
-    host.textContent = '';
-    if (r.error || !(r.phrases || []).length) return;
-    host.appendChild(el('span', 'amuted', 'Examples (click one to put it in the box):'));
-    for (const p of r.phrases) {
-      const b = el('button', 'aexample', p);
-      b.type = 'button';
-      b.addEventListener('click', () => fillBox(p));
-      host.appendChild(b);
+    if (TUTOR) {
+      host.textContent = '';
+      tutorLines(host, TUTOR);
+      showExamples();
+      return;
     }
+    if (!STATE.tutor_due) {                       // not shown, so not asked for
+      host.textContent = '';
+      showExamples();
+      return;
+    }
+    const r = await call('examples', { selection: SELECTION });
+    host.textContent = '';
+    if (!r.error && (r.phrases || []).length) {
+      host.appendChild(el('span', 'amuted', 'Examples (click one to put it in the box):'));
+      for (const p of r.phrases) {
+        const b = el('button', 'aexample', p);
+        b.type = 'button';
+        b.addEventListener('click', () => fillBox(p));
+        host.appendChild(b);
+      }
+    }
+    showExamples();
   }
 
   /* --------------------------------------------------------- the Run tab */
@@ -338,9 +420,12 @@
     $a('#aCmd').value = '';
     fitBox();
     RECALL = -1;
+    TUTOR = null;
     if (!PHRASES.length || PHRASES[0] !== phrase) PHRASES.unshift(phrase);
     const r = await call('handle', { phrase, selection: SELECTION });
     if (r.error) { note(r.error, 'abad'); return; }
+    const tu = r.outcome.tutor;
+    TUTOR = r.outcome.type === 'PLAN' && tu && tu.why !== 'trouble' && (tu.lines || []).length ? tu : null;
     entry(phrase, r.outcome, how);
     if (r.refused) note(r.refused, 'abad');
     JOB_TAB = r.job ? (r.run_tab || null) : null;
@@ -354,8 +439,7 @@
   function busyUi(on) {
     $a('#aCmd').disabled = on;
     $a('#aSend').disabled = on;
-    $a('#aRunSel').disabled = on;
-    $a('#aExamples').hidden = on;       // no phrase can be sent while a plan runs
+    showExamples();                     // hidden while a plan runs: no phrase can be sent
     $a('#aRunning').hidden = !on;       // the one line the panel shows while it runs; its output is in the Run tab
   }
 
@@ -430,7 +514,10 @@
   async function finished(st) {
     for (const o of st.outcomes || []) entry('(the plan made from the download)', o, 'next');
     if (st.error) note('the plan could not be carried out: ' + st.error, 'abad');
-    const done = st.done || {};
+    const done = Object.assign({}, st.done || {});
+    // the tutor's lines of the plan's show_tutor step are under the box (Decision 25), not in its reply
+    const taught = new Set((((TUTOR || {}).lines) || []).map((x) => x.trim()));
+    done.lines = (done.lines || []).filter((x) => !taught.has(String(x).trim()));
     if (st.stopped) note('stopped: the run under way was terminated and nothing after it started', 'abad');
     const runs = [...new Set(done.run_ids || [])];
     const batchSeq = (done.points || []).length ? st.seq : null;
@@ -438,7 +525,7 @@
       const box = el('div', 'acard aresult');
       for (const line of (done.lines || []).slice(0, 3)) box.appendChild(el('div', 'aann', line));
       details(box, (done.lines || []).slice(3));
-      if ((done.lines || []).length) $a('#aConv').appendChild(box);
+      if ((done.lines || []).length) reply(box);
     }
     if (batchSeq) {
       const b = await call('batch?seq=' + batchSeq);
@@ -447,7 +534,8 @@
         box.appendChild(el('div', 'aplan', 'batch of ' + (done.points || []).length + ' points'));
         box.appendChild(batchTable(b));
         details(box, (done.lines || []).concat([b.csv]));
-        $a('#aConv').appendChild(box);
+        reply(box);
+        if (CUR) CUR.dataset.line += '; batch of ' + (done.points || []).length + ' points done';
       }
     } else {
       for (const rid of runs) {
@@ -493,7 +581,8 @@
     }
     box.appendChild(row);
     details(box, (more || r.lines || []));
-    $a('#aConv').appendChild(box);
+    reply(box);
+    if (CUR) CUR.dataset.line += '; ' + r.headline;
     return r;
   }
 
@@ -507,8 +596,7 @@
     b.type = 'button';
     b.addEventListener('click', () => fillBox(phrase));
     box.appendChild(b);
-    $a('#aConv').appendChild(box);
-    scrollDown();
+    reply(box);
   }
 
   /* --------------------------------------------------- the Config view */
@@ -520,7 +608,6 @@
     (async () => {
       if (!STATE) await refresh();
       if (!STATE.project) return;
-      await syncSelection();
       const same = STATE.source && norm(STATE.source) === norm(d.path);
       if (d.cause === 'user' && !same) {
         // another workbook opened in the Config view: Assist follows (GUI_DESIGN.md section 6)
@@ -550,8 +637,8 @@
       .catch(() => {});
   });
 
-  /* The channel files picked in the Run tab (Decision 20): kept, shown in the selection line, and handed to the
-   * core with the next phrase. */
+  /* The channel files and options of the Run tab (Decisions 20 and 23): kept and handed to the core with the next
+   * phrase. The Run tab shows them, so the panel does not (Decision 25). */
   window.addEventListener('sicopr:channels', (e) => {
     const d = e.detail || {};
     SELECTION.thru = d.thru || null;
@@ -561,7 +648,6 @@
     SELECTION.options = { export_mat: o.export_mat === true, eye_under_mlse: o.eye_under_mlse === true };
     (async () => {
       if (!STATE) await refresh();
-      await syncSelection();
       // a change the user made in the Run tab while it holds this panel's setup: its command follows (Decision 23);
       // a change the panel made itself (cause panel) needs nothing more
       if (ASSEMBLED && d.cause !== 'panel' && STATE.project) await reassemble();
@@ -627,10 +713,12 @@
     call('project', { path: d.path }).then(async (r) => {
       if (r.error) { note(r.error, 'abad'); return; }
       $a('#aConv').textContent = '';
+      $a('#aOlder').textContent = '';
+      CUR = null;
+      TUTOR = null;
       await refresh();
       await loadHistory();
       showSource();
-      await syncSelection();
       await loadExamples();
     }).catch(() => {});
   });
@@ -641,8 +729,7 @@
   });
   $a('#aSend').addEventListener('click', () => send($a('#aCmd').value).catch((x) => note(x.message, 'abad')));
   $a('#aToRun').addEventListener('click', () => emit('show', { view: 'run' }));
-  $a('#aRunSel').addEventListener('click', () => send(RUN_PHRASE).catch((x) => note(x.message, 'abad')));
-  $a('#aCmd').addEventListener('input', fitBox);
+  $a('#aCmd').addEventListener('input', () => { fitBox(); showExamples(); });
   $a('#aCmd').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {             // Enter sends; Shift+Enter is a new line in the box
       e.preventDefault();
@@ -654,6 +741,7 @@
       RECALL = Math.max(-1, Math.min(PHRASES.length - 1, RECALL + (e.key === 'ArrowUp' ? 1 : -1)));
       $a('#aCmd').value = RECALL < 0 ? '' : PHRASES[RECALL];
       fitBox();
+      showExamples();
     }
   });
   $a('#aSettings').addEventListener('toggle', () => {
@@ -686,19 +774,22 @@
       const e = entry(r.phrase || '', out, ['edit', 'open'].includes(r.kind) ? 'config view' : '');
       e.classList.add('aold');
     }
+    CUR = null;                          // a reply from now on is to a new command
   }
 
   async function init() {
     focusBox(100);                       // the command box is where a new user starts (Decision 21)
     await refresh();
     if (!STATE.project) {
-      note('Choose the project folder with Browse: the folder that holds (or will hold) .sicopr.', 'amuted');
+      // Browse is in Settings (Decision 25): opened, so a first start shows where to choose the folder
+      $a('#aSettings').open = true;
+      note('Choose the project folder with Browse, in Settings: the folder that holds (or will hold) .sicopr.',
+        'amuted');
       return;
     }
     await loadHistory();
     showSource();
     if (STATE.running) startJob();
-    await syncSelection();
     await loadExamples();
   }
   init().catch((x) => report('init', String(x.message || x)));

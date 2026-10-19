@@ -3,6 +3,10 @@
 /* The SiCoPR-Assist panel. Colours come from SiCoPR's own variables, so it follows the page's theme. */
 #panel-assist { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 #panel-assist .aline { display: flex; align-items: center; gap: 8px; }
+/* the top line (Decision 25): with a working config, its short state (the title is the slot's header); the project
+   is in Settings */
+#panel-assist .atop { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+#panel-assist .atop[hidden] { display: none; }
 #panel-assist .apath { flex: 1; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
 #panel-assist .amuted { color: var(--muted); font-size: 12px; }
 #panel-assist .asmall { padding: 3px 8px; font-size: 12px; }
@@ -21,7 +25,8 @@
 #panel-assist .aplan, #panel-assist .aq { font-weight: 600; margin-top: 4px; }
 #panel-assist .astop { color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 4px 8px;
   margin-top: 4px; }
-#panel-assist .asteps { margin: 4px 0 0; padding-left: 22px; font-family: ui-monospace, monospace; font-size: 12px; }
+/* a plan in one line that says where its effect can be seen; its steps are under details (Decision 25) */
+#panel-assist .aoneline { font-weight: 600; margin-top: 4px; overflow-wrap: anywhere; }
 #panel-assist .aopts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 #panel-assist .atutor { margin-top: 6px; color: var(--muted); font-size: 12px; }
 #panel-assist .alink { color: var(--accent); }
@@ -45,8 +50,6 @@
    scrolls above it. */
 #panel-assist .acommand { position: sticky; bottom: 0; z-index: 2; display: flex; flex-direction: column; gap: 5px;
   background: var(--panel); border-top: 2px solid var(--accent); padding: 8px 0 6px; }
-#panel-assist .aselrow { display: flex; align-items: center; gap: 8px; }
-#panel-assist .aselline { flex: 1; font-size: 12px; word-break: break-all; }
 #panel-assist .alabel { font-size: 14px; font-weight: 700; }
 #panel-assist .abox { display: flex; gap: 6px; align-items: stretch; }
 #panel-assist .abox textarea { flex: 1; min-height: 4.8em; max-width: none; box-sizing: border-box; resize: vertical;
@@ -64,5 +67,11 @@
 #panel-assist .afold > summary { cursor: pointer; color: var(--muted); font-size: 12px; text-transform: uppercase;
   letter-spacing: .06em; }
 #panel-assist .aset { font-size: 11.5px; white-space: pre-wrap; max-height: 30vh; overflow: auto; }
+/* older exchanges in History, newest first: one line each, opened to the full reply */
+#panel-assist .aolder { display: flex; flex-direction: column; gap: 4px; margin: 4px 0; }
+#panel-assist .aolder[hidden] { display: none; }
+#panel-assist .aolditem > summary { cursor: pointer; font-family: ui-monospace, monospace; font-size: 11.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#panel-assist .aolditem[open] > summary { white-space: normal; overflow-wrap: anywhere; }
 #panel-assist .ahrec { font-family: ui-monospace, monospace; font-size: 11px; border-bottom: 1px solid var(--line);
   padding: 2px 0; }

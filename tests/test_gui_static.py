@@ -193,26 +193,17 @@ check('the command box takes the focus on load, once it is on screen, and never 
       and 'document.activeElement === document.body' in fn('focusBox'), fn('focusBox'))
 fit = fn('fitBox')
 check('the command box grows with its content', 'box.scrollHeight + 4' in fit and "box.style.height = 'auto'" in fit
-      and "addEventListener('input', fitBox)" in src and 'fitBox();' in fn('fillBox'), fit)
+      and "addEventListener('input', () => { fitBox();" in src and 'fitBox();' in fn('fillBox'), fit)
 
-sync = fn('syncSelection')
 cfg_ev, ch_ev = heard_body('config'), heard_body('channels')
-check('the selection line follows sicopr:config and sicopr:channels',
-      'SELECTION.config = d.path' in cfg_ev and 'await syncSelection()' in cfg_ev
-      and 'SELECTION.thru = d.thru' in ch_ev and 'SELECTION.fext = (d.fext' in ch_ev
-      and 'SELECTION.next = (d.next' in ch_ev and 'await syncSelection()' in ch_ev
-      and "call('selection', { selection: SELECTION })" in sync and "$a('#aSelLine').textContent = r.line" in sync,
-      'config handler %r\nchannels handler %r' % (cfg_ev[:160], ch_ev[:300]))
-check('the selection line and the Run selection button sit above the command box',
-      cmd and 0 <= cmd.group(1).find('id="aSelLine"') < cmd.group(1).find('id="aRunSel"') < cmd.group(1).find('id="aCmd"')
-      and '>Run selection</button>' in cmd.group(1), 'the order in the template')
+# Decision 25 (Phase V2-9) took the selection line and its Run selection button away: the Run tab shows the files and
+# options. The selection itself is still kept from the tabs and handed to the core (tests/test_streamline.py).
+check('the selection follows sicopr:config and sicopr:channels',
+      'SELECTION.config = d.path' in cfg_ev and 'SELECTION.thru = d.thru' in ch_ev and 'SELECTION.fext = (d.fext' in ch_ev
+      and 'SELECTION.next = (d.next' in ch_ev,
+      'config handler %r, channels handler %r' % (cfg_ev[:160], ch_ev[:300]))
 from sicopr_assist import core as _core  # noqa: E402
 from sicopr_assist.panel import api as _api  # noqa: E402
-first_phrase = re.search(r"let RUN_PHRASE = '([^']*)';", src)
-check('Run selection sends the phrase Run the selected config and channels.',
-      'send(RUN_PHRASE)' in wired('aRunSel', 'click') and first_phrase
-      and first_phrase.group(1) == _core.RUN_SELECTION == 'Run the selected config and channels.'
-      and 'RUN_PHRASE = r.phrase || RUN_PHRASE' in sync, (wired('aRunSel', 'click')[:120], first_phrase and first_phrase.group(1)))
 check('every phrase is posted with the selection, so the core is handed it as data',
       "call('handle', { phrase, selection: SELECTION })" in fn('send'), 'send() posts the phrase without the selection')
 ex = fn('loadExamples')
@@ -223,8 +214,8 @@ check('an example phrase fills the command box: up to four are asked from the pa
 check('the examples are asked again when the config in view changes and when a command ends',
       'loadExamples()' in cfg_ev and 'loadExamples()' in fn('send') and 'loadExamples()' in fn('finished')
       and 'await loadExamples()' in fn('init'), 'a call of loadExamples is missing')
-check('while a plan runs, the box, Send and Run selection are off together',
-      all(("$a('#%s').disabled = on" % i) in fn('busyUi') for i in ('aCmd', 'aSend', 'aRunSel')), fn('busyUi'))
+check('while a plan runs, the box and Send are off together',
+      all(("$a('#%s').disabled = on" % i) in fn('busyUi') for i in ('aCmd', 'aSend')), fn('busyUi'))
 
 
 # ---- the Run tab and the panel as one (Decision 23; gate V7.4)
@@ -299,9 +290,9 @@ check('a batch\'s reply is a short table, one row per point, with its lines unde
       and 'details(box, (done.lines || []).concat([b.csv]));' in fin
       and "for (const line of b.lines) box.appendChild" not in fin, fin[:900])
 cd = fn('card')
-check('the long text of a reply (its announcements) folds behind a details toggle; the plan is a short list',
-      'details(box, out.announce);' in cd and "for (const line of out.announce" not in cd
+check('the long text of a reply (its announcements) folds behind a details toggle; the plan is one line (Decision 25)',
+      'details(box, steps.concat(out.announce || []));' in cd and "for (const line of out.announce" not in cd
       and "const d = el('details', 'adetails');" in fn('details') and "el('summary', '', 'details ('" in fn('details')
-      and "ol.appendChild(el('li', '', s.op || s));" in cd, cd[:800])
+      and "el('div', 'aoneline', planLine(out))" in cd, cd[:800])
 
 finish()

@@ -25,6 +25,14 @@ SiCoPR's own. The panel keeps short replies: the plan as a short list, questions
 the headline result or a batch's short table, with long text behind a details toggle. Sections 4.1, 5, 7, 7a, 8 and 12
 were changed to match; section 16 lists what was built.
 
+Changed in Phase V2-9 (19 October 2026, SiCoPR-Assist 0.11.0): the panel streamlined (Decision 25). **The panel shows
+only what the GUI does not.** No selection line or Run selection button (the Run tab shows its files and options); the
+project folder, Browse and the version in Settings, the top line only the working config; a plan as one line
+that says where its effect can be seen, its steps under details; the examples under the box only while it is empty and
+the user is new, or after `What can I say?`; the last three exchanges in view and older ones in History. Only the
+panel's page changed (and `GET state` gained `tutor_due`); the core and SiCoPR's branch did not. Sections 5, 5a, 8 and
+11 were changed to match; section 17 lists what was built.
+
 Written against SiCoPR-Assist 0.6.0 (`f884c1f`) and SiCoPR `55c3f71` (1.1.1), whose GUI was read in full
 (`gui\app.py`, `config_io.py`, `runner.py`, `schematic.py`, `static\`, `README.md`) and run once from a
 temporary folder (`--no-browser --dir <temp> --run-dir <temp>`, port 8799) to see its layout, views and
@@ -187,9 +195,10 @@ when the panel asks for a project folder through Browse.
 
 From top to bottom:
 
-1. **Project line.** The project folder (Decision 3: where `.sicopr\` lives), Browse to change it, the
-   SiCoPR-Assist version, and the working config in one line: `working config run_0003, 2 overrides, 1 edit
-   from the config view`.
+1. **Top line.** Once the project has a working config, its short state: `working config run_0003, 2
+   overrides, 1 edit from the config view` (the title is the slot's header, which SiCoPR's GUI gives every panel). *Since Phase V2-9* the project folder (Decision 3: where
+   `.sicopr\` lives), Browse to change it and the SiCoPR-Assist version are in Settings (item 6); before, they
+   were on this line.
 2. **The conversation.** Each command as typed, then its outcome as a card:
    - PLAN: the announced lines, then the numbered steps (as `cli.show` prints them);
    - QUESTION: the question text and one button per option. A button sends the option text as the next
@@ -199,7 +208,16 @@ From top to bottom:
    - STOP: the reason, in the problem style SiCoPR uses.
    The tutor's lines (Decision 11) follow the card as on the command line; each example phrase is a link that
    puts it in the command box. *Since Phase V2-8* a card is short: the plan's steps as a list, the question with its
-   buttons, the stop's reason; the announced lines fold behind a `details` toggle.
+   buttons, the stop's reason; the announced lines fold behind a `details` toggle. *Since Phase V2-9* a plan is one
+   line that says where its effect can be seen (`2 changes, highlighted in Config`, `running in the Run tab`, `3
+   points: output in the Run tab`, `examples under the command box`, or for a plan that only shows or writes
+   something `show_config: its lines below`), first `using the Run tab's setup` when the phrase used the GUI's setup
+   (the core's pattern names the selection or the Run tab); the numbered steps and the announcements are under
+   `details`. A plan's tutor lines for a new user, and those of `What can I say?`, go under the command box (item
+   5); the tutor's lines after a miss or on trouble stay in the card they explain. The last three exchanges (a
+   command, its card, and the replies to it: result, notes) stay in view; an older one moves to the History fold
+   (item 6a), newest first, as one line (what was said, its one-line reply, its run's headline) that opens to the
+   full exchange.
 3. **One running line** while a plan is carried out (`run_0006 running: output in the Run tab`, and for a batch its
    point), with a button that shows the Run tab. *Since Phase V2-8* the run's lines go to the Run tab's Output, not
    the panel (section 7); before, the panel had a progress area of its own.
@@ -210,7 +228,8 @@ From top to bottom:
    block at the bottom of the panel, set apart from the conversation by a rule and a border in the accent
    colour, and kept in view: the conversation scrolls above it, the block does not (it sticks to the bottom
    of the panel). From top to bottom:
-   - the selection line and the **Run selection** button (section 5a);
+   - *until Phase V2-9:* the selection line and the **Run selection** button (section 5a); both are gone, since
+     the Run tab shows the files and options;
    - the label `Type a command`;
    - a text area of three lines that grows with its content (up to about twelve lines, then it scrolls), with
      Send beside it. Enter sends; Shift+Enter starts a new line (a phrase typed on several lines is sent as
@@ -223,10 +242,18 @@ From top to bottom:
      row TU04): with no run yet, the phrase that runs the one config and the one channel file of the folder
      (when there is exactly one of each) and `Run the example.`; once there is a working config, the tutor's
      examples, written with the names of that config, which is the one the Config view shows. They are asked
-     again when the config in view changes and when a command ends, and hidden while a plan runs.
-   While a plan runs, the box, Send and Run selection are off, and Stop (in the Run tab, since Phase V2-8) is live.
-6. **Settings** (folded): the settings in force with where each came from (`core.settings_lines`); they are
-   changed by phrase (`Tutor off`) as on the command line.
+     again when the config in view changes and when a command ends, and hidden while a plan runs. *Since Phase
+     V2-9* they show only while the box is empty and the history holds fewer successful commands than
+     `tutor_until_commands` (`GET state` says so in `tutor_due`, by the tutor's own rule, `tutor.successes`); the
+     tutor's lines of a plan for a new user show here the same way, and those of `What can I say?` always (row
+     TU03), until the next command. Typing hides them; emptying the box shows them again.
+   While a plan runs, the box and Send are off, and Stop (in the Run tab, since Phase V2-8) is live.
+6. **Settings** (folded): *since Phase V2-9* first the project folder with Browse and the SiCoPR-Assist version
+   (opened by itself when the panel has no project folder, so Browse is in sight), then the settings in force with
+   where each came from (`core.settings_lines`); they are changed by phrase (`Tutor off`) as on the command line.
+6a. **History** (folded, Phase V2-9): the exchanges older than the last three, newest first, one line each that
+   opens to the full exchange; below them, folded, every record of the project history (as before Phase V2-9,
+   when the fold held only those).
 7. **Language model** (folded, reserved): shows `none: this version is rules-based`. When the layer is added
    it is configured here. It works upstream of the core and never past it (version 1 prompt, section 1): it
    may turn loose wording into a phrase or propose `changes`, and the core validates them exactly as typed
@@ -250,7 +277,10 @@ differs (section 4.1). The Run tab fills its lists when it is first opened, so u
 config and no channel file.
 
 **What the panel does with it.** It keeps the selection (`config` from `sicopr:config`, `thru`, `fext` and
-`next` from `sicopr:channels`), shows it in a line above the command box, and posts it with every phrase:
+`next` from `sicopr:channels`), shows it in a line above the command box, and posts it with every phrase. *Since
+Phase V2-9 the line and its button are gone* (Decision 25): the Run tab shows the files and options, the panel still
+keeps the selection and posts it with every phrase, and a plan that used it begins `using the Run tab's setup`. The
+`POST selection` endpoint below stays, unused by the page. Until then the line read:
 
     Selected: config.xlsx; THRU thru.s4p; 3 FEXT, 4 NEXT
     Selected: config.xlsx; no channel file (pick a THRU in the Run tab)
@@ -466,10 +496,10 @@ folder and `host.roots()`.
 
 | endpoint | does | calls |
 |---|---|---|
-| `GET state` | the project line, the pending question, whether a plan is running | `Project`, `Project.read_pending`, `core.history_lines`, `core.Context(...).base` |
+| `GET state` | the project line, the pending question, whether a plan is running; `tutor_due` (Phase V2-9): the history holds fewer successful commands than `tutor_until_commands`, so the examples under the box are shown | `Project`, `Project.read_pending`, `core.history_lines`, `core.Context(...).base`, `tutor.successes`, `read_settings` |
 | `POST project {path}` | change the project folder (a directory under `host.roots()`) | `Project` |
 | `POST handle {phrase, selection}` | resolve a phrase, with the selection in the tabs (and the Run tab's options) handed over as data (sections 5a, 15); carry out a PLAN in the worker; with a PLAN of one COM run, also `run_tab`, the setup the page is sent as `sicopr:set-run` | `core.handle`, `run.run_tab_setup`, then `run.carry_out` (and `core.fetch_followup` through `next`) |
-| `POST selection {selection}` | the selection as the core will be handed it (paths outside the project folder and `host.roots()` left out), the line that shows it, and the phrase of the Run selection button | none of the core: `api.clean_selection`, `api.selection_line` |
+| `POST selection {selection}` | the selection as the core will be handed it (paths outside the project folder and `host.roots()` left out), the line that shows it, and the phrase of the Run selection button; not called by the page since Phase V2-9 | none of the core: `api.clean_selection`, `api.selection_line` |
 | `POST runtab {selection}` | the Run tab's setup for its files and options now, the working config kept (Phase V2-7): `{config, thru, fext, next, options, command, note, run_id}`, or `{command: null}` with no THRU | `run.run_tab_preview` (which uses `core.Context` and `run.run_tab_command`) |
 | `POST examples {selection}` | up to four phrases for under the command box, each one giving a PLAN now | `tutor.first_run`, `tutor.examples`, `core._resolve` through the tutor's own check |
 | `GET job?since=` | progress lines, running or done, the carry-out result; whether the plan runs anything (`runs`) and the panel's one line (`running_line`), since Phase V2-8 | the worker's buffer, `run.line_text` |
@@ -550,6 +580,13 @@ path like any other.
   does not, the block stays in view, the line follows both events, Run selection sends its phrase, an example
   fills the box). The real page is driven in the walk-through of gate V6.5, where the same behaviours are
   checked with real key presses.
+- **The streamlined panel (Phase V2-9).** `tests\test_streamline.py`: no selection line or Run selection button,
+  and a plan that used the GUI's setup says so; project, Browse and version inside Settings and the top line only
+  the working config; a plan as one line (run in node when it is installed, on sample plans) with its
+  steps under details, a question and a stop as before; the examples' rule (run in node on sample states) and
+  `GET state`'s `tutor_due` on a seeded history; three exchanges in view, older ones in History newest first, the
+  replies inside their exchange. The real page is driven in the walk-through of gate V9.3, where "shown" and
+  "hidden" are what the browser renders.
 
 ## 12. Open questions for the maintainer
 
@@ -760,3 +797,41 @@ SiCoPR's `gui/README.md`, *Panels*. Where the decision was silent, the least sur
    Without "compare" the pair is still run, with no comparison step. "two cases" (or runs, points, results) and "both
    cases" are placed only in such a request; anywhere else they are asked about (Rule 4). Several sentences were
    already read as one request; only their words were missing.
+
+## 17. As built (Phase V2-9, 19 October 2026)
+
+Decision 25 of the build prompt. The owner liked GUI first ("the Assist command prompt area was getting too busy")
+and asked for the panel to be streamlined, leveraging SiCoPR's GUI as much as possible; he chose five items of eight
+offered on 18 October. Only the panel's page changed (`panel.js`, `panel.css`), plus one field of `GET state`; the
+core, its outcomes, the use-case table and the frozen L4 list did not, and SiCoPR's branch did not. Where the decision
+was silent, the least surprising reading was taken:
+
+1. **"Used the GUI's setup"** is read from the outcome's `pattern`, which the core already writes: `selection` (a
+   phrase about the selection in the tabs) or `run tab` (the setup in the Run tab: "the command", "the current
+   settings"). Only a PLAN says it; a question or a stop explains itself.
+2. **The top line** shows the server's existing project line (`api.working_line`) only when it begins `working
+   config`, and is hidden otherwise. It has no title of its own: the slot's header already reads `SiCoPR-Assist`
+   (a first build put the title in the panel too, and the walk-through's first screenshot showed it twice). With no project folder, Settings opens by itself, since
+   Browse is in it.
+3. **The one line** is made on the page from the plan's steps (`planLine`): the number of changes (the outcome's
+   `changes`, or for a plan read back from the history, its `set_param` and `add_param` steps), then a batch's points
+   or a run (any step that sends output to the Run tab: `run_com`, `run_batch`, `build_matrix`, `export_mat`,
+   `download`), and for a plan that does neither, its steps and `its lines below` (`show_config: its lines below`), or
+   `examples under the command box` for `What can I say?`. The trailing `show_tutor` step of a new user's plans is
+   not named, since its lines may be hidden by the time the command ends.
+4. **Examples.** "Successful commands" is the tutor's own count (`tutor.successes`: typed phrases and chosen options
+   with status ok; an edit or a workbook opened in the Config view does not count), given by `GET state` as
+   `tutor_due`, so the page and the tutor cannot disagree. The tutor's lines of a PLAN replace the examples under the
+   box until the next command, under the same rule; those of `What can I say?` show whatever the count and whether
+   the box is empty. The tutor's lines after a miss or on trouble stay in the card. Carrying out the plan's
+   `show_tutor` step gives the same lines back among the plan's result lines; the page leaves them out of the reply,
+   since they are under the box (the first walk-through showed them twice, in a reply card and under the box).
+5. **Exchanges.** An exchange is a command (a phrase, an answer, a Config-view edit or open) with its card and every
+   reply that follows it (a result card, a note), so a result moves to History with its command. Notes that come with
+   no command (a run of the Run tab's own) stay in the conversation. The one line of an exchange in History is what
+   was said, its one-line reply and, after a run, its headline. Every record of the project history is still in the
+   History fold, below the exchanges, folded; opening History records a view as before, so a session writes the same
+   history records as with 0.10.0 (gate V9.2, compared on the real page).
+6. **Unchanged on purpose.** The `POST selection` endpoint and `api.selection_line` stay (si-gui may use them), though
+   the page no longer calls them; the Config view's tags, the running line, the headline and the batch table are as
+   in Phase V2-8.

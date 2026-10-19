@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.11.0 (19 October 2026)
+
+Version 2, Phase V2-9: streamlining the panel. The owner liked GUI first ("the Assist command prompt area was getting
+too busy") and chose five of eight items offered on 18 October: the panel shows only what SiCoPR's GUI does not
+(Decision 25). Only the panel's page changes, and the panel's `GET state` gains one field; the core, its outcomes, the
+use-case table (876 rows) and the frozen L4 list (660 rows) are unchanged, and the same session writes the same history
+records. SiCoPR's branch `gui-panel-slot` is unchanged.
+
+- **No selection line.** The line above the command box and its Run selection button are gone: the Run tab shows the
+  files and options. The selection is still handed to the core with every phrase, and a plan that used it says so
+  (`using the Run tab's setup`). The Run tab's Run button and `Run the command.` run it.
+- **Project and version in Settings.** The project folder, Browse and the version line are in the Settings fold (opened
+  by itself when the panel has no project folder). The panel's own top line is only the working config's short
+  state (`working config run_0005, 2 overrides`), hidden while there is none; the title is the slot's header, which
+  SiCoPR's GUI gives every panel.
+- **A plan is one line** that says where its effect can be seen: `2 changes, highlighted in Config`, `running in the Run
+  tab`, `3 points: output in the Run tab`. The steps and the announcements are under details. A question keeps its text
+  and buttons, a stop its reason; the result lines are as in 0.10.0.
+- **Examples only when they help.** The example phrases under the box show while it is empty and the history holds fewer
+  successful commands than `tutor_until_commands`; a plan's tutor text (a new user's) is shown there the same way,
+  and no longer also in the plan's reply.
+  `What can I say?` always shows them. `GET state` gives `tutor_due` (the tutor's own rule).
+- **Short conversation.** The last three exchanges stay in view; older ones are in the History fold, newest first, each
+  one line (what was said, its one-line reply, its run's headline) that opens to the full reply. Every record of the
+  project history is still there, folded below them.
+- Tests: `tests\test_streamline.py` (new, gate V9.1); the checks of `tests\test_gui_static.py` that described the
+  selection line, the Run selection button and the plan's list of steps now describe what replaced them.
+
 ## 0.10.0 (18 October 2026)
 
 Version 2, Phase V2-8: GUI first, after the maintainer's third GUI session. "For displaying the run command output, I'd
