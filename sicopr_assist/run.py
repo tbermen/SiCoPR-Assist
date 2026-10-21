@@ -695,8 +695,11 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
                             'measured channel' % (_native(synthetic), example_channel.LENGTH_MM, n, il))
     else:
         wc = ctx.wc
-        if wc is None:
+        own_configs = bool(out.get('points')) and all(pt.get('config') for pt in out['points'])
+        if wc is None and not own_configs:          # a batch whose points name their own configs needs none
             return _failed(project, rec, ctx.base[1])
+        if wc is None:
+            wc = {'main': {}, 'packages': {}, 'links': {}}
         if ctx.source_changed():
             source = dict(source, sha256=_sha(ctx.path(source['path'])))
     # the changes of the plan, from its steps (a replayed plan holds them there too)
@@ -737,7 +740,16 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
             if pt.get('skipped'):
                 R.say('status', '%s: skipped, %s' % (where, pt['skipped']))
             else:
-                if pt.get('channels'):           # a fetched batch: each point has its own channel files, no change
+                if pt.get('config'):             # a batch over configs: each point imports its own, as saved
+                    got_wc, issues = config_model.import_config(ctx.path(pt['config']))
+                    if got_wc is None or config_model.stops(issues):
+                        rec_pt['skipped'] = 'the config %s cannot be imported' % pt['config']
+                        R.say('status', '%s: skipped, %s' % (where, rec_pt['skipped']))
+                        points.append(rec_pt)
+                        continue
+                    point_wc = {'config': got_wc}
+                    point_chans = [(p, r) for p, r in pt['channels']]
+                elif pt.get('channels'):         # a fetched batch: each point has its own channel files, no change
                     point_wc = {'config': wc}
                     point_chans = [(p, r) for p, r in pt['channels']]
                 else:
@@ -836,6 +848,9 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
         elif op == 'batch_summary':
             path, rows = summary.write_batch_summary(project, rec['seq'], points)
             lines += summary.batch_lines(rows) + ['one row per point added to %s' % project.relative(path)]
+            if a.get('results_file'):            # this batch's results together, in one file of its own
+                one = summary.write_results_file(project, rec['seq'], rows, a['results_file'])
+                lines.append('the results of this batch together: %s' % project.relative(one))
         elif op == 'diff_results':
             if a.get('against') == core.AGAINST_THRU_ONLY:   # the two cases of a THRU (Decision 24): the first is it
                 lines += _diff_lines(project, (points[0] if points else {}).get('run_id'), points,

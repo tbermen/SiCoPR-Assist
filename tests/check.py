@@ -10,7 +10,13 @@ means the record is stale, so the run fails to say so. Nothing is written to dis
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
+import os
 import sys
+
+# The test scripts written before Phase V2-10 describe strict mode, and run in it (the setting translator, through its
+# environment override). Translator mode, on by default for a user, is tested where it is named: tests\test_translate.py
+# and the rows of groups PS, PP, CF and SY, which set the mode themselves.
+os.environ.setdefault('SICOPR_ASSIST_TRANSLATOR', 'off')
 
 _results = []
 _xresults = []

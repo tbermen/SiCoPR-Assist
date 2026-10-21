@@ -113,7 +113,9 @@ def normalise(obj, roots):
             for form in (r, r.replace('\\', '/'), r.replace('/', '\\')):
                 obj = obj.replace(form, '<root>')
         # each prior state serves the stand-in tools page under its own path (tests\cases\standin_ieee.py)
-        return re.sub(r'(http://127\.0\.0\.1:\d+/)s\d+/', r'\1s<n>/', obj)
+        obj = re.sub(r'(http://127\.0\.0\.1:\d+/)s\d+/', r'\1s<n>/', obj)
+        # the two copies are built one after the other, so a seeded record's time can fall in the next second (S2)
+        return re.sub(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d', '<time>', obj)
     return obj
 
 

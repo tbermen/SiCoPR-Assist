@@ -1,0 +1,5 @@
+role,interface,words,802.3dj,802.3ck
+kr,KR,\bkr\b|\bbackplane\b,Clause 178,Clause 163
+cr,CR,\bcr\b|\bcable\b|\bdac\b|\bcopper cable\b,Clause 179,Clause 162
+c2c,C2C,\bc2c\b|\bchip[\s-]+to[\s-]+chip\b,Annex 176C,Annex 120F
+c2m,C2M,\bc2m\b|\bchip[\s-]+to[\s-]+module\b|\bhost[\s-]+to[\s-]+module\b,Annex 176D,Annex 120G

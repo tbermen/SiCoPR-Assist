@@ -34,7 +34,8 @@ def main():
     # second session (rows XT01 to XT06), 2 with the fetch rows F11 and F12 (7 October, from the IEEE page), and 6
     # after his first GUI session (rows SL01 to SL05 and EX01, 10 October), and 4 after his second (rows RT01 to RT04,
     # the Run tab's state, 17 October)
-    check('the prior-state file lists 110 strings', len(states) == 110 and len(set(states)) == 110, len(states))
+    check('the prior-state file lists 127 strings (110, and 17 of Phase V2-10)', len(states) == 127 and len(set(states)) == 127,
+          len(states))
     in_table = {r['prior_state'] for r in rows}
     check('every prior_state in the table is in the prior-state file', in_table <= set(states),
           sorted(in_table - set(states))[:5])

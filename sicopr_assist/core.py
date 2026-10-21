@@ -447,9 +447,11 @@ def handle(phrase, project, origin='cli', selection=None):
         if pending:
             got = _answer(phrase, ctx, pending)
         if got is None:
-            out, answers, resume = _resolve(phrase, ctx, {})
+            # the miss gate (Decision 26, item 5): while a question is pending, the translator does not read the phrase
+            out, answers, resume = _resolve_any(phrase, ctx, {}, layer=not pending)
         else:
             out, answers, resume = got
+            _note_response(out, pending)
     except engine.EngineMissing as e:
         out, answers, resume = outcome('STOP', reason=str(e), pattern='no engine'), {}, None
     warn = [w for w in ctx.settings['warnings'] if w not in out['announce']]
@@ -534,7 +536,7 @@ def _record(project, phrase, out, pending, answered, shown=(), origin='cli', kin
         answers=(pending or {}).get('seq') if answered else None,
         rephrase_of=rephrase_of,
         outcome=out['type'], status=status, reason=out.get('reason'), plan=out, shown=list(shown), origin=origin,
-        kind=kind, **more)
+        kind=kind, translation=out.get('translation'), **more)
     try:
         return project.append_history(rec)['seq']
     except (OSError, ValueError) as e:
@@ -544,11 +546,138 @@ def _record(project, phrase, out, pending, answered, shown=(), origin='cli', kin
 
 def _resolve(phrase, ctx, mods):
     """(outcome, answers, resume) for a phrase read with the modifications chosen so far."""
-    text = phrase
-    for old, new in mods.get('replace', []):
-        text = _replace_words(text, old, new)
+    text = _replaced(phrase, mods)
     out, answers = _plan(text, ctx, mods)
     return out, answers, {'phrase': phrase, 'mods': mods}
+
+
+def _replaced(text, mods):
+    for old, new in mods.get('replace', []):
+        text = _replace_words(text, old, new)
+    return text
+
+
+# ----------------------------------------------------------------------------- translator mode (Decision 26)
+def translator_on(ctx):
+    """Whether translator mode is on for this command: the setting translator, or its environment override."""
+    from sicopr_assist import translate
+    return translate.is_on(ctx.settings['values'])
+
+
+def _view(ctx):
+    """What the translator reads from the project (translate.View)."""
+    from sicopr_assist import translate, tutor
+    wc = ctx.wc
+    folder_wc, src = None, None
+    if wc is None:
+        src = ctx.source_path
+        folder_wc = tutor._imported(src) if src else None
+    return translate.View(wc, [r for r in ctx.history if is_command(r)], ctx.last,
+                          [(p, r or 'thru') for p, _, r in ctx.channels()], ctx.root, folder_wc=folder_wc,
+                          folder_config=src, overlay=translate.Overlay(ctx.setting('preset_overlay')),
+                          selection=ctx.selection, project=ctx.project)
+
+
+def _missed(o):
+    """Whether the core missed a phrase: the tutor's test (a word not placed and no PLAN, nothing matched), or a name
+    that is not a COM keyword asked about."""
+    from sicopr_assist import tutor
+    if tutor.is_miss(o):
+        return True
+    if o['type'] == 'QUESTION':
+        return (o.get('question') or {}).get('text', '').startswith('Strict mode:')
+    if o['type'] == 'STOP':
+        return (o.get('reason') or '').startswith(('Not a supported request', 'No parameter in the config'))
+    return False
+
+
+def _resolve_any(phrase, ctx, mods, layer=True):
+    """(outcome, answers, resume): the strict core's reading, and in translator mode the layer's when the strict core
+    missed (translate.py). The layer hands the core phrases it resolves, or asks its own question (a proposal, a
+    which-question) or stops (a preset without its overlay); the core still validates and plans everything. Every
+    command in translator mode records what the layer did (translation)."""
+    out, answers, resume = _resolve(phrase, ctx, mods)
+    if not layer or not translator_on(ctx):
+        return out, answers, resume
+    from sicopr_assist import __version__, translate
+    rec = {'translator': translate.NAME, 'version': __version__, 'rules_sha256': translate.rules_sha256(),
+           'wording': phrase, 'strict': {'type': out['type'], 'missed': _missed(out),
+                                         'detail': _brief(out)},
+           'fired': [], 'preset': None, 'phrase': None, 'proposal': None, 'used': False, 'response': None}
+    try:
+        # a fresh view of the project: the strict reading may have imported a config into ctx (a first run)
+        t = translate.translate(_replaced(phrase, mods), _view(Context(ctx.project, ctx.selection)), out)
+    except Exception as e:                       # noqa: BLE001 - the strict outcome stands, and the record says why
+        rec['error'] = '%s: %s' % (type(e).__name__, e)
+        out['translation'] = rec
+        return out, answers, resume
+    if t is None:
+        out['translation'] = rec
+        return out, answers, resume
+    rec.update(fired=t['fired'], preset=t['preset'], proposal=t['proposal'])
+    lead = ['translator mode: %s' % '; '.join(t['fired'])] if t['fired'] else []
+    base = dict(pattern='translator: %s' % '; '.join(t['fired']), unplaced=[])
+    if t['outcome'] is not None:
+        lo = t['outcome']
+        if lo['type'] == 'QUESTION':
+            o = outcome('QUESTION', question=dict(lo['question']), announce=lead + t['announce'], **base)
+        else:
+            o = outcome('STOP', reason=_sentence(lo['reason']), announce=lead + t['announce'], **base)
+        rec.update(used=True, output='%s: %s' % (lo['type'], (lo.get('question') or {}).get('text') or lo.get('reason')))
+        o['translation'] = rec
+        return o, dict(t['answers']), {'phrase': phrase, 'mods': mods, 'via': 'translator'}
+    if out['type'] == 'PLAN' and not t['override_plan']:
+        out['translation'] = rec
+        return out, answers, resume
+    merged = dict(t['mods'])
+    merged.update(mods)
+    for cand in t['candidates']:
+        cctx = Context(ctx.project, ctx.selection)        # each reading starts from the project as it is
+        o2, a2 = _plan(_replaced(cand, mods), cctx, merged)
+        if _missed(o2):
+            continue
+        ctx._c.pop('edit_done', None)
+        if 'edit_done' in cctx._c:                        # a reading that takes a selection into the working config
+            ctx._c['edit_done'] = cctx._c['edit_done']
+        o2['announce'] = lead + ['read as: %s' % cand] + list(t['announce']) + list(o2['announce'])
+        o2['pattern'] = '%s; %s' % (base['pattern'], o2['pattern'])
+        rec.update(used=True, phrase=cand, output=_brief(o2))
+        o2['translation'] = rec
+        return o2, a2, {'phrase': phrase, 'mods': mods, 'via': 'translator'}
+    rec['tried'] = list(t['candidates'])
+    out['translation'] = rec
+    return out, answers, resume
+
+
+def _brief(o):
+    if o['type'] == 'PLAN':
+        return 'PLAN: ' + ' > '.join(s['op'] for s in o.get('steps') or [])
+    if o['type'] == 'QUESTION':
+        return 'QUESTION: ' + (o.get('question') or {}).get('text', '')[:200]
+    return 'STOP: ' + (o.get('reason') or '')[:200]
+
+
+def _note_response(out, pending):
+    """The answer to a question the translator asked: whether the user confirmed its proposal (the first option),
+    changed it (another option) or declined it (cancel). Recorded in the answer's translation field."""
+    asked = ((pending or {}).get('outcome') or {}).get('translation')
+    if not asked or not asked.get('used'):
+        return
+    opts = ((pending.get('outcome') or {}).get('question') or {}).get('options') or []
+    m = re.match(r'answer: ([^;]*)', out.get('pattern') or '')
+    chosen = m.group(1).strip() if m else None
+    if chosen is None or _option_key(chosen) == CANCEL or out['type'] == 'STOP' and \
+            (out.get('reason') or '').startswith('Cancelled'):
+        response = 'declined'
+    elif opts and chosen == opts[0]:
+        response = 'confirmed'
+    else:
+        response = 'changed'
+    rec = dict(out.get('translation') or {})
+    rec.update({'answers_question': pending.get('seq'), 'question_rules': asked.get('fired'),
+                'proposal': asked.get('proposal'), 'response': response, 'chosen': chosen})
+    rec.setdefault('translator', asked.get('translator'))
+    out['translation'] = rec
 
 
 def _replace_words(text, old, new):
@@ -591,6 +720,8 @@ def _answer(phrase, ctx, pending):
             return _stop('Cancelled: nothing changed and nothing runs.', pattern='answer: cancel') + (None,)
     if chosen is None and words and set(words) <= parse.CONFIRM:
         chosen = next((o for o in options if _option_key(o).startswith('run')), None)
+        if chosen is None:                      # a proposal's yes (translator mode): "go ahead", "ok" confirm it
+            chosen = next((o for o in options if _option_key(o) == 'yes'), None)
     mods = copy.deepcopy(resume.get('mods') or {})
     if chosen is None:
         req = None
@@ -608,6 +739,11 @@ def _answer(phrase, ctx, pending):
         return _stop('Cancelled: nothing changed and nothing runs.', pattern='answer: %s' % chosen) + (None,)
     if what.get('stop'):
         return _stop(what['stop'], pattern='answer: %s' % chosen) + (None,)
+    if what.get('phrase'):
+        # an option of a translator's question is a phrase the core resolves (Decision 26, item 4)
+        out, ans, res = _resolve_any(what['phrase'], ctx, {})
+        out['pattern'] = 'answer: %s; %s' % (chosen, out['pattern'])
+        return out, ans, res
     for k, v in what.items():
         if k == 'replace':
             mods.setdefault('replace', []).append(v)
@@ -628,7 +764,9 @@ def _again(resume, ctx, mods):
     GUI's Config view (edit)."""
     if resume.get('edit') is not None:
         return _edit_resolve(resume['edit'], ctx, mods)
-    return _resolve(resume['phrase'], ctx, mods)
+    # in translator mode a question asked on the layer's reading (or one stored without its answers, as a seeded one)
+    # is asked again through the layer, so that its answers are the layer's (Decision 26)
+    return _resolve_any(resume['phrase'], ctx, mods)
 
 
 # ----------------------------------------------------------------------------- reading the phrase
@@ -646,6 +784,9 @@ def _plan(text, ctx, mods):
                      'run (Show me the summary again), statistics of a result over the last set of runs, and how a '
                      'parameter relates to a result.', **base)
     low = text.lower()
+    # every config of the folder on every THRU of it, thru-only and with crosstalk, as one batch (blind row B151)
+    if FOLDER_BATCH.search(low) and 'fetch' not in acts:
+        return _folder_batch(req, low, ctx, mods, base)
     # the thru-only case and the crosstalk case of the THRU in use, together: "thru-only and xtalk", "with and without
     # crosstalk" (Decision 24, rows GF02 to GF05); a channel download that asks for both plans its own matrix
     if {'thru_only', 'crosstalk'} <= set(req['flags']) and 'fetch' not in acts:
@@ -689,6 +830,99 @@ def _plan(text, ctx, mods):
         # a run with the dashboard asked for beside it (row CB17), or a re-run right after a dashboard (row C2)
         return _with_dashboard(out, ctx, base, asked=dash), answers
     return out, answers
+
+
+FOLDER_BATCH = re.compile(r'^run every config on every thru\b')
+RESULTS_FILE = 'results.csv'
+
+
+def _folder_batch(req, low, ctx, mods, base):
+    """Run every config on every THRU, thru-only and with crosstalk: a batch over the config files and the THRU files
+    of the project folder (and its data folder), each config imported as saved, each THRU thru-only and with the FEXT
+    and NEXT files that belong to it (Decision 19). A THRU with none has no crosstalk point: it is listed as skipped.
+    Points are reused by fingerprint (Decision 6); more new runs than max_new_runs asks first. Every point's result
+    also goes to one results file, .sicopr\\runs\\command_<seq>\\results.csv."""
+    left = [w for w in req['unplaced'] if w.lower() not in ('every', 'config', 'configs', 'thru', 'thrus', 'on', 'into',
+                                                             'one', 'results', 'file', 'combined', 'and', 'with')]
+    if req['sets'] or req['sweeps'] or req['files'] or req['packages'] or left:
+        return _ask('A run of every config on every THRU is asked for on its own, and this phrase also asks for something '
+                    'else, so nothing runs.', [CANCEL], {CANCEL: None}, **base)
+    flags = set(req['flags'])
+    modes = [m for m, f in (('thru_only', 'thru_only'), ('xtalk', 'crosstalk')) if f in flags] or ['thru_only', 'xtalk']
+    configs = [c for c in ctx.config_files() if not c.lower().endswith('.json')]
+    thrus = [c for c in ctx.channel_files() if channel_kind(os.path.basename(c)) == 'thru']
+    if not configs or not thrus:
+        return _ask('There is %s in this project folder, so there is nothing to run. Put the config workbooks and the '
+                    'channel files in it (or in its data folder).' % ('no config' if not configs else 'no THRU file'),
+                    [PROVIDE_FILES, CANCEL], {PROVIDE_FILES: {'stop': 'Name the files: Run COM on <channel> with '
+                                                                      '<config>.'}, CANCEL: None}, **base)
+    sic = engine.engine_sha256()
+    prior = ctx.runs
+    points, new_fps, announce = [], [], []
+    for cfg in configs:
+        wc, res = validate.validate_import(ctx.path(cfg), None)
+        fields, err = (config_model.loaded_fields(wc) if wc is not None and res['status'] == 'ok' else (None, None))
+        why = None
+        if wc is None or res['status'] != 'ok':
+            why = 'the config does not import: %s' % (res['text'] or 'it cannot be read')
+        elif err:
+            why = 'the config does not load: %s' % err
+        for t in thrus:
+            folder = os.path.dirname(ctx.path(t))
+            names = sorted(n for n in os.listdir(folder) if parse.CHANNEL_EXT.search(n))
+            got = match_crosstalk(os.path.basename(t), names)
+            fext, nxt = got['fext'], got['next']
+            rel = lambda n: os.path.relpath(os.path.join(folder, n), ctx.root)      # noqa: E731
+            for mode in modes:
+                files = [(t, 'thru')] + ([(rel(f), 'fext') for f in fext] + [(rel(n), 'next') for n in nxt]
+                                         if mode == 'xtalk' else [])
+                pt = {'values': {'config': cfg, 'channel': t, 'mode': mode}, 'writes': {}, 'config': cfg,
+                      'channels': [[p, r] for p, r in files], 'new': False, 'reused_from': None, 'skipped': None}
+                if why:
+                    pt['skipped'] = why
+                elif mode == 'xtalk' and not (fext or nxt):
+                    pt['skipped'] = 'no FEXT or NEXT file belongs to %s (Decision 19)' % t
+                else:
+                    stops, _ = input_check(wc, [(ctx.path(p), r) for p, r in files], with_notes=False)
+                    if stops:
+                        pt['skipped'] = 'validate_inputs fails: %s' % stops[0]
+                if pt['skipped']:
+                    points.append(pt)
+                    continue
+                fp = _fingerprint(fields, channel_keys((r, _sha(ctx.path(p))) for p, r in files), sic)
+                rid = next((r for r, f in prior if _same_fingerprint(f, fp)), None)
+                if rid is not None:
+                    pt['reused_from'] = rid
+                elif any(_same_fingerprint(f, fp) for f in new_fps):
+                    pt['reused_from'] = 'earlier point of this batch'
+                else:
+                    pt['new'] = True
+                    new_fps.append(fp)
+                points.append(pt)
+    skipped = [p for p in points if p['skipped']]
+    n_new = sum(1 for p in points if p['new'])
+    n_reused = sum(1 for p in points if p['reused_from'])
+    announce.append('%d config%s x %d THRU%s x %s: %d point%s, %d new, %d reused, %d skipped'
+                    % (len(configs), '' if len(configs) == 1 else 's', len(thrus), '' if len(thrus) == 1 else 's',
+                       ' and '.join(m.replace('_', '-') for m in modes), len(points), '' if len(points) == 1 else 's',
+                       n_new, n_reused, len(skipped)))
+    announce += ['config: %s' % c for c in configs] + ['THRU: %s' % t for t in thrus]
+    announce += ['%s %s on %s is skipped: %s' % (p['values']['channel'], p['values']['mode'].replace('_', '-'),
+                                                p['values']['config'], p['skipped']) for p in skipped]
+    announce.append('every point goes to batch_summary.csv, and this batch\'s results together to one results file, '
+                    '.sicopr\\runs\\command_<seq>\\%s' % RESULTS_FILE)
+    fields_out = dict(points=points, new_runs=n_new, reused_runs=n_reused, **base)
+    if len(skipped) == len(points):
+        return _stop('No point of the batch can be run: %s.' % '; '.join(sorted({p['skipped'] for p in skipped})),
+                     announce=announce, **fields_out)
+    limit = ctx.setting('max_new_runs')
+    if n_new > limit and not mods.get('confirm_limit'):
+        return _ask('%d new runs is more than max_new_runs (%d), so the batch waits for you: run all or cancel.'
+                    % (n_new, limit), ['run all', CANCEL], {'run all': {'confirm_limit': True}, CANCEL: None},
+                    announce=announce, **fields_out)
+    steps = [_step('build_matrix', configs=len(configs), thrus=len(thrus), modes=modes, points=len(points)),
+             _step('validate_config'), _step('run_batch', new_runs=n_new), _step('batch_summary', results_file=RESULTS_FILE)]
+    return outcome('PLAN', steps=steps, announce=announce, **fields_out), {}
 
 
 def _has_v1_action(req):
@@ -1552,7 +1786,7 @@ def _plan_v1(text, req, ctx, mods, base):
     # a channel file named without a config: after a run, only that channel changes and the config of the last
     # run is kept (Decision 18); with no run yet, a re-run of it asks for a config, as row S3 does (row CH05)
     named = [f for f in req['files'] if f['ext'] == 'channel']
-    if named and len(named) == len(req['files']) and not req['sweeps'] and \
+    if named and len(named) == len(req['files']) and not req['sweeps'] and not mods.get('config_path') and \
             not {'example', 'these_files', 'this_config'} & set(req['flags']):
         if ctx.last is not None:
             return _channel_swap(req, ctx, mods, base)
@@ -2034,16 +2268,52 @@ def _change_items(req, wc, ctx, mods):
                     return ('block', typed, best, order)
             fixed.append(typed)
         out.append(({'name': kw, 'value': ' '.join(fixed), 'op': 'set'}, {'jp': '/main/' + kw, 'key': kw, 'block': None}))
+    # an unqualified package keyword follows the PKG_NAME set in the same phrase, not the one the config holds now
+    # (core fix 2, rows CF07 and CF08)
+    view = _with_new_selection(wc, out, req['sets'])
+    to_main = set(mods.get('to_main') or ())
     for s in req['sets']:
         blk = s.get('block')
         if isinstance(blk, dict):
             best, order = _block_options(ctx, wc, blk['attempt'])
             return ('blockattempt', blk['attempt'], best, order)
-        tgt = _target(s['name'], wc, blk)
+        if blk is not None and _is_main_keyword(s['name'], wc):
+            # "in <block>" after a main keyword: a main keyword is never written into a package block (core fix 2,
+            # row CF05); the answer says where it goes
+            if s['name'] not in to_main:
+                return ('mainkw', s['name'], blk, s)
+            blk = None
+        tgt = _target(s['name'], view, blk)
         if isinstance(tgt, tuple):
             return tgt + (s,)
         out.append((s, tgt))
     return out
+
+
+def _with_new_selection(wc, items, sets):
+    """wc as the blocks are selected once this phrase's PKG_NAME is applied: a package form already read into items,
+    or a PKG_NAME = value among the sets. wc itself when the phrase does not set PKG_NAME."""
+    kw = _key_in(wc['main'], 'PKG_NAME') or 'PKG_NAME'
+    value = next((it['value'] for it, tgt in items if tgt['jp'] == '/main/' + kw), None)
+    for s in sets:
+        if parse.squash(s.get('name') or '') == 'pkg_name' and s.get('value') is not None:
+            value = s['value']
+    names = str(value or '').split()
+    if not names or not all(n in wc['packages'] for n in names):
+        return wc
+    view = dict(wc, main=dict(wc['main']))
+    view['main'][kw] = ' '.join(names)
+    return view
+
+
+def _is_main_keyword(name, wc):
+    """Whether a name is a keyword of the main area only: the config holds it there and the schema has no package
+    block row for it, or the schema knows it only in the main area."""
+    in_pkg = validate.schema_row(name, 'package block') is not None or \
+        any(_key_in(p, name) is not None for p in wc['packages'].values())
+    if in_pkg:
+        return False
+    return _key_in(wc['main'], name) is not None or validate.schema_row(name, 'main') is not None
 
 
 def _change(req, ctx, mods, base, wc):
@@ -2118,6 +2388,12 @@ def _item_question(info, req, ctx, wc, mods, base):
         opts = list(wc['packages'])
         return _ask('There is no package block named %s in this config. The blocks are %s.' % (typed, ', '.join(opts)),
                     opts, {b: {'replace': [typed, b]} for b in opts}, **base)
+    if kind == 'mainkw':
+        name, blk = info[1], info[2]
+        opt = 'set %s in the main area' % name
+        return _ask('"in %s" follows %s, a keyword of the main area, and a main keyword is never written into a '
+                    'package block, so nothing runs until that is settled.' % (blk, name), [opt, CANCEL],
+                    {opt: {'to_main': [name]}, CANCEL: None}, **base)
     if kind == 'noblock':
         opts = list(wc['packages'])
         return _ask('There is no package block named %s in this config.' % info[1], opts or [CANCEL],
@@ -2748,6 +3024,8 @@ def _first_run(req, ctx, mods, base, roles=None, lead=(), options=None):
     The example setup with no channel file in the project folder runs on a synthetic THRU that is written when the
     plan is carried out (Decision 22, row EX01)."""
     configs = [f['text'] for f in req['files'] if f['ext'] in CONFIG_EXT + ('.mat',)]
+    if mods.get('config_path') and not configs:
+        configs = [mods['config_path']]          # a base workbook an interface preset brings (translate.py)
     chans = [f['text'] for f in req['files'] if f['ext'] == 'channel']
     found_cfg = ctx.config_files()
     found_ch = ctx.channel_files()
@@ -2812,6 +3090,14 @@ def _first_run(req, ctx, mods, base, roles=None, lead=(), options=None):
     steps = [] if is_json else [_step('import_config', path=cfg, example=example,
                                       **({'example_channel': synthetic} if synthetic else {}))]
     changes = []
+    blocks_low = {b.lower() for b in wc['packages']}
+    if any(isinstance(s.get('block'), dict) for s in req['sets']) or any(a.get('block') for a in req['attempts']) \
+            or any(str(w).lower() in blocks_low for w in req['unplaced']):
+        # a block named in a first-run phrase was read before the config was: read the phrase again against the
+        # blocks of the config imported (core fix 2, row CF06)
+        again = parse.read(req['phrase'], ctx.names(wc), list(wc['packages']))
+        req = dict(req, sets=again['sets'], packages=again['packages'], attempts=again['attempts'],
+                   unplaced=again['unplaced'])
     if req['sets'] or req['packages'] or req['attempts']:
         ctx._c['base'] = (wc, 'import', [])
         ctx._c['source_path'] = path if path.lower().endswith(('.xlsx', '.xls')) else ctx.source_path
@@ -2828,9 +3114,10 @@ def _first_run(req, ctx, mods, base, roles=None, lead=(), options=None):
                 return _value_question(v, it, tgt, wc, ctx, base)
             ch.append((tgt['jp'], v))
         r = validate.validate(wc, ch, _selections_for(ch, ctx), allow=mods.get('allow') or ())
-        sub = _change_outcome(r, ch, req, ctx, mods, base, wc)[0]
+        sub, sub_answers = _change_outcome(r, ch, req, ctx, mods, base, wc)
         if sub['type'] != 'PLAN':
-            return sub, {}
+            # the question keeps its answers, so that "run it anyway" plans this first run (core fix 1, row CF02)
+            return sub, sub_answers
         changes = sub['changes']
         steps += [s for s in sub['steps'] if s['op'] in ('set_param', 'add_param', 'recompute_linked')]
         steps.append(_step('validate_config'))
@@ -3070,6 +3357,10 @@ def _selection_request(req, ctx, mods, base, said='selection'):
     acts = set(req['actions'])
     sel = ctx.selection
     runs = bool(acts & {'run', 'rerun'}) or 'again' in flags
+    if not runs and acts == {'change'} and 'sel_channel' in flags and not req['sweeps'] and not req['files'] and \
+            not req['sets'] and not req['packages'] and not req['attempts'] and not req['unplaced'] and \
+            not flags & {'example', 'these_files', 'this_config', 'crosstalk', 'thru_only', 'last_run'}:
+        return _stage_selection(ctx, mods, base)          # "Use the selected channels." (blind row B156)
     if not runs or acts - {'run', 'rerun', 'change'} or req['sweeps'] or req['files'] or \
             flags & {'example', 'these_files', 'this_config', 'crosstalk', 'thru_only', 'last_run'}:
         return _ask('The selection in the tabs is run on its own, so nothing runs. Run it with: %s After a run, '
@@ -3129,6 +3420,77 @@ def _selection_request(req, ctx, mods, base, said='selection'):
             [{'text': p, 'ext': 'channel', 'role': r} for p, r in chans]
     return _first_run(dict(req, files=files, flags=[f for f in req['flags'] if not f.startswith('sel')]), ctx, mods,
                       base, roles=[r for _, r in chans], lead=lines, options=sel['options'])
+
+
+def _stage_selection(ctx, mods, base):
+    """Use the selected channels: the channel files selected in the tabs, in the roles they were picked, become the
+    channel files of the working config, and nothing runs (the request does not say to run). The working config is
+    the last one, or the config selected in the Config tab when there is none yet; the record names it with the
+    channels (as a Config-view edit does, GUI_DESIGN.md section 6), so the next command builds on it."""
+    sel = ctx.selection
+    if sel is None:
+        return _ask('There is no selection outside the GUI: the selected channel files are the ones picked in the Run '
+                    'tab of the GUI (sicopr-assist gui). Name the files instead, for example: Run COM on data\\thru.s4p '
+                    'with data\\config.xlsx.', [PROVIDE_FILES, CANCEL],
+                    {PROVIDE_FILES: {'stop': 'Name the files: Run COM on <channel> with <config>.'}, CANCEL: None}, **base)
+    if not sel['thru']:
+        return _ask('No channel file is selected in the tabs, so there is nothing to take. Select a THRU file in the Run '
+                    'tab.', [SELECT_IN_RUN_TAB, CANCEL], {SELECT_IN_RUN_TAB: {'stop': 'Pick the THRU file, and any FEXT '
+                                                                                     'and NEXT files, in the Run tab.'},
+                                                         CANCEL: None}, **base)
+    chans = [(sel['thru'], 'thru')] + [(p, 'fext') for p in sel['fext']] + [(p, 'next') for p in sel['next']]
+    for p, role in chans:
+        if not os.path.isfile(ctx.path(p)):
+            return _stop('%s, the %s selected in the tabs, does not exist. Nothing changes.' % (p, role.upper()), **base)
+        bad = touchstone_problem(ctx.path(p))
+        if bad:
+            return _stop('%s, the %s selected in the tabs, is not a valid Touchstone file: %s. Nothing changes.'
+                         % (p, role.upper(), bad), **base)
+    rec = ctx.last
+    steps, announce = [], []
+    if rec is not None and ctx.wc is not None:
+        wc = ctx.wc
+        src = dict(rec.get('source') or {}) or None
+        overrides = [dict(o) for o in rec.get('overrides') or []]
+        old = [(p, r or 'thru') for p, _, r in ctx.channels()]
+        announce.append('the working config is kept (%s), with its %d override%s' % (
+            (src or {}).get('path') or 'the last one', len(overrides), '' if len(overrides) == 1 else 's'))
+    else:
+        cfg = sel['config']
+        if not cfg:
+            return _ask('No config is selected in the tabs and there is no working config yet, so the channel files have '
+                        'no config to go with. Open a workbook in the Config tab.', [SELECT_IN_CONFIG_TAB, CANCEL],
+                        {SELECT_IN_CONFIG_TAB: {'stop': 'Open the workbook in the Config tab. Then: Use the selected '
+                                                        'channels.'}, CANCEL: None}, **base)
+        path = ctx.path(cfg)
+        if not os.path.isfile(path):
+            return _stop('%s, the config selected in the tabs, does not exist. Nothing changes.' % cfg, **base)
+        wc, announce = _checked_import(path, mods, base, announce)
+        if wc is None:
+            return announce
+        steps.append(_step('import_config', path=cfg, example=False))
+        src = {'path': cfg, 'sha256': _sha(path)}
+        overrides = []
+        old = []
+        announce.insert(0, 'the working config is %s, the config selected in the Config tab' % cfg)
+    thru, xt = chans[0][0], chans[1:]
+    old_thru = next((p for p, r in old if r == 'thru'), None)
+    steps.append(_step('set_channel', role='thru', before=old_thru, after=thru))
+    if xt or any(r != 'thru' for _, r in old):
+        steps.append(_step('set_channel', role='crosstalk', thru=thru, before=[p for p, r in old if r != 'thru'] or None,
+                           fext=[p for p, r in xt if r == 'fext'], next=[p for p, r in xt if r == 'next'],
+                           rule='selection'))
+    stops, notes = input_check(wc, [(ctx.path(p), r) for p, r in chans], with_notes=True)
+    if stops:
+        return _stop(_sentence(stops[0]), announce=announce, **base)
+    steps.append(_step('validate_inputs', channels=[p for p, _ in chans]))
+    announce += ['the channel files selected in the tabs are taken into the working config, in the roles they were '
+                 'picked: %s' % '; '.join('%s %s' % (r.upper(), p) for p, r in chans)] + notes + \
+        ['nothing runs: the request does not say to run; Re-run. (or Run the command. in the GUI) runs them']
+    ctx._c['edit_done'] = {'config': wc, 'source': src,
+                           'channels': [{'path': p, 'sha256': _sha(ctx.path(p)), 'role': r} for p, r in chans],
+                           'overrides': overrides, 'detail': {'staged': 'selection'}}
+    return outcome('PLAN', steps=steps, announce=announce, **base), {}
 
 
 def _selection_lines(chans):
@@ -3674,6 +4036,14 @@ def _show(req, text, ctx, base):
         lines = ['%s: %s -> %s' % (validate.name_of(o['json_path']), show(o['before']), show(o['after'])) for o in ov] or \
             ['the last run used the imported config as is']
         return outcome('PLAN', steps=[_step('show_overrides')], announce=lines, **base), {}
+    m = re.search(r'^show (?:me )?(?:the )?package block (\S+?)\.?$', low)
+    if m and wc is not None:
+        blk = next((b for b in wc['packages'] if b.lower() == m.group(1)), None)
+        if blk is not None:                      # one block's keywords and values (row SY35)
+            lines = ['%s: %s' % (k, show(v)) for k, v in wc['packages'][blk].items()]
+            return outcome('PLAN', steps=[_step('show_config', block=blk)],
+                           announce=['the package block %s in the working config of the last run' % blk] + lines,
+                           **dict(base, unplaced=[])), {}
     if re.search(r'^show (me )?the config\b|^show config\b', low):
         if wc is None:
             return _no_history(ctx, base)
@@ -3691,6 +4061,12 @@ def _show(req, text, ctx, base):
         n = req['sets'][0]['name']
         return outcome('PLAN', steps=[_step('show_param', name=n)],
                        announce=['%s is %s in the working config of the last run' % (n, show(_current(wc, n)))], **base), {}
+    if (re.search(r'^show\b', low) and len(req['sets']) > 1 and all(s.get('value') is None for s in req['sets'])
+            and wc is not None and not req['sweeps'] and not req['unplaced'] and not req['attempts']):
+        names = [s['name'] for s in req['sets']]          # several keywords in one show (row SY34)
+        return outcome('PLAN', steps=[_step('show_param', names=names)],
+                       announce=['%s is %s in the working config of the last run' % (n, show(_current(wc, n)))
+                                 for n in names], **base), {}
     return None
 
 

@@ -215,3 +215,27 @@ CH07,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the sam
 XT04,Case1; Case3,change,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 RT02,Case1; Case3,run,must,STOP,review,STOP: whether the reason names the same cause is read by a person
 RT06,Case1; Case3,run,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS08,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS10,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS12,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS14,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS17,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS19,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS21,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS23,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS15,Case1,PS,must,PLAN,review,no step chain in the detail
+PS25,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS27,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS31,Case1,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS31,Case3,PS,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+PS32,Case1,PS,must,PLAN,review,no step chain in the detail
+PP19,Case1; Case2; Case3; Case4,PP,must,PLAN,review,no step chain in the detail
+PP21,Case1; Case2; Case3; Case4,PP,must,PLAN,review,no step chain in the detail
+CF11,Case1,CF,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SY12,Case1; Case2; Case3; Case4,SY,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SY14,Case3; Case4,SY,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SY15,Case1; Case2,SY,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+SY65,Case1; Case2; Case3; Case4,SY,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+MG01,Case1; Case2; Case3; Case4,SY,must,QUESTION,review,keyword-description options with no list
+MG02,Case1; Case2; Case3; Case4,SY,must,STOP,review,STOP: whether the reason names the same cause is read by a person
+MG03,Case1; Case2; Case3; Case4,SY,must,STOP,review,STOP: whether the reason names the same cause is read by a person

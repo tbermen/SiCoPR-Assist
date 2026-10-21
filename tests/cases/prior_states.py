@@ -111,7 +111,7 @@ def plan(steps, **fields):
 
 # ----------------------------------------------------------------------------- seeding
 def seed_run(ctx, phrase='Run COM on data\\thru.s4p with data\\config.xlsx', wc=None, overrides=(),
-             steps=STANDARD_PLAN, channels=None, cases=None, record=True, source=None, numbers=None):
+             steps=STANDARD_PLAN, channels=None, cases=None, record=True, source=None, numbers=None, translation=None):
     """One complete run: working config, run CSV, result file and (unless record is False) the history
     record. Returns the run id. The new working config becomes the prior working config."""
     p = ctx.project
@@ -136,7 +136,7 @@ def seed_run(ctx, phrase='Run COM on data\\thru.s4p with data\\config.xlsx', wc=
             plan=plan(steps, changes=[dict(o, applied=True) for o in overrides]),
             source=source, channels=chan_recs, overrides=list(overrides),
             working_config=ctx.rel(p.working_config_path(rid)), run_ids=[rid],
-            sicopr={'sha256': engine.engine_sha256(), 'release': engine.default_release()}))
+            sicopr={'sha256': engine.engine_sha256(), 'release': engine.default_release()}, translation=translation))
     ctx.prior_wc = wc
     return rid
 
@@ -655,6 +655,171 @@ def f1_complete(ctx):
                   points=recs, new_runs=len(recs))))
 
 
+# ----------------------------------------------------------------------------- Phase V2-10: rules and presets (21 October)
+def name_overlay(ctx, path):
+    """The setting preset_overlay in the project settings file, added to what the prior state wrote there: a row that
+    needs the overlay names it as a user would (the harness finds the file by scoring.OVERLAY_ENV)."""
+    sp = ctx.project.settings_path
+    os.makedirs(os.path.dirname(sp), exist_ok=True)
+    old = ''
+    if os.path.exists(sp):
+        with open(sp, encoding='utf-8') as f:
+            old = f.read()
+    with open(sp, 'w', encoding='utf-8', newline='\n') as f:
+        f.write(old + ('' if not old or old.endswith('\n') else '\n') + '[translator]\npreset_overlay = %s\n' % path)
+
+
+def overlay_values(path, preset):
+    """[(keyword, value)] of one preset of the local overlay file, in its order. Test side only: the values may not be
+    in the repository, so they are read from the file and never written here."""
+    import csv
+    with open(path, newline='', encoding='utf-8') as f:
+        return [(r['keyword'], r['value']) for r in csv.DictReader(f) if r['preset'] == preset]
+
+
+def keys_for(wc, pairs):
+    """{oracle key: value} for keyword pairs as a phrase names them: a keyword of the main area there, a package keyword
+    in the selected block (the block PKG_NAME names for TX), anything else added to the main area."""
+    sel = str(wc['main'].get('PKG_NAME', '')).split()
+    blk = sel[0] if sel and sel[0] in wc['packages'] else None
+    out = {}
+    for k, v in pairs:
+        try:
+            v = float(v) if isinstance(v, str) and not v.strip().startswith('[') else v
+        except ValueError:
+            pass
+        if k in wc['main']:
+            out[k] = v
+        elif blk and k in wc['packages'][blk]:
+            out['packages.%s.%s' % (blk, k)] = v
+        else:
+            out[k] = v
+    return out
+
+
+AK_DIR = os.path.join('data', 'ak')
+AK_NAME = 'Tx_NPC_250mm_32AWG_BPK_%smm_27AWG_BPK_250mm_32AWG_NPC_Rx_thru1.s4p'
+
+
+def ak_folder(ctx):
+    """data\\ak: four THRUs named alike, BPK_300mm to BPK_1400mm in the length place (the blind fixture's akinwale
+    style), each a synthetic line of that length; a seeded thru-only run on the BPK_300mm THRU."""
+    for mm in (300, 500, 1200, 1400):
+        fixtures.link_or_copy(ctx.fx.thru_of(float(mm)), os.path.join(ctx.root, AK_DIR, AK_NAME % mm))
+    rel = os.path.join(AK_DIR, AK_NAME % 300)
+    seed_run(ctx, phrase='Run COM on %s with data\\config.xlsx' % rel, channels=[(rel.replace('/', '\\'), 'thru')])
+
+
+def two_more_thrus(ctx):
+    seed_run(ctx)
+    fixtures.link_or_copy(ctx.fx.thru_of(800.0), ctx.data('thru_long.s4p'))
+    fixtures.link_or_copy(ctx.fx.thru_of(500.0), ctx.data('thru_500mm.s4p'))
+
+
+def two_thru_runs(ctx):
+    """A run on data\\thru.s4p, then a re-run on data\\thru2.s4p with DER_0 = 1e-4 (as CH06)."""
+    seed_run(ctx)
+    second_thru(ctx)
+    before = ctx.prior_wc
+    wc = with_values(before, {'DER_0': 1e-4})
+    seed_run(ctx, phrase='Re-run with data\\thru2.s4p and DER_0 = 1e-4.', wc=wc,
+             overrides=overrides_of(before, {'DER_0': 1e-4}), steps=('set_channel',) + CHANGE_PLAN,
+             channels=[('data\\thru2.s4p', 'thru')])
+
+
+def sigma_rj_batch(ctx):
+    seed_batch(ctx, 'Run sigma_RJ at 0.01, 0.02 and 0.03.', [{'sigma_RJ': 0.01}, {'sigma_RJ': 0.02}, {'sigma_RJ': 0.03}],
+               reuse_first=True)
+
+
+def kr_named_files(ctx):
+    fixtures.link_or_copy(ctx.fx.configs[ctx.label], ctx.data(os.path.join('configs', 'kr_case1.xlsx')))
+    fixtures.link_or_copy(ctx.fx.thru, ctx.data('Tx_Rx_thru1.s4p'))
+
+
+def c2m_fetch(ctx):
+    """The F1 stand-in page with no interface confirmed, the starting config as data\\cfg_c2m.xlsx and no
+    data\\config.xls."""
+    fetch_env(ctx, confirmed=False)
+    os.remove(ctx.data('config.xls'))
+    fixtures.link_or_copy(ctx.fx.configs[ctx.label], ctx.data('cfg_c2m.xlsx'))
+
+
+def preset_record(name, values):
+    """The translation field of a history record whose phrase fired a preset (the shape core.translation_record writes)."""
+    return {'translator': 'rules and presets', 'preset': name, 'rules': ['preset: ' + name], 'seeded': True,
+            'phrase': 'Re-run with ' + ' and '.join('%s = %s' % (k, v) for k, v in values)}
+
+
+DJC2C_VALUES = [('ffe_pre_tap_len', 5), ('N_f', 50), ('MLSE', 0), ('DER_0', 6.7e-6), ('ERL Pass threshold', 9.7)]
+
+
+def both_tests(wc):
+    """z_p select for both package tests of the class in view: [1 2] for class A, [3 4] for class B."""
+    sel = str(wc['main'].get('PKG_NAME', '')).split()
+    return '[3 4]' if sel and 'CLASSB' in sel[0].upper() else '[1 2]'
+
+
+def dj_c2c_run(ctx):
+    seed_run(ctx)
+    before = ctx.prior_wc
+    pairs = DJC2C_VALUES + [('z_p select', both_tests(before))]
+    values = dict(pairs)
+    wc = with_values(before, values)
+    seed_run(ctx, phrase='Make it an 802.3dj C2C config and re-run.', wc=wc, overrides=overrides_of(before, values),
+             steps=CHANGE_PLAN, translation=preset_record('802.3dj C2C', pairs))
+
+
+def ck_c2c_run(ctx):
+    """The run-complete state, then a re-run with the overlay's 802.3ck C2C change list. Seeded only with the overlay:
+    its values may not be in the repository, and every row on this state needs it (overlay:present). Without it the
+    state is the run-complete state alone."""
+    seed_run(ctx)
+    path = getattr(ctx, 'overlay', None)
+    if not path:
+        return
+    before = ctx.prior_wc
+    pairs = overlay_values(path, '802.3ck C2C')
+    values = keys_for(before, pairs)
+    wc = with_values(before, values)
+    seed_run(ctx, phrase='Make it an 802.3ck C2C config and re-run.', wc=wc, overrides=overrides_of(before, values),
+             steps=CHANGE_PLAN, translation=preset_record('802.3ck C2C', pairs))
+
+
+STRICT_NS = (
+    (b'http://schemas.openxmlformats.org/spreadsheetml/2006/main', b'http://purl.oclc.org/ooxml/spreadsheetml/main'),
+    (b'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+     b'http://purl.oclc.org/ooxml/officeDocument/relationships'),
+    (b'http://schemas.openxmlformats.org/drawingml/2006/main', b'http://purl.oclc.org/ooxml/drawingml/main'),
+)
+
+
+def strict_ooxml(ctx):
+    """data\\config.xlsx rewritten as a strict OOXML package, the way Excel saves Strict Open XML Spreadsheet: the
+    purl.oclc.org/ooxml namespaces in every part in place of the transitional ones."""
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(ctx.fx.configs[ctx.label]) as zin, zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zout:
+        for info in zin.infolist():
+            data = zin.read(info.filename)
+            if info.filename.endswith(('.xml', '.rels')):
+                for a, b in STRICT_NS:
+                    data = data.replace(a, b)
+            zout.writestr(info, data)
+    replace_file(ctx.data('config.xlsx'), buf.getvalue())
+    ctx.prior_wc = None
+
+
+def c2m_eye_run(ctx):
+    """A run, then a re-run in eye height and VEC mode: PMD_type = C2M with VEC Pass threshold = 10 and EH_min = 12
+    added. The made-up numbers of that second run are those of Ctx.numbers for k = 2 (COM 4.24, VEC_dB 8.6,
+    VEO_mV 9.1)."""
+    seed_run(ctx)
+    seed_override_run(ctx, {'PMD_type': 'C2M', 'VEC Pass threshold': 10, 'EH_min': 12},
+                      phrase='Re-run with PMD_type = C2M and VEC Pass threshold = 10 and EH_min = 12.')
+
+
 # ----------------------------------------------------------------------------- the registry
 FALCON = ['Run COM on D:\\acme\\falcon_rev2\\thru.s4p with D:\\acme\\cfg_falcon.xlsx',
           'Re-run with package PKG_AcmeBGA']
@@ -851,6 +1016,34 @@ BUILDERS = {
     r'run complete with the starting config and data\thru.s4p; the Run tab holds the same files with --eye-under-mlse '
     r'ticked': lambda c: (seed_run(c), run_tab(c, eye_under_mlse=True)),
     r'run complete with the starting config and data\thru.s4p; there is no Run tab (the command line)': seed_run,
+    # Phase V2-10 (21 October): rules and presets
+    r'run complete thru-only with the starting config and data\ak\Tx_NPC_250mm_32AWG_BPK_300mm_27AWG_BPK_250mm_32AWG_NPC_'
+    r'Rx_thru1.s4p; data\ak holds four THRUs named alike, with BPK_300mm, BPK_500mm, BPK_1200mm and BPK_1400mm in that '
+    r'place': ak_folder,
+    r'run complete with the starting config and data\thru.s4p; data\thru_long.s4p and data\thru_500mm.s4p also exist':
+        two_more_thrus,
+    r'run complete with the starting config and data\thru.s4p, then a re-run with data\thru2.s4p and DER_0 = 1e-4':
+        two_thru_runs,
+    'the sigma_RJ sweep is complete: sigma_RJ at 0.01, 0.02 and 0.03, 3 results': sigma_rj_batch,
+    r'none; data\Tx_Rx_thru1.s4p exists and the starting config is data\configs\kr_case1.xlsx': kr_named_files,
+    r'as F1 but the config is data\cfg_c2m.xlsx (the starting config under that name), there is no data\config.xls, '
+    r'and no interface is confirmed for this project': c2m_fetch,
+    r'run complete with the starting config and data\thru.s4p, then a re-run as the 802.3dj C2C preset '
+    r'(ffe_pre_tap_len = 5, N_f = 50, MLSE = 0, DER_0 = 6.7e-6, ERL Pass threshold = 9.7, both package tests)':
+        dj_c2c_run,
+    r'run complete with the starting config and data\thru.s4p, then a re-run as the 802.3ck C2C preset with the overlay '
+    r'values': ck_c2c_run,
+    r'none; data\config.xlsx is the starting config saved as a strict OOXML workbook, and data\thru.s4p exists':
+        strict_ooxml,
+    r'run complete in eye height and VEC mode: the starting config with PMD_type = C2M, VEC Pass threshold = 10 and '
+    r'EH_min = 12, on data\thru.s4p; seeded results COM 4.24, VEC_dB 8.6 and VEO_mV 9.1': c2m_eye_run,
+    'the question of PS05 is open': lambda c: seed_question(c, 'PS05'),
+    'the question of PS11 is open': lambda c: seed_question(c, 'PS11'),
+    'the question of PS24 is open': lambda c: seed_question(c, 'PS24'),
+    'the question of PP01 is open': lambda c: seed_question(c, 'PP01'),
+    'the question of PP08 is open': lambda c: seed_question(c, 'PP08'),
+    'the question of PP09 is open': lambda c: seed_question(c, 'PP09'),
+    'the question of CF01 is open': lambda c: seed_question(c, 'CF01'),
 }
 
 

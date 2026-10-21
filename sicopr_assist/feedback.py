@@ -204,6 +204,38 @@ def _missed_words(rec):
     return list(dict.fromkeys(words))
 
 
+def translation_lines(history, m, names):
+    """Translator mode (Decision 26, item 6; the owner, 20 October): for every command made in translator mode, the
+    user's wording, whether the strict core had missed it, the rules, synonyms or preset that fired, the phrase handed to
+    the core (or the layer's own question or stop), any proposal, and whether the user confirmed, changed or declined
+    it; and the translator's name, version and rules SHA-256. Masked like every phrase."""
+    recs = [r for r in history if r.get('translation')]
+    out = ['', 'translator mode (%d commands): seq, the wording, whether the strict core missed it, the rules that '
+           'fired, the preset, the phrase handed to the core, the proposal, the response' % len(recs)]
+    seen = []
+    for r in recs:
+        t = r['translation']
+        who = '%s %s, rules SHA-256 %s' % (t.get('translator'), t.get('version'), t.get('rules_sha256'))
+        if t.get('translator') and who not in seen:
+            seen.append(who)
+    for who in seen:
+        out.append('  translator: %s' % who)
+    for r in recs:
+        t = r['translation']
+        un = _unplaced(r, names)
+        strict = t.get('strict') or {}
+        parts = ['wording: %s' % m.mask(t.get('wording') or r.get('phrase'), un),
+                 'strict missed: %s' % ('yes' if strict.get('missed') else 'no' if strict else 'n/a'),
+                 'fired: %s' % (m.mask('; '.join(t.get('fired') or t.get('question_rules') or [])) or 'nothing'),
+                 'preset: %s' % (t.get('preset') or 'none'),
+                 'handed to the core: %s' % (m.mask(t.get('phrase')) if t.get('phrase') else
+                                             m.mask(str(t.get('output') or 'the strict outcome stands')[:160])),
+                 'proposal: %s' % (m.mask(t.get('proposal')) if t.get('proposal') else 'none'),
+                 'response: %s' % (t.get('response') or 'none')]
+        out.append('  %s  %s' % (r.get('seq'), ' | '.join(parts)))
+    return out
+
+
 def export_lines(project, day=None):
     """The feedback file of this project, as lines. Reads the history and the settings; writes nothing."""
     from sicopr_assist import __version__, core
@@ -259,8 +291,10 @@ def export_lines(project, day=None):
     lines += ['', 'words that could not be placed (count, word): %d' % len(words)]
     for w, n in words.most_common():                     # kept as typed, unless it is a path, a file or a block
         lines.append('  %d  %s' % (n, m.mask(w, [w])))
+    lines += translation_lines(history, m, names)
     defaults = setting_defaults()
-    differ = ['%s = %s' % (k, setting_text(v)) for k, v in values.items() if v != defaults[k][0]]
+    differ = ['%s = %s' % (k, m.mask(setting_text(v)) if isinstance(v, str) else setting_text(v))
+              for k, v in values.items() if v != defaults[k][0]]
     lines += ['', 'limits that differ from the defaults: %s' % (', '.join(differ) or 'none')]
     lines += ['', 'commands (%d): seq, outcome, status, phrase; config view marks an edit or a workbook opened in the '
               "GUI's Config view, which is not a typed command" % len(history)]

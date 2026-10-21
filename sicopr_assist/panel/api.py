@@ -356,6 +356,11 @@ def headline(got):
         return '%s: no COM value in the result' % rid
     thr = got.get('threshold')
     verdict = ''
+    if got.get('eye'):                           # eye height and VEC mode: judged by VEC and EH_min (core fix 5)
+        words = [summary.eye_verdict(c, got['eye'])['pass'] for c in got.get('cases') or []]
+        word = 'pass' if all(w is True for w in words) else ('fail' if any(w is False for w in words) else 'not judged')
+        return '%s: COM %s dB (not judged), %s on VEC Pass threshold and EH_min' % (
+            rid, ', '.join(summary.fmt(c) for c in nums), word)
     if thr is not None:
         passed = sum(1 for c in nums if c >= thr)
         word = 'pass' if passed == len(nums) else ('fail' if not passed else '%d of %d cases pass' % (passed, len(nums)))

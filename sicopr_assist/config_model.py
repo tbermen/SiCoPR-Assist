@@ -475,8 +475,13 @@ def _import_workbook(path):
         doc = xlsx_io.read_workbook(path)
     except xlsx_io.LegacyXls as e:
         return None, [_issue('stop', 'legacy_xls', str(e))]
+    except xlsx_io.StrictOOXML as e:
+        return None, [_issue('stop', 'strict_ooxml', str(e))]
     except (xlsx_io.NotAWorkbook, zipfile.BadZipFile, KeyError, OSError) as e:
         return None, [_issue('stop', 'unreadable', 'cannot read %s: %s' % (os.path.basename(path), e))]
+    except Exception as e:                       # noqa: BLE001 - a workbook openpyxl cannot read is a STOP, never a traceback
+        return None, [_issue('stop', 'unreadable', 'cannot read %s: %s: %s' % (os.path.basename(path),
+                                                                              type(e).__name__, e))]
     issues = [_issue('note', 'xls_is_xlsx', doc.note)] if doc.note else []
     found = xlsx_io.scan(doc.grid, doc.formulas)
     source = {'file': os.path.basename(path), 'sheet': doc.sheet, 'sha256': _sha256(path)}

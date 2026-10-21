@@ -6,4 +6,4 @@ QUESTION or a STOP as a plain dictionary and never runs COM.
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
 
-__version__ = '0.11.0'
+__version__ = '0.12.0'

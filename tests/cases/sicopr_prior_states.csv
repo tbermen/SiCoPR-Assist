@@ -1,13 +1,13 @@
 prior_state,rows,ids,kind,seed,engine_results
-none,2,"R1, X3",files only,"the files named, and nothing else",no
-none; data\config.xlsx and data\thru.s4p exist,1,R2,files only,"the files named, and nothing else",no
+none,3,"R1, SY03, X3",files only,"the files named, and nothing else",no
+none; data\config.xlsx and data\thru.s4p exist,36,"CF01, CF06, CF07, PS01, PS03, PS05, PS07, PS08, PS11, PS12, PS16, PS17 and 12 more",files only,"the files named, and nothing else",no
 none; project folder holds exactly one config and one THRU file,3,"PH01, PH02, R3",files only,"the files named, and nothing else",no
 none; project folder holds two configs,1,R4,files only,"the files named, and nothing else",no
 none; no 448G preset exists,1,R5,files only,"the files named, and nothing else",no
 "none; data\config.xlsx exists, data\config.xls does not",1,R6,files only,"the files named, and nothing else",no
 none; data\bad.s4p is truncated,1,R7,files only,"the files named, and nothing else",no
 none; THRU file max frequency is well below what the baud rate needs,1,R8,files only,"the files named, and nothing else",no
-R1 complete,4,"C3, C4, D1, D4",run complete,"a history record of the run, its working config, and a seeded result file",seeded
+R1 complete,5,"C3, C4, D1, D4, SY57",run complete,"a history record of the run, its working config, and a seeded result file",seeded
 no prior run in this project,2,"D2, SM12",settings or history,history.jsonl holding exactly the commands described (or none),no
 R1 complete; Rscript not on PATH,1,D3,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
 R1 then D1 complete,3,"C1, C2",run complete,"a history record of the run, its working config, and a seeded result file",seeded
@@ -15,8 +15,8 @@ R1 complete; z_p (TX) defines 4 package cases,1,C5,run complete,"a history recor
 R2 complete; inventory holds three THRU files,1,C6,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
 C2 complete,1,C7,run complete,"a history record of the run, its working config, and a seeded result file",seeded
 R2 complete; data\thru.s4p modified on disk since that run,1,C8,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
-none; data\config.xls exists; interface type KR already confirmed for this project; network up,1,F1,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
-as F1 but interface type not yet confirmed,1,F2,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+none; data\config.xls exists; interface type KR already confirmed for this project; network up,2,"F1, SY36",fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
+as F1 but interface type not yet confirmed,2,"F2, SY38",fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
 as F1 but no network,1,F3,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
 as F1 but the selected zip is already cached,1,F4,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
 as F1 but the newest entry is marked superseded or do not use,1,F5,fetch environment,a local stand-in for the IEEE index page and its zips; the network condition named; the interface answer stored or not,no
@@ -29,9 +29,9 @@ new terminal; history file from an earlier session exists,1,S1,settings or histo
 history exists,1,S2,settings or history,history.jsonl holding exactly the commands described (or none),no
 project folder with no history,3,"CH05, FB07, S3",files only,"history.jsonl holding exactly the commands described (or none); the files named, and nothing else",no
 last run has COM below the pass threshold,1,X1,run complete,"a history record of the run, its working config, and a seeded result file",seeded
-any,7,"FB03, TU03, TU04, TU06, TU07, TU08, X2",files only,"the files named, and nothing else",no
-run complete with the starting config and data\thru.s4p,722,"CB01, CB02, CB03, CB04, CB05, CB06, CB07, CB08, CB09, CB10, CB11, CB12 and 582 more",run complete,"a history record of the run, its working config, and a seeded result file",seeded
-run complete with one active override: DER_0 = 1e-4,2,"CB14, SX19",run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
+any,10,"FB03, SY39, SY41, SY42, TU03, TU04, TU06, TU07, TU08, X2",files only,"the files named, and nothing else",no
+run complete with the starting config and data\thru.s4p,797,"CB01, CB02, CB03, CB04, CB05, CB06, CB07, CB08, CB09, CB10, CB11, CB12 and 646 more",run complete,"a history record of the run, its working config, and a seeded result file",seeded
+run complete with one active override: DER_0 = 1e-4,3,"CB14, SX19, SY32",run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
 "run complete with two active overrides: DER_0 = 1e-4, SNR_TX = 32.5",2,"CB15, CB16",run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
 "run complete with data\config.xlsx, data\thru.s4p and crosstalk files",1,CB18,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
 none; both files exist,4,"CB19, CP02, CP03, CP16",files only,"the files named, and nothing else",no
@@ -50,7 +50,7 @@ run complete with C_b = [0.2e-4 0.3e-4],1,SX14,run complete,"a history record of
 runs complete for Clip Method = Slow and for Clip Method = Fast,1,SX18,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
 run complete; data\thru.s4p was replaced on disk since then,1,SX22,run complete,"a history record of the run, its working config, and a seeded result file; the file or environment condition named",seeded
 run complete with one active override: N_qb = 0,1,SX26,run complete,"a history record of the run, its working config, and a seeded result file; the named change already applied in the working config",seeded
-the question of SX34 is open,2,"SX35, SX36",settings or history,the earlier use case replayed up to its open or cancelled question,no
+the question of SX34 is open,3,"MG05, SX35, SX36",settings or history,the earlier use case replayed up to its open or cancelled question,no
 new project folder: no history yet; both files exist,2,"TU01, TU02",files only,"history.jsonl holding exactly the commands described (or none); the files named, and nothing else",no
 history holds 20 successful commands,1,TU05,settings or history,history.jsonl holding exactly the commands described (or none),no
 no settings file; history holds 4 successful commands,1,TU09,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
@@ -81,7 +81,7 @@ history holds 40 commands,2,"FB04, FB06",settings or history,history.jsonl holdi
 "the project settings file sets mask_names = off; history holds Run COM on D:\acme\falcon_rev2\thru.s4p with D:\acme\cfg_falcon.xlsx, then Re-run with package PKG_AcmeBGA, then Re-run with C_d = [0.4e-4 0.9e-4]",1,FB15,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
 "the project settings file sets mask_numbers = on; history holds Run COM on D:\acme\falcon_rev2\thru.s4p with D:\acme\cfg_falcon.xlsx, then Re-run with package PKG_AcmeBGA, then Re-run with C_d = [0.4e-4 0.9e-4]",1,FB16,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
 the project settings file holds mask_names = maybe; history holds 40 commands,1,FB17,settings or history,"the settings file lines named, in the user file or the project file as stated; history.jsonl holding exactly the commands described (or none)",no
-the C_b sweep of SX02 is complete: 9 results,7,"SM01, SM02, SM05, SM06, SM07, SM14, SM15",batch complete,"history and result files for every point of the batch, with seeded result values",seeded
+the C_b sweep of SX02 is complete: 9 results,10,"MG04, SM01, SM02, SM05, SM06, SM07, SM14, SM15, SY29, SY31",batch complete,"history and result files for every point of the batch, with seeded result values",seeded
 the Clip Method sweep of SX17 is complete: 2 results,1,SM03,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
 the C_b sweep of SX27 is complete: 2 results,1,SM04,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
 "the grid of SX15 is complete: C_b at 3 values by DER_0 at 2 values, 6 results",1,SM08,batch complete,"history and result files for every point of the batch, with seeded result values",seeded
@@ -93,19 +93,36 @@ none; both files exist; the config has no f_z row,1,SC06,files only,"the files n
 run complete with the starting config and data\thru.s4p; data\thru2.s4p also exists,3,"CH01, CH02, CH06",seeded run,"as the run-complete state, plus a second THRU file at data\thru2.s4p (a different length)",no
 run complete with one active override: DER_0 = 1e-4; data\thru2.s4p also exists,1,CH03,seeded run,"as the one-override state with DER_0 = 1e-4, plus a second THRU file at data\thru2.s4p",no
 run complete with the starting config and data\thru.s4p; data\fext1.s4p also exists,1,CH08,seeded run,"as the run-complete state, plus a FEXT file at data\fext1.s4p",no
-"run complete thru-only with the starting config and data\ch\b300_thru1.s4p; data\ch holds two THRUs, b300_thru1.s4p and b500_thru1.s4p, each with three FEXT (b300_xtalk1_Fext.s4p to b300_xtalk3_Fext.s4p) and four NEXT files (b300_xtalk4_Next.s4p to b300_xtalk7_Next.s4p) named after it",3,"GF04, XT01, XT06",seeded run,"the files named, written with make_s4p.py, and a history record of the run described",no
+"run complete thru-only with the starting config and data\ch\b300_thru1.s4p; data\ch holds two THRUs, b300_thru1.s4p and b500_thru1.s4p, each with three FEXT (b300_xtalk1_Fext.s4p to b300_xtalk3_Fext.s4p) and four NEXT files (b300_xtalk4_Next.s4p to b300_xtalk7_Next.s4p) named after it",6,"GF04, SY18, SY19, SY20, XT01, XT06",seeded run,"the files named, written with make_s4p.py, and a history record of the run described",no
 "run complete with the starting config, data\ch\b300_thru1.s4p and its three FEXT and four NEXT files; data\ch as in the thru-only state",3,"GF02, GF03, XT04",seeded run,"the files named, written with make_s4p.py, and a history record of the run described",no
 "run complete thru-only with the starting config and data\ch1\x_thru_Tx7_to_Rx7.s4p; data\ch1 holds that one THRU, three FEXT files (x_FEXT_Tx5_to_Rx7.s4p, x_FEXT_Tx6_to_Rx7.s4p, x_FEXT_Tx8_to_Rx7.s4p) and two NEXT files (x_NEXT_Tx7_to_Rx7.s4p, x_NEXT_Tx8_to_Tx7.s4p)",1,XT02,seeded run,"the files named, written with make_s4p.py, and a history record of the run described",no
 "run complete thru-only with the starting config and data\ch2\b300_thru1.s4p; data\ch2 holds two THRUs, b300_thru1.s4p and b500_thru1.s4p, and FEXT and NEXT files whose names match neither",1,XT05,seeded run,"the files named, written with make_s4p.py, and a history record of the run described",no
 as F1 but the newest entry for the interface holds several zips under one date,1,F11,stand-in page,a stand-in index page in the recorded markup,no
 as F1 but two entries for the interface share the newest date,1,F12,stand-in page,a stand-in index page in the recorded markup,no
 no history; the GUI selection holds the starting config as data\config.xlsx and the THRU data\thru.s4p,1,SL01,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
-"no history; the GUI selection holds the starting config as data\config.xlsx, the THRU data\ch\b300_thru1.s4p, three FEXT and four NEXT files of data\ch",1,SL02,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
+"no history; the GUI selection holds the starting config as data\config.xlsx, the THRU data\ch\b300_thru1.s4p, three FEXT and four NEXT files of data\ch",2,"SL02, SY04",seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
 no history; the GUI selection holds the starting config as data\config.xlsx and no channel file,1,SL03,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
 no history; both files exist; there is no GUI selection (the command line),1,SL04,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
-run complete with the starting config and data\thru.s4p; the GUI selection holds that config and the THRU data\thru2.s4p,1,SL05,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
-"empty project folder: no config, no channel file, no history",1,EX01,seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
+run complete with the starting config and data\thru.s4p; the GUI selection holds that config and the THRU data\thru2.s4p,2,"SL05, SY05",seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
+"empty project folder: no config, no channel file, no history",2,"EX01, PS33",seeded,"the files named, written with make_s4p.py; the selection is handed to the core as data",no
 run complete with the starting config and data\thru.s4p; the Run tab holds the same files with Output dynamic results ticked,2,"GF01, RT01",seeded run,"the run-complete state, plus the Run tab state handed to the core as data",no
 run complete with the starting config and data\thru.s4p; the Run tab holds the same files and options as that run,1,RT02,seeded run,"the run-complete state, plus the Run tab state handed to the core as data",no
 run complete with the starting config and data\thru.s4p; the Run tab holds the same files with --eye-under-mlse ticked,1,RT04,seeded run,"the run-complete state, plus the Run tab state handed to the core as data",no
 run complete with the starting config and data\thru.s4p; there is no Run tab (the command line),1,RT03,seeded run,"the run-complete state, plus the Run tab state handed to the core as data",no
+"run complete thru-only with the starting config and data\ak\Tx_NPC_250mm_32AWG_BPK_300mm_27AWG_BPK_250mm_32AWG_NPC_Rx_thru1.s4p; data\ak holds four THRUs named alike, with BPK_300mm, BPK_500mm, BPK_1200mm and BPK_1400mm in that place",3,"SY01, SY13, SY22",seeded run,"the four THRUs written with make_s4p.py (300, 500, 1200 and 1400 mm) under the names given, as the blind fixture placed them in the akinwale folder; one seeded thru-only run on the BPK_300mm THRU",no
+run complete with the starting config and data\thru.s4p; data\thru_long.s4p and data\thru_500mm.s4p also exist,2,"SY21, SY23",seeded run,"the run-complete state, plus data\thru_long.s4p and data\thru_500mm.s4p written with make_s4p.py",no
+"run complete with the starting config and data\thru.s4p, then a re-run with data\thru2.s4p and DER_0 = 1e-4",1,SY24,seeded run,"the run-complete state, then data\thru2.s4p written with make_s4p.py and a seeded re-run on it with DER_0 = 1e-4 (as CH06)",no
+"the sigma_RJ sweep is complete: sigma_RJ at 0.01, 0.02 and 0.03, 3 results",1,SY30,batch complete,"a seeded run, then a seeded sigma_RJ batch at 0.01, 0.02 and 0.03 (the first reused), as the blind fixture of B102",no
+none; data\Tx_Rx_thru1.s4p exists and the starting config is data\configs\kr_case1.xlsx,1,SY02,files only,the starting config copied to data\configs\kr_case1.xlsx and a THRU written with make_s4p.py as data\Tx_Rx_thru1.s4p; the fixture layout otherwise,no
+"as F1 but the config is data\cfg_c2m.xlsx (the starting config under that name), there is no data\config.xls, and no interface is confirmed for this project",1,SY37,fetch environment,"the F1 stand-in page (which has a C2M entry) with the starting config copied to data\cfg_c2m.xlsx, no data\config.xls, and no interface confirmed",no
+"run complete with the starting config and data\thru.s4p, then a re-run as the 802.3dj C2C preset (ffe_pre_tap_len = 5, N_f = 50, MLSE = 0, DER_0 = 6.7e-6, ERL Pass threshold = 9.7, both package tests)",4,"PS30, PS31",seeded run,"the run-complete state, then a seeded re-run with the 802.3dj C2C change list (z_p select [1 2] on class A configs, [3 4] on class B) whose history record names the preset that fired (802.3dj C2C)",no
+"run complete with the starting config and data\thru.s4p, then a re-run as the 802.3ck C2C preset with the overlay values",3,"PP03, PS29, PS32",seeded run,"the run-complete state, then a seeded re-run with the overlay's 802.3ck C2C change list (owner_translations.csv B162, b_min included), the history record naming the preset; seeded only when the overlay is present (the rows that use it carry overlay:present), since its values may not be in the repository",no
+"none; data\config.xlsx is the starting config saved as a strict OOXML workbook, and data\thru.s4p exists",1,CF11,files only,"the starting config rewritten by the test as a strict OOXML package (the purl.oclc.org/ooxml namespaces in place of the transitional ones), the way Excel saves Strict Open XML Spreadsheet; data\thru.s4p from the fixture layout",no
+"run complete in eye height and VEC mode: the starting config with PMD_type = C2M, VEC Pass threshold = 10 and EH_min = 12, on data\thru.s4p; seeded results COM 4.24, VEC_dB 8.6 and VEO_mV 9.1",1,CF12,seeded run,"a seeded run, then a seeded re-run with PMD_type = C2M and VEC Pass threshold = 10 and EH_min = 12 added; the made-up numbers of that second run are COM 4.24, VEC_dB 8.6 and VEO_mV 9.1 (Ctx.numbers for k = 2)",no
+the question of PS05 is open,5,"PP04, PP05, PP06, PP07",settings or history,the earlier use case replayed up to its open or cancelled question,no
+the question of PS11 is open,1,PS15,settings or history,the earlier use case replayed up to its open or cancelled question,no
+the question of PS24 is open,2,"PP15, PP16",settings or history,the earlier use case replayed up to its open or cancelled question,no
+the question of PP01 is open,1,PP02,settings or history,the earlier use case replayed up to its open or cancelled question,no
+the question of PP08 is open,5,"PP10, PP11, PP12, PP19, PP21",settings or history,the earlier use case replayed up to its open or cancelled question,no
+the question of PP09 is open,4,"PP13, PP14, PP18, PP20",settings or history,the earlier use case replayed up to its open or cancelled question,no
+the question of CF01 is open,1,CF02,settings or history,the earlier use case replayed up to its open or cancelled question,no

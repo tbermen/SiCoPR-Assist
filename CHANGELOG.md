@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.12.0 (21 October 2026)
+
+Version 2, Phase V2-10: rules and presets. The owner: "I want the user to be able to request KR, CR, C2M or C2C, or
+802.3ck or 802.3dj, and have it adjust the analysis appropriately." Decision 26: translator mode, a layer of rules and
+interface presets in front of the strict core, with no model. The use-case table grows to 1041 rows (groups PS, PP,
+CF and SY, 165 rows, scored in translator mode; CF in both modes) and the frozen L4 list to 801 rows (the 660 of V2-9
+unchanged, then 141 new); with `translator = off` every earlier row scores as in 0.11.0.
+
+- **Translator mode** (`sicopr_assist\translate.py`; setting `translator`, default on, and its environment override
+  `SICOPR_ASSIST_TRANSLATOR`). When the strict core misses a phrase, the layer reads it again and hands the core a
+  phrase it resolves, or asks its own question, or stops. It never writes the run CSV, runs the engine or skips
+  validation. The miss gate: a reply to a pending question, an out-of-scope request (email, slides, diagnose,
+  convert, optimise) and a value the core refused never reach it. Typos are forgiven in command words only.
+- **Words to keywords**: the owner's rulings (baud rate, pass threshold, SNDR, DFE taps, Rx FFE taps, package A and B,
+  the high-loss package, both package tests) and the study's list; references from the project (the 500mm thru, the
+  original thru, the other package, the channel I selected); number words; a word with several readings (`Z_c`,
+  `SNR`, trace impedance) is a question with the candidates; a name one look-alike character from a keyword
+  (`DER_O`) is asked about, never corrected.
+- **Interface presets** (`sicopr_assist\data\presets.csv`, each value with its source): KR, CR, C2C and C2M in
+  802.3dj and 802.3ck. 802.3dj CR proposes the host classes (HL to HL) with the valid pairs as options; 802.3dj C2M
+  starts from the 802-COM C2M egress template, shipped unchanged with its License Notice sheet, with the adaptive
+  search keywords; 802.3ck C2M offers the eye height and VEC run or a C2C-parameter COM. A named interface takes the
+  standard of the config in view, a named standard keeps the interface in view.
+- **The overlay**: values whose only source may not be redistributed (IEEE Std 802.3ck-2022, P802.3dj drafts, the COM
+  3.70 workbooks, OIF texts) are not in the repository; they load from a local CSV named by the setting
+  `preset_overlay`, and without it those presets stop and say what is missing.
+- **Proposals**: about 10% more Rx FFE taps with the counts; the low-power receivers (four without the overlay, five
+  with it); the XSR-like receiver. Each option is a phrase the core resolves.
+- **History and feedback**: every command in translator mode records the wording, whether the strict core missed it,
+  the rules or preset that fired, the phrase handed to the core, any proposal, whether the user confirmed, changed or
+  declined it, and the translator's name, version and rules SHA-256 (history key `translation`); Export feedback
+  carries them.
+- **Core fixes** (both modes): the answer to a validation question on a first-run phrase is kept, and Q14's text is
+  right for a `b_min` limit above 0 (rows CF01 to CF03); `in <block>` binds per item, a main keyword is never written
+  into a package block, a first-run phrase reads block qualifiers, an unqualified package keyword follows the
+  `PKG_NAME` set in the same phrase (CF04 to CF09); a MATLAB vector expression with `ones` or `zeros` is written out
+  as the values MATLAB reads (CF10); a strict OOXML workbook is a STOP, not a traceback (CF11); a run in eye height
+  and VEC mode is judged by `VEC Pass threshold` and `EH_min` (CF12). A value glued to letters (`53.l25`) is read as
+  one word, so it stops as not a number.
+- **Also**: `Use the selected channels.` takes the channel files selected in the GUI into the working config without a
+  run; several keywords in one `Show`; `Show the package block <block>.`; a batch summary says whether COM passes at
+  every point; the panel's result line for an eye height and VEC run.
+- Tests: `tests\test_translate.py` (new: gates V10.5 and V10.6, the miss gate, the core fixes' texts); gates V10.1
+  and V10.2 in `tests\test_use_cases.py`; 17 new prior-state builders; the settings test covers the two new settings.
+  The test scripts written before this phase run in strict mode (`tests\check.py`).
+
 ## 0.11.0 (19 October 2026)
 
 Version 2, Phase V2-9: streamlining the panel. The owner liked GUI first ("the Assist command prompt area was getting

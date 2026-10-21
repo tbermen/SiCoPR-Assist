@@ -40,7 +40,7 @@ import fixtures  # noqa: E402
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--gate', choices=['G1.3', 'G4', 'G6', 'G7', 'M1', 'M2', 'N1', 'N2', 'V1.1', 'V2.1', 'V3.1', 'V6.2',
-                                         'V7.3', 'V8.2'],
+                                         'V7.3', 'V8.2', 'V10.1', 'V10.2'],
                     action='append',
                     default=[],
                     help='check a gate condition as well (may be given more than once)')
@@ -50,6 +50,9 @@ def main(argv=None):
     ap.add_argument('--only', help='comma-separated row ids, for a quick look')
     ap.add_argument('--no-paraphrases', action='store_true')
     args = ap.parse_args(argv)
+    # the earlier gates' own checks call the core in strict mode, as they were written; each scored row sets its mode
+    # itself (scoring.Scorer.context), and the rows of Phase V2-10 are scored in translator mode
+    os.environ.setdefault('SICOPR_ASSIST_TRANSLATOR', 'off')
     if not fixtures.find_starting_configs():
         print('SKIP: the four starting workbooks (by SHA-256, in tests\\configs or SICOPR_ASSIST_CONFIGS) are '
               'absent or hidden; the use-case harness needs them')
@@ -121,6 +124,10 @@ def main(argv=None):
         gate_v62(rows, results, full)
     if 'V7.3' in args.gate:
         gate_v73(rows, results, full)
+    if 'V10.1' in args.gate:
+        gate_v101(rows, results, full)
+    if 'V10.2' in args.gate:
+        gate_v102(rows, results, full)
     if 'V8.2' in args.gate:
         gate_v82(rows, results, full)
     if 'G1.3' in args.gate:
@@ -570,8 +577,8 @@ def gate_v73(rows, results, full):
           (len(ids), ids[649:]))
     with open(scoring.REVIEW, newline='', encoding='utf-8') as f:
         rlines = f.read().splitlines()
-    check('V7.3: the review list has 216 rows: the 214 it had, unchanged, then RT02 and RT06',
-          len(rlines) == 217 and [ln.split(',')[0] for ln in rlines[215:]] == ['RT02', 'RT06']
+    check('V7.3: the review list had 216 rows: the 214 it had, unchanged, then RT02 and RT06',
+          len(rlines) >= 217 and [ln.split(',')[0] for ln in rlines[215:217]] == ['RT02', 'RT06']
           and hashlib.sha256('\n'.join(rlines[:215]).encode('utf-8')).hexdigest() == REVIEW_214_SHA256,
           len(rlines) - 1)
     by_id = {r['id']: r for r in rows}
@@ -662,14 +669,15 @@ def gate_v82(rows, results, full):
     with open(scoring.FROZEN, newline='', encoding='utf-8') as f:
         lines = f.read().splitlines()
     ids = [ln.split(',')[0] for ln in lines[1:]]
-    check('V8.2: the frozen list has 660 rows: the 655 it had, unchanged, then GF01 to GF05',
-          len(ids) == 660 and ids[655:] == list(NEW_ROWS_V8)
+    # the list has grown since (gate V10.2 pins the 660 rows it had then and what came after them)
+    check('V8.2: the frozen list had 660 rows: the 655 it had, unchanged, then GF01 to GF05',
+          len(ids) >= 660 and ids[655:660] == list(NEW_ROWS_V8)
           and hashlib.sha256('\n'.join(lines[:656]).encode('utf-8')).hexdigest() == FROZEN_655_SHA256,
           (len(ids), ids[653:]))
     with open(scoring.REVIEW, newline='', encoding='utf-8') as f:
         rlines = f.read().splitlines()
-    check('V8.2: the review list has the 216 rows it had, unchanged',
-          len(rlines) == 217 and hashlib.sha256('\n'.join(rlines).encode('utf-8')).hexdigest() == REVIEW_216_SHA256,
+    check('V8.2: the review list had the 216 rows it had, unchanged',
+          len(rlines) >= 217 and hashlib.sha256('\n'.join(rlines[:217]).encode('utf-8')).hexdigest() == REVIEW_216_SHA256,
           len(rlines) - 1)
     by_id = {r['id']: r for r in rows}
     with fixtures.Fixtures() as fx:
@@ -735,6 +743,91 @@ def gate_v82(rows, results, full):
                         o['type'] + (': ' + ' > '.join(steps) if steps else '')), ok,
                           (o['type'], steps, o.get('reason'), opts, o.get('unplaced')))
                     fx.remove_project(ctx.root)
+
+
+NEW_GROUPS_V10 = ('PS', 'PP', 'CF', 'SY')
+FROZEN_660_SHA256 = '6b9007e795918b6e00396cc1ada3e7012520bd5f4a7d7f8d3b6f37c0c7a9fbc1'     # the file at V2-9
+V9_SCORES = 'score_use_cases.v2_phase_9_full.csv'      # V2-9's full-mode score file, in SICOPR_ASSIST_INPUTS
+
+
+def gate_v101(rows, results, full):
+    """Gate V10.1 (Phase V2-10): strict mode unchanged. With translator = off (every row without a mode condition is
+    scored so), every score of the rows that existed at V2-9 equals V2-9's full-mode score file, pair by pair, and the
+    frozen list's 660 rows of V2-9 are unchanged."""
+    import csv
+    import hashlib
+    import scoring
+    check('V10.1: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
+    with open(scoring.FROZEN, 'rb') as f:
+        data = f.read()
+    head = b''.join(data.splitlines(keepends=True)[:661])
+    check('V10.1: the frozen list starts with the 660 rows of V2-9, byte for byte (SHA-256 %s...)' % FROZEN_660_SHA256[:12],
+          hashlib.sha256(head).hexdigest() == FROZEN_660_SHA256, hashlib.sha256(head).hexdigest())
+    old_rows = [r for r in rows if r['group'] not in NEW_GROUPS_V10]
+    check('V10.1: every row of V2-9 is scored in strict mode (no mode condition)',
+          all(scoring.modes(r) == ['strict'] for r in old_rows), [r['id'] for r in old_rows if scoring.modes(r) != ['strict']])
+    path = os.path.join(os.environ.get('SICOPR_ASSIST_INPUTS') or '', V9_SCORES)
+    if not os.path.isfile(path):
+        print('SKIP: V10.1 score comparison needs V2-9\'s score file %s (the build inputs folder)' % V9_SCORES)
+        return
+    with open(path, newline='', encoding='utf-8') as f:
+        before = {(r['id'], r['config']): r for r in csv.DictReader(f)}
+    cols = ('applies', 'L1', 'L2', 'L3', 'L4', 'paraphrases_ok', 'paraphrases_asked', 'paraphrases_wrong')
+    now = {(r['id'], r['config']): r for r in results if r['group'] not in NEW_GROUPS_V10}
+    differ = []
+    for key, b in before.items():
+        a = now.get(key)
+        if a is None:
+            differ.append('%s %s: not scored now' % key)
+            continue
+        d = [c for c in cols if str(a.get(c, '')) != str(b.get(c, ''))]
+        if d:
+            differ.append('%s %s: %s' % (key[0], key[1], ', '.join('%s %s -> %s' % (c, b.get(c), a.get(c)) for c in d)))
+    check('V10.1: every score of the %d pairs of V2-9 is the same in strict mode (%s)' % (len(before), ', '.join(cols)),
+          len(now) == len(before) and not differ, differ[:20])
+
+
+def gate_v102(rows, results, full):
+    """Gate V10.2: every must PS, SY, PP and CF row passes L1 and every other level that applies, in translator mode
+    (CF in both modes); only the new rows entered the frozen list. Rows that need the overlay apply only where it is
+    (scoring.OVERLAY_ENV)."""
+    import scoring
+    want = [(r, label) for r in rows if r['group'] in NEW_GROUPS_V10 and r['priority'] == 'must'
+            for label in scoring.labels_of(r)]
+    got = [r for r in results if r['group'] in NEW_GROUPS_V10 and r['priority'] == 'must']
+    applicable = [r for r in got if r['applies'] == 'yes']
+    check('V10.2: the must PS, SY, PP and CF rows were scored (%d pairs, %d applicable here)' % (len(want), len(applicable)),
+          len(got) == len(want) and applicable, len(got))
+    check('V10.2: the preset overlay is on this machine, so every new row applies (overlay:present rows too)',
+          scoring.overlay_file() is not None and len(applicable) == len(got),
+          '%d of %d pairs apply' % (len(applicable), len(got)))
+    check('V10.2: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
+    board(applicable, 'V10.2: the new rows')
+    disputed = open_disputes()
+    bad = [r for r in applicable if (r['L1'] != 'PASS' or 'FAIL' in (r['L2'], r['L3'], r['L4'])) and r['id'] not in disputed]
+    excused = sorted({r['id'] for r in applicable if r['id'] in disputed})
+    if excused:
+        print('V10.2: excused by dispute: %s' % ', '.join(excused))
+    check('V10.2: every must new pair passes L1, and L2, L3 and L4 where they apply', not bad,
+          ['%s %s: %s' % (r['id'], r['config'], r['note'][:200]) for r in bad])
+    for g in NEW_GROUPS_V10:
+        mine = [r for r in applicable if r['group'] == g]
+        print('V10.2 %s: %d pairs; L1 %d, L2 %d/%d, L3 %d/%d, L4 %d/%d' % (
+            g, len(mine), sum(r['L1'] == 'PASS' for r in mine),
+            sum(r['L2'] == 'PASS' for r in mine), sum(r['L2'] in ('PASS', 'FAIL') for r in mine),
+            sum(r['L3'] == 'PASS' for r in mine), sum(r['L3'] in ('PASS', 'FAIL') for r in mine),
+            sum(r['L4'] == 'PASS' for r in mine), sum(r['L4'] in ('PASS', 'FAIL') for r in mine)))
+    with open(scoring.FROZEN, newline='', encoding='utf-8') as f:
+        lines = f.read().splitlines()
+    groups = {(r['id'], r['starting_config']): r['group'] for r in rows}
+    after = [ln for ln in lines[661:]]
+    check('V10.2: after the 660 rows of V2-9 the frozen list holds only rows of PS, PP, CF and SY (%d)' % len(after),
+          after and all(groups.get(tuple(ln.split(',')[:2])) in NEW_GROUPS_V10 for ln in after),
+          [ln[:40] for ln in after if groups.get(tuple(ln.split(',')[:2])) not in NEW_GROUPS_V10][:5])
+    with open(scoring.REVIEW, newline='', encoding='utf-8') as f:
+        rlines = f.read().splitlines()
+    check('V10.2: after the 216 rows of V2-9 the review list holds only rows of PS, PP, CF and SY',
+          all(groups.get(tuple(ln.split(',')[:2])) in NEW_GROUPS_V10 for ln in rlines[217:]), len(rlines) - 217)
 
 
 _types = {}

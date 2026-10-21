@@ -22,6 +22,13 @@ it (case and spaces do not matter). There is no alias table, and nothing is gues
 parameter name is offered back to you as an option, never corrected silently. The tool is
 rules-based: there is no language model in this version.
 
+That is strict mode. Translator mode (on by default since 0.12.0) adds a layer of rules and interface
+presets in front of it: when the strict reading misses, the layer reads the phrase again with the words
+engineers use (baud rate is `f_b`, DFE taps is `N_b`, SNDR is `SNR_TX`, the 500mm thru, the other
+package), the interfaces of 802.3dj and 802.3ck (KR, CR, C2C, C2M), and proposals where an amount is
+missing (about 10% more Rx FFE taps, the CR host classes, the low-power receivers), and hands the core a
+phrase it resolves. The core still validates and plans everything. See *Translator mode* below.
+
 ## What it is not
 
 - **It never changes a COM result.** It edits a working copy of your config, hands it to SiCoPR,
@@ -216,6 +223,48 @@ force and where each one came from. The example file
 | `mask_names`, `mask_numbers` | on, off | what Export feedback masks |
 | `max_download_mb` | 500 | a channel download larger than this many megabytes asks first |
 | `download_retries` | 1 | how many more times an interrupted download is tried before the tool stops |
+| `translator` | on | translator mode: the rules-and-presets layer reads a phrase the strict core misses; off = strict mode only |
+| `preset_overlay` | (empty) | a local CSV file with the preset values that may not be shipped (see *Translator mode*) |
+
+## Translator mode
+
+With `translator = on` (the default), a phrase the strict core misses is read again by a layer of
+rules and presets (`sicopr_assist\translate.py`), which hands the core a phrase it resolves, or asks
+its own question, or stops. It never writes the run CSV, runs the engine or skips validation, and it
+never reads a reply to a pending question, an out-of-scope request (email, slides, diagnose, convert,
+optimise) or a value the core refused. A typo is forgiven in command words only (`Re-reun`, `rn it
+agian`), never in a keyword name or a value: `DER_O` is asked about.
+
+- **Words to keywords**: baud rate (`f_b`), pass threshold (`COM Pass threshold`), SNDR (`SNR_TX`),
+  DFE taps (`N_b`), Rx FFE pre and post taps, local search off or a full grid (`Local Search = 0`),
+  ERL on, package A or B (the class blocks), the class B or high-loss package and both package tests
+  (`z_p select`), with vs without xtalk, the interactive R report, what was the COM, did it pass,
+  stats on the sweep, sensitive to X. A word with several readings (`Z_c`, `SNR`, trace impedance)
+  becomes a question with the candidates.
+- **References from the project**: the 500mm thru (a THRU beside the last one with that length in
+  its name), the original thru (the first run's), the other package, the channel I selected.
+- **Interfaces and standards**: `Setup a 802.3dj config for C2C and run my channels.`,
+  `Make it an 802.3ck KR config and re-run.`, `make it a cable config` (the standard of the config in
+  view, by `f_b`), `Switch to 802.3ck.` (the interface in view). 802.3dj KR and C2C start from the
+  shipped KR workbook; 802.3dj CR asks for the host classes with HL to HL proposed; 802.3dj C2M starts
+  from the 802-COM C2M egress template, shipped in `sicopr_assist\data\templates` with its License
+  Notice sheet, and is informative margin, not pass or fail; every 802.3ck preset and the 802.3dj C2M
+  `eta_0` need the overlay.
+- **Proposals**: `Give me more Rx FFE and re-run my setup.` proposes about 10% more taps with the
+  counts; `Restrict the receiver equalization to low power.` offers the low-power receivers. Each
+  option is a phrase the core resolves.
+
+Every command in translator mode records in the history the wording, whether the strict core missed
+it, the rules or preset that fired, the phrase handed to the core, any proposal, and whether you
+confirmed, changed or declined it; Export feedback carries them.
+
+**The overlay.** Preset values whose only source is a document that may not be redistributed (IEEE Std
+802.3ck-2022, the IEEE P802.3dj drafts, the IEEE COM 3.70 workbooks, OIF Implementation Agreements) are
+not in this repository. Each value in `sicopr_assist\data\presets.csv` names its source. Put the others
+in a local CSV with the columns `preset, keyword, value` (and, as you like, `source`) and name it in the
+settings, for example `preset_overlay = D:\work\presets_overlay.csv` under `[translator]`. Without it,
+the presets that need it stop and say which values are missing; 802.3dj KR, C2C and CR, the low-power
+receivers 1 to 4 and everything else work without it.
 
 ## The dashboard
 
@@ -482,7 +531,8 @@ channel download in 0.6.0, and the GUI in 0.7.0. Version 0.8.0 follows the first
 selection in the tabs, the command box, and the example that runs from an empty folder. Version 0.9.0
 follows the second: the Run tab and the panel as one. Version 0.10.0 follows the third: GUI first, with a
 run's output in the Run tab, and three phrasings of that session. Version 0.11.0 streamlines the panel: it shows
-only what SiCoPR's GUI does not.
+only what SiCoPR's GUI does not. Version 0.12.0 adds translator mode: rules and interface presets in front of the
+strict core, and five fixes of the core the presets needed.
 
 ## What is known to be incomplete
 
@@ -491,7 +541,7 @@ only what SiCoPR's GUI does not.
 - A re-run with another channel file replaces one THRU, or one FEXT or NEXT file. When the last run
   had several FEXT (or NEXT) files, naming one of them stops and asks for the whole set with its
   config.
-- 216 of the 876 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
+- 240 of the 1041 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
   They are scored at L1 (and L2 and L3 where those apply) and listed for a person to review.
 - Four behaviours are assumptions not yet confirmed by the maintainer: matching a typo in an action
   or filler word (`agian` read as `again`, never for a parameter name); the trouble thresholds of

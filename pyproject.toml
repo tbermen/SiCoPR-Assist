@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sicopr-assist"
-version = "0.11.0"
+version = "0.12.0"
 description = "A rules-based front end that turns phrases into SiCoPR runs"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,5 +30,5 @@ assist = "sicopr_assist.panel"
 packages = ["sicopr_assist", "sicopr_assist.panel"]
 
 [tool.setuptools.package-data]
-"sicopr_assist" = ["data/*"]
+"sicopr_assist" = ["data/*", "data/templates/*"]
 "sicopr_assist.panel" = ["static/*"]

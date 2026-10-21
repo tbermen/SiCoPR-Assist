@@ -59,6 +59,26 @@ class NotAWorkbook(ValueError):
     """A file that is not an .xlsx workbook."""
 
 
+class StrictOOXML(ValueError):
+    """An .xlsx saved as Excel's Strict Open XML Spreadsheet: openpyxl, and so this tool, and SiCoPR cannot read it
+    (core fix 4, row CF11; the IEEE COM 3.70 workbooks are such files)."""
+
+
+STRICT_NAMESPACE = b'purl.oclc.org/ooxml'
+
+
+def is_strict_ooxml(path):
+    """Whether an .xlsx package is strict OOXML: its workbook part uses the purl.oclc.org/ooxml namespaces."""
+    try:
+        with zipfile.ZipFile(path) as z:
+            names = z.namelist()
+            part = 'xl/workbook.xml' if 'xl/workbook.xml' in names else next(
+                (n for n in names if n.endswith('workbook.xml')), None)
+            return part is not None and STRICT_NAMESPACE in z.read(part)[:4000]
+    except (zipfile.BadZipFile, OSError, KeyError):
+        return False
+
+
 def _col_letters(idx0):
     """0-based column index -> spreadsheet letters."""
     s, n = '', idx0 + 1
@@ -121,6 +141,12 @@ def read_workbook(path):
     row r+1 and column c+1), formulas ({'B28': 'B3/2.5'}, without the '='), schema (the keywords sheet)
     and note (set when an .xlsx was read under another name). Raises LegacyXls or NotAWorkbook."""
     readable, tmp, note = _readable_copy(path)
+    if is_strict_ooxml(readable):
+        if tmp:
+            shutil.rmtree(tmp, ignore_errors=True)
+        raise StrictOOXML("%s is a strict OOXML workbook (Excel's Strict Open XML Spreadsheet), which SiCoPR-Assist "
+                          "and SiCoPR cannot read: save it as an ordinary Excel Workbook (.xlsx) and run again"
+                          % os.path.basename(path))
     try:
         wb_val = openpyxl.load_workbook(readable, data_only=True)
         wb_fml = openpyxl.load_workbook(readable, data_only=False)

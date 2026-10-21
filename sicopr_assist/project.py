@@ -18,6 +18,7 @@ set and the user profile otherwise; user_home() is the only place that decides i
 import datetime
 import json
 import os
+import re
 
 STATE_DIR = '.sicopr'
 SETTINGS_FILE = 'assist.ini'
@@ -58,6 +59,7 @@ HISTORY_KEYS = (
     'origin',          # 'cli' or 'gui': where the record was written (version 2, the GUI); None in older records
     'kind',            # what the record is (KINDS); None in older records, which are all phrases
     'detail',          # what a GUI record holds besides the keys above (GUI_DESIGN.md section 7a), or None
+    'translation',     # translator mode (Phase V2-10): what the rules-and-presets layer did, or None (TRANSLATION_KEYS)
 )
 STATUSES = ('ok', 'question', 'cancelled', 'stopped', 'failed')
 
@@ -115,10 +117,12 @@ def setting_defaults():
         for k, raw in cp.items(sec):
             if raw.strip().lower() in ('on', 'off'):
                 out[k] = (_ON_OFF[raw.strip().lower()], sec)
-            elif '.' in raw:
+            elif re.fullmatch(r'\d+\.\d*', raw.strip()):
                 out[k] = (float(raw), sec)
-            else:
+            elif re.fullmatch(r'\d+', raw.strip()):
                 out[k] = (int(raw), sec)
+            else:                                   # a text setting: a path, empty when not set (preset_overlay)
+                out[k] = (raw.strip(), sec)
     return out
 
 
@@ -159,11 +163,15 @@ def read_settings(project=None):
                     continue
                 d = defaults[k][0]
                 raw = raw.strip()
-                if isinstance(d, bool):
+                if isinstance(d, str):
+                    v = raw
+                elif isinstance(d, bool):
                     if raw.lower() not in _ON_OFF:
                         warn.append('%s: %s = %s is not on or off, so %s stays in force' % (p, k, raw, 'on' if vals[k] else 'off'))
                         continue
                     v = _ON_OFF[raw.lower()]
+                if isinstance(d, (bool, str)):
+                    pass
                 else:
                     try:
                         v = type(d)(raw)

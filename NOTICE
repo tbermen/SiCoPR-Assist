@@ -49,3 +49,27 @@ under the same licence.
 
   Copyright 2026 Todd Bermensolo
   SPDX-License-Identifier: BSD-3-Clause
+
+
+4. Interface presets and the C2M template
+-----------------------------------------
+
+The 802.3dj C2M preset starts from an 802-COM config template, shipped
+unchanged, byte for byte, with its own License Notice sheet:
+
+  sicopr_assist/data/templates/config_com-4p13p0_802p3dj_d2p3_200G_C2M_TP0_TP2_Egress_26_01_27.xlsx
+  from opensource.ieee.org/802-com/com_code, tag 4.17.0
+  (SHA-256 57e9da3f17dee495f386622f2bab30895a55b2ed40f2df997636d1a73af62e6e)
+
+The preset values in sicopr_assist/data/presets.csv that come from the
+802-COM C2C, CR and C2M templates and from the starting workbooks name that
+source in their own row. Those workbooks are:
+
+  Copyright 2025 802-COM Authors
+  SPDX-License-Identifier: BSD-3-Clause
+
+Values whose only source is a document that may not be redistributed (IEEE
+Std 802.3ck-2022, IEEE P802.3dj drafts, the IEEE COM 3.70 workbooks, OIF
+Implementation Agreements) are not in this repository. SiCoPR-Assist reads
+them from a local overlay file the user names in the settings
+(preset_overlay); without it, the presets that need them stop and say so.

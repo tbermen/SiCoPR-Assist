@@ -72,25 +72,80 @@ def labels_of(row):
     return ['Case1'] if row['starting_config'] == 'any' else row['starting_config'].split('; ')
 
 
+# Phase V2-10: the mode a row is scored in, and the preset overlay. A row with no mode condition is scored in strict
+# mode (translator = off), as every row was before; mode:translator rows in translator mode; mode:any rows in both.
+# The overlay is local and never in the repository: the harness finds it by the environment variable OVERLAY_ENV and
+# names it to the product through the setting preset_overlay, as a user would.
+TRANSLATOR_ENV = 'SICOPR_ASSIST_TRANSLATOR'          # the product's own override of the setting translator
+OVERLAY_ENV = 'SICOPR_ASSIST_OVERLAY'                 # where the test finds the overlay file (outside the repository)
+
+
+def overlay_file():
+    """The preset overlay this machine has for the tests, or None."""
+    p = os.environ.get(OVERLAY_ENV, '').strip()
+    return p if p and os.path.isfile(p) else None
+
+
+def conditions(row):
+    return [c.strip() for c in row['applies_when'].split(';') if c.strip()]
+
+
+def modes(row):
+    """The modes a row is scored in: ['strict'], ['translator'] or both (mode:any)."""
+    kinds = {c.partition(':')[2] for c in conditions(row) if c.startswith('mode:')}
+    if 'any' in kinds:
+        return ['strict', 'translator']
+    return ['translator'] if 'translator' in kinds else ['strict']
+
+
 def applies(row):
-    """(True, '') when the row's applies_when holds for the engine under test, else (False, why)."""
-    cond = row['applies_when'].strip()
-    if not cond:
-        return True, ''
-    kind, _, arg = cond.partition(':')
-    sup, dflt = engine.supported_releases(), engine.default_release()
-    holds = {'loader_reads': lambda: engine.reads_keyword(arg),
-             'loader_lacks': lambda: not engine.reads_keyword(arg),
-             'release_supported': lambda: arg in sup,
-             'release_unsupported': lambda: arg not in sup,
-             'release_default': lambda: arg == dflt,
-             'release_supported_not_default': lambda: arg in sup and arg != dflt}[kind]()
-    return holds, '' if holds else '%s does not hold for this engine' % cond
+    """(True, '') when the row's applies_when holds for the engine under test, else (False, why). Conditions joined by
+    '; ' must all hold. overlay:absent always holds: the harness names no overlay unless a row needs one."""
+    for cond in conditions(row):
+        kind, _, arg = cond.partition(':')
+        if kind == 'mode':
+            continue
+        if kind == 'overlay':
+            if arg == 'present' and overlay_file() is None:
+                return False, 'overlay:present does not hold: no preset overlay on this machine (%s)' % OVERLAY_ENV
+            continue
+        sup, dflt = engine.supported_releases(), engine.default_release()
+        holds = {'loader_reads': lambda: engine.reads_keyword(arg),
+                 'loader_lacks': lambda: not engine.reads_keyword(arg),
+                 'release_supported': lambda: arg in sup,
+                 'release_unsupported': lambda: arg not in sup,
+                 'release_default': lambda: arg == dflt,
+                 'release_supported_not_default': lambda: arg in sup and arg != dflt}[kind]()
+        if not holds:
+            return False, '%s does not hold for this engine' % cond
+    return True, ''
 
 
 # ----------------------------------------------------------------------------- value helpers
 def split_points(text):
     return [x.strip() for x in l4.split_top(text, '; ') if x.strip()]
+
+
+_ONES = re.compile(r'^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\*(ones|zeros)\(1,(\d+)\)$')
+
+
+def written_out(text):
+    """A MATLAB row vector with x*ones(1,n) or x*zeros(1,n) terms as the values MATLAB reads from it, or the text
+    unchanged. Row CF10 holds the typed form; a product that writes the values out is compared by what is read
+    (the row's note). Written here, apart from the product's own reader."""
+    s = str(text).strip()
+    if not (s.startswith('[') and s.endswith(']')) or 'ones(' not in s and 'zeros(' not in s:
+        return text
+    s = re.sub(r'\s*\*\s*', '*', s[1:-1])
+    s = re.sub(r'\(\s*1\s*,\s*(\d+)\s*\)', r'(1,\1)', s)
+    out = []
+    for term in s.split():
+        m = _ONES.match(term)
+        if m:
+            out += [m.group(1) if m.group(2) == 'ones' else '0'] * int(m.group(3))
+        else:
+            out.append(term)
+    return '[%s]' % ' '.join(out)
 
 
 def same(product_value, expected_text):
@@ -99,7 +154,10 @@ def same(product_value, expected_text):
         return product_value is None
     if product_value is None:
         return False
-    return O.norm(O.val(product_value)) == O.norm(expected_text)
+    if O.norm(O.val(product_value)) == O.norm(expected_text):
+        return True
+    w = written_out(expected_text)
+    return w != expected_text and O.norm(O.val(product_value)) == O.norm(w)
 
 
 def strip_linked(text):
@@ -226,9 +284,17 @@ class Scorer:
             self.by_id.setdefault(r['id'], []).append(r)
 
     # ---- prior state and the call
-    def context(self, row, label):
+    def context(self, row, label, mode='strict'):
+        """The prior state of a row, in a mode: the setting translator through its environment override, and for a
+        row that needs the overlay the setting preset_overlay in the project settings file."""
         ctx = prior_states.Ctx(self.fx, label, row, self.by_id)
+        ctx.mode = mode
+        ctx.env[TRANSLATOR_ENV] = 'on' if mode == 'translator' else 'off'
+        if 'overlay:present' in conditions(row) and overlay_file():
+            ctx.overlay = overlay_file()
         prior_states.build(row['prior_state'], ctx)
+        if getattr(ctx, 'overlay', None):
+            prior_states.name_overlay(ctx, ctx.overlay)
         return ctx
 
     def phrase_of(self, row, column='phrase'):
@@ -329,14 +395,33 @@ class Scorer:
 
     # ---- one pair
     def score(self, row, label, paraphrases=True):
-        res = dict(id=row['id'], config=label, group=row['group'], priority=row['priority'], applies='yes',
-                   L1='', L2='', L3='', L4='', paraphrases_ok='', paraphrases_asked='', paraphrases_wrong='', note='')
+        """One row and config pair, in every mode the row is scored in (modes): a level passes when it passes in each
+        mode, and the note says which mode a failure came from."""
         ok, why = applies(row)
         if not ok:
-            res.update(applies='no', note=why)
-            return res
+            return dict(id=row['id'], config=label, group=row['group'], priority=row['priority'], applies='no',
+                        L1='', L2='', L3='', L4='', paraphrases_ok='', paraphrases_asked='', paraphrases_wrong='',
+                        note=why)
+        ms = modes(row)
+        if len(ms) == 1:
+            return self.score_in(row, label, ms[0], paraphrases)
+        each = [self.score_in(row, label, m, paraphrases) for m in ms]
+        res = dict(each[0])
+        for lv in ('L1', 'L2', 'L3', 'L4'):
+            got = [e[lv] for e in each]
+            res[lv] = 'FAIL' if 'FAIL' in got else got[0]
+        for k in ('paraphrases_ok', 'paraphrases_asked', 'paraphrases_wrong'):
+            if all(isinstance(e[k], int) for e in each):
+                res[k] = sum(e[k] for e in each)
+        res['note'] = '; '.join('%s: %s' % (m, e['note']) for m, e in zip(ms, each) if e['note'])
+        res['_outcomes'] = {m: e.get('_outcome') for m, e in zip(ms, each)}
+        return res
+
+    def score_in(self, row, label, mode, paraphrases=True):
+        res = dict(id=row['id'], config=label, group=row['group'], priority=row['priority'], applies='yes',
+                   L1='', L2='', L3='', L4='', paraphrases_ok='', paraphrases_asked='', paraphrases_wrong='', note='')
         notes = []
-        ctx = self.context(row, label)
+        ctx = self.context(row, label, mode)
         try:
             o = self.call(ctx, self.phrase_of(row))
             bad = well_formed(o)
@@ -388,7 +473,7 @@ class Scorer:
         if paraphrases and paras.strip():
             okn = asked = wrong = 0
             for ph in [p.strip() for p in paras.split(' | ') if p.strip()]:
-                c2 = self.context(row, label)
+                c2 = self.context(row, label, mode)
                 try:
                     o2 = self.call(c2, ph)
                 finally:

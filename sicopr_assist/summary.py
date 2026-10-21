@@ -379,17 +379,23 @@ def run_summary(project, rid):
         wc = None
     lines = ['%s: %s, emulating COM release %s' % (rid, res.get('status'), res.get('release') or 'unknown')]
     cases = res.get('cases') or []
-    thr = _threshold(wc, COM_FIELD) if wc else None
+    eye = eye_mode(wc) if wc else None
+    thr = None if eye else (_threshold(wc, COM_FIELD) if wc else None)
     for i, case in enumerate(cases, 1):
         com = case.get(COM_FIELD)
         verdict = ''
         if thr is not None and is_number(com):
             verdict = ' (%s; COM Pass threshold %s)' % ('pass' if com == com and com >= thr else 'fail', fmt(thr))
+        if eye:
+            verdict = ' (not judged: PMD_type = %s is eye height and VEC mode)' % eye['mode']
         parts = ['COM %s dB%s' % (fmt(com), verdict)]
         for f in RUN_FIELDS:
             if f in case and (f != 'ERL' or is_number(case[f])):
                 parts.append('%s %s' % (f, fmt(case[f])))
-        lines.append('%s%s' % ('case %d: ' % i if len(cases) > 1 else '', ', '.join(parts)))
+        line = '%s%s' % ('case %d: ' % i if len(cases) > 1 else '', ', '.join(parts))
+        if eye:
+            line += '; ' + eye_verdict(case, eye)['text']
+        lines.append(line)
     if res.get('status') != 'complete':
         lines.append('the run did not complete: %s' % (res.get('message') or 'no message'))
     elif res.get('message'):
@@ -397,7 +403,53 @@ def run_summary(project, rid):
     lines += ['engine: %s' % n for n in engine_notes(project, rid)]
     lines.append('results: %s' % project.relative(project.run_dir(rid)))
     return {'run_id': rid, 'status': res.get('status'), 'release': res.get('release'), 'cases': cases,
-            'threshold': thr, 'lines': lines}
+            'threshold': thr, 'eye': eye, 'lines': lines}
+
+
+def _eye_values():
+    """The PMD_type values that switch the engine to eye height and VEC mode: the schema's legal values other than its
+    loader default (the default is COM mode). Read from the schema, never written here (gate G3.3)."""
+    row = validate.schema_row('PMD_type', 'main')
+    if row is None:
+        return set()
+    default = str(row['loader_default']).strip(" '\"").upper()
+    return {str(v).strip().upper() for v in validate.legal_values(row) or [] if str(v).strip().upper() != default}
+
+
+def eye_mode(wc):
+    """In eye height and VEC mode (PMD_type C2M, the 802.3ck Annex 120G measurement) a run is judged by VEC Pass
+    threshold and EH_min, not by COM (core fix 5, row CF12): {'mode', 'vec_max', 'eh_min'}, or None in COM mode."""
+    mode = param_value(wc, 'PMD_type')
+    if not isinstance(mode, str) or mode.strip().upper() not in _eye_values():
+        return None
+    vec, eh = as_number(param_value(wc, 'VEC Pass threshold')), as_number(param_value(wc, 'EH_min'))
+    return {'mode': mode.strip(), 'vec_max': vec, 'eh_min': eh}
+
+
+def eye_verdict(case, eye):
+    """pass or fail of one case in eye height and VEC mode: VEC_dB at or below VEC Pass threshold and the eye height
+    (VEO_mV) at or above EH_min. {'pass': True, False or None, 'text'}."""
+    vec, veo = case.get('VEC_dB'), case.get('VEO_mV')
+    why, ok = [], True
+    known = False
+    if is_number(vec) and eye['vec_max'] is not None:
+        known = True
+        if vec <= eye['vec_max']:
+            why.append('VEC_dB %s is within VEC Pass threshold (%s)' % (fmt(vec), fmt(eye['vec_max'])))
+        else:
+            ok = False
+            why.append('VEC_dB %s is above VEC Pass threshold (%s)' % (fmt(vec), fmt(eye['vec_max'])))
+    if is_number(veo) and eye['eh_min'] is not None:
+        known = True
+        if veo >= eye['eh_min']:
+            why.append('the eye height (VEO_mV %s) is at or above EH_min (%s)' % (fmt(veo), fmt(eye['eh_min'])))
+        else:
+            ok = False
+            why.append('the eye height (VEO_mV %s) is below EH_min (%s)' % (fmt(veo), fmt(eye['eh_min'])))
+    if not known:
+        return {'pass': None, 'text': 'not judged: the run has no VEC_dB or VEO_mV to compare with VEC Pass threshold '
+                                      'and EH_min'}
+    return {'pass': ok, 'text': '%s: %s' % ('pass' if ok else 'fail', '; '.join(why))}
 
 
 def batch_rows(project, seq, points):
@@ -424,8 +476,40 @@ def batch_rows(project, seq, points):
             for f in FIRST:
                 vals = [c.get(f) for c in cases if f in c]
                 row[f] = ' '.join(repr(v) if is_number(v) else str(v) for v in vals)
+            row['verdict'] = _point_verdict(project, rid, cases) if res.get('status') == 'complete' else None
         rows.append(row)
     return rows
+
+
+def _point_verdict(project, rid, cases):
+    """pass or fail of one point against its own config's COM Pass threshold (every package case), or None when the
+    run's config has no threshold or the run is in eye height and VEC mode (judged there, not by COM)."""
+    try:
+        wc = project.read_working_config(rid)
+    except (OSError, ValueError):
+        return None
+    if eye_mode(wc):
+        return None
+    thr = _threshold(wc, COM_FIELD)
+    coms = [c.get(COM_FIELD) for c in cases]
+    if thr is None or not coms or not all(is_number(c) and c == c for c in coms):
+        return None
+    return 'pass' if all(c >= thr for c in coms) else 'fail'
+
+
+def batch_verdict(rows):
+    """The batch as a whole: whether COM passes at every point that ran (row B165 of the blind set: does the system
+    pass?). None when no point has a verdict."""
+    judged = [r for r in rows if r.get('verdict') in ('pass', 'fail')]
+    if not judged:
+        return None
+    bad = [r for r in judged if r['verdict'] == 'fail']
+    left = len(rows) - len(judged)
+    tail = '' if not left else '; %d point%s not judged' % (left, '' if left == 1 else 's')
+    if not bad:
+        return 'overall: COM passes at every point that ran (%d of %d)%s' % (len(judged), len(judged), tail)
+    return 'overall: COM fails at %d of %d points (%s)%s' % (len(bad), len(judged),
+                                                           ', '.join('point %d' % r['point'] for r in bad), tail)
 
 
 def write_batch_summary(project, seq, points):
@@ -444,12 +528,29 @@ def write_batch_summary(project, seq, points):
     return path, rows
 
 
+def write_results_file(project, seq, rows, name):
+    """The rows of one batch in a file of their own, .sicopr\\runs\\command_<seq>\\<name>, with every result at full
+    precision and the pass or fail of each point (the batch over configs and THRUs, blind row B151)."""
+    folder = os.path.join(project.runs_dir, 'command_%04d' % int(seq))
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, name)
+    cols = BATCH_COLUMNS + ('verdict',)
+    with open(path, 'w', newline='', encoding='utf-8') as f:
+        w = csv.DictWriter(f, fieldnames=cols, lineterminator='\n')
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: r.get(k) if r.get(k) is not None else '' for k in cols})
+    return path
+
+
 def batch_lines(rows):
     out = []
     for r in rows:
         com = r.get(COM_FIELD, '')
-        out.append('%d. %s: %s%s%s' % (r['point'], r['values'] or 'as configured', r['status'],
-                                      ' %s' % r['run_id'] if r['run_id'] else '',
-                                      ', COM %s' % ' '.join(fmt(float(x)) for x in com.split()) if com else
-                                      (', %s' % r['note'] if r['note'] else '')))
-    return out
+        out.append('%d. %s: %s%s%s%s' % (r['point'], r['values'] or 'as configured', r['status'],
+                                        ' %s' % r['run_id'] if r['run_id'] else '',
+                                        ', COM %s' % ' '.join(fmt(float(x)) for x in com.split()) if com else
+                                        (', %s' % r['note'] if r['note'] else ''),
+                                        ', %s' % r['verdict'] if r.get('verdict') else ''))
+    overall = batch_verdict(rows)
+    return out + ([overall] if overall else [])

@@ -383,9 +383,44 @@ def _read_as_unit(keyword):
     return None
 
 
+_VEC_NUM = r'[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?'
+_VEC_TERM = re.compile(r'^(?:(?P<a>%s)\*)?(?P<f>ones|zeros)\(1,(?P<n>\d+)\)(?:\*(?P<b>%s))?$|^(?P<x>%s)$'
+                       % (_VEC_NUM, _VEC_NUM, _VEC_NUM))
+
+
+def matlab_vector(text):
+    """A MATLAB row vector built with ones(1,n) or zeros(1,n), such as [0.25 0.15*ones(1,3) 0.05*ones(1,7)], written
+    out as the values MATLAB reads from it ('[0.25 0.15 0.15 0.15 0.05 ...]'); None for any other text. Core fix 3
+    (Phase V2-10): the Reference Code evaluates such a cell, SiCoPR's loader does not, so the run CSV holds the values
+    written out."""
+    if not isinstance(text, str):
+        return None
+    s = text.strip()
+    if not (s.startswith('[') and s.endswith(']')) or not re.search(r'\b(?:ones|zeros)\s*\(', s) or ';' in s:
+        return None
+    s = re.sub(r'\s*\*\s*', '*', s[1:-1].strip())
+    s = re.sub(r'\(\s*1\s*,\s*(\d+)\s*\)', r'(1#\1)', s)          # the comma of ones(1,n) is not a separator
+    out = []
+    for term in re.split(r'[\s,]+', s):
+        if not term:
+            continue
+        m = _VEC_TERM.match(term.replace('#', ','))
+        if not m:
+            return None
+        if m.group('x') is not None:
+            out.append(m.group('x'))
+            continue
+        if m.group('a') is not None and m.group('b') is not None:
+            return None
+        v = m.group('a') or m.group('b') or '1'
+        out += [('0' if m.group('f') == 'zeros' else v)] * int(m.group('n'))
+    return '[%s]' % ' '.join(out) if out else None
+
+
 def check_value(wc, json_path, value, selections=None):
     """One proposed value against the schema: (value as it will be written, findings). Units are converted
-    to the stored unit and announced; a switch word becomes 0 or 1; a choice takes the listed spelling."""
+    to the stored unit and announced; a switch word becomes 0 or 1; a choice takes the listed spelling. A MATLAB
+    vector expression the Reference Code accepts ([0.3 0.2*ones(1,4)]) is written out and announced."""
     config_model.key_of(json_path)                      # raises ValueError on a path that is not one
     block = json_path.split('/')[2] if json_path.startswith('/packages/') else None
     name = name_of(json_path)
@@ -400,6 +435,11 @@ def check_value(wc, json_path, value, selections=None):
         out.append(finding(status, rid, _tag(text, rid), kw, json_path, options, answers))
 
     if kind in NUMERIC_KINDS:
+        written = matlab_vector(value)
+        if written is not None:
+            add('announce', None, '%s = %s is written out as %s, the values MATLAB reads from it (SiCoPR reads the '
+                'values, not the expression)' % (kw, value.strip(), written))
+            value = written
         unit = split_unit(value)
         if unit:
             num, u = _plain_number(unit[0]), unit[1]
@@ -507,10 +547,26 @@ def check_value(wc, json_path, value, selections=None):
                     {opts[0]: {'set': {json_path: conv}}, opts[1]: {'allow': [rid]}, 'cancel': None})
             else:
                 opts = ['run it anyway', 'cancel']
-                add('ask', rid, '%s = %s: %s' % (kw, show(value), _rule_text(rid) if rid else
-                                                 'the schema asks when it is %s (%s)' % (clause, row['limit_basis'])),
-                    opts, {opts[0]: {'allow': [rid]}, 'cancel': None})
+                add('ask', rid, _limit_text(kw, value, clause, rid, row), opts, {opts[0]: {'allow': [rid]}, 'cancel': None})
     return value, out
+
+
+def _limit_text(kw, value, clause, rid, row):
+    """What an ask on a limit says. A DFE limit is asked about for its sign as well as its size (rule Q14), and the
+    sign has its own sentence: a b_min above 0 forces the tap up, a b_max below 0 forces it down (core fix 1)."""
+    low = kw.lower()
+    tap = 'the first DFE tap' if low.endswith('(1)') else 'DFE taps 2 to N_b'
+    nums = _flat(parse_numbers(value)) if parse_numbers(value) else []
+    if rid == 'Q14' and low.startswith('b_min') and clause.startswith('>') and any(x > 0 for x in nums):
+        top = max(x for x in nums if x > 0)
+        return ('%s = %s is a minimum above 0, which forces %s to at least %s, not a limit on how negative it may go'
+                % (kw, show(value), tap, short(top)))
+    if rid == 'Q14' and low.startswith('b_max') and clause.startswith('<') and any(x < 0 for x in nums):
+        bot = min(x for x in nums if x < 0)
+        return ('%s = %s is a maximum below 0, which forces %s to at most %s'
+                % (kw, show(value), tap, short(bot)))
+    return '%s = %s: %s' % (kw, show(value), _rule_text(rid) if rid else
+                            'the schema asks when it is %s (%s)' % (clause, row['limit_basis']))
 
 
 def _check_from_config(wc, row, json_path, value, selections, add):
