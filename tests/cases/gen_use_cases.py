@@ -57,6 +57,8 @@ def known_keywords(sicopr_path):
                                       body('read_ParamConfigFile'))]
     pkg = [k for _, k in re.findall(r"xp\(\s*(['\"])(.+?)\1", body('_read_ParamConfigFile__read_pkg_params'))]
     zp = ['z_p (TX)', 'z_p (NEXT)', 'z_p (FEXT)', 'z_p (RX)']          # looked up through a variable in the loader
+    # SiCoPR e1651c4 reads b_max(2..N_b) and b_min(2..N_b) through a helper, _dfe_limits(key, default)
+    main += [k for _, k in re.findall(r"_dfe_limits\(\s*(['\"])(.+?)\1", body('read_ParamConfigFile'))]
     src = body('read_ParamConfigFile'); mandatory = set()
     for m in re.finditer(r"_read_ParamConfigFile__xls_param\(\s*parameter\s*,\s*(['\"])(.+?)\1", src):
         i = m.end(); depth = 1; commas = 0                         # count the arguments after the keyword

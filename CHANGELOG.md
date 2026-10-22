@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.12.2 (21 October 2026)
+
+Tested with SiCoPR commit `e1651c4` (config value cells read as MATLAB evaluates them, SiCoPR finding F19), recorded
+in `SICOPR_REF`.
+
+- **`b_max(2..N_b)` and `b_min(2..N_b)` are read again.** SiCoPR `e1651c4` reads them through a helper,
+  `_dfe_limits(key, default)`, and the loader scan (`schema_check.loader_keywords`) knew only helpers of one argument.
+  The two keywords dropped out of the import, so the run CSV left out the workbook's cells and the engine took the
+  reference defaults (0.2 and -0.2): "Change DFE taps to 2" on the 802.3dj KR workbooks (C4, PA073) loaded
+  `bmax [0.85 0.2]`, `bmin [0 -0.2]` where the workbook holds 0 for both. A helper now passes on its keyword from
+  its first argument and its default from the argument the call gives it. COM Octave 4p17p0 (`read_ParamConfigFile`)
+  on the run CSV with the two cells gives `bmax [0.85 0]`, `bmin [0 0]` for N_b = 2 and `[0.85 0 0]`, `[0 0 0]` for
+  N_b = 3 on Case1 to Case4, as the table expects; without them it gives the defaults, as SiCoPR does. The table is
+  unchanged.
+- The test oracle (`tests\cases\gen_use_cases.py`) reads the two keywords through the same helper.
+- Tests: the schema self-check covers a helper of two arguments; G2.3 and G2.5 of `tests\test_config.py` failed on
+  `e1651c4` before the fix.
+
 ## 0.12.1 (21 October 2026)
 
 The maintainer's rulings at the Phase V2-10 checkpoint (21 October 2026). The use-case table grows to 1050 rows (46

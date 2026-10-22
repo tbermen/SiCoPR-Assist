@@ -147,8 +147,10 @@ def loader_keywords(source):
 
     for fn in [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name in LOADER_FUNCS]:
         scope = 'main' if fn.name == LOADER_FUNCS[0] else 'package block'
+        # A helper takes the keyword first; a second argument may carry the default on to the reader
+        # (SiCoPR e1651c4 reads b_max(2..N_b) and b_min(2..N_b) through _dfe_limits(key, default)).
         helpers = {h.name: h for h in ast.walk(fn)
-                   if isinstance(h, ast.FunctionDef) and h is not fn and len(h.args.args) == 1}
+                   if isinstance(h, ast.FunctionDef) and h is not fn and h.args.args and h.name not in READERS}
 
         def passes_on(h, seen=()):
             arg = h.args.args[0].arg
@@ -186,7 +188,11 @@ def loader_keywords(source):
                             default = ast.unparse(kw.value)
                     add(keynode.value, scope, st.lineno, default, scale_of(st.value))
                 elif name in via and c.args and isinstance(c.args[0], ast.Constant) and isinstance(c.args[0].value, str):
-                    add(c.args[0].value, scope, st.lineno, via[name], None)
+                    default = via[name]
+                    params = [a.arg for a in helpers[name].args.args]
+                    if default in params[1:] and params.index(default) < len(c.args):
+                        default = ast.unparse(c.args[params.index(default)])
+                    add(c.args[0].value, scope, st.lineno, default, None)
     return out
 
 
@@ -388,12 +394,17 @@ def self_check():
          "    pkg.z = _load('z_p (NEXT)')\n"
          "def read_ParamConfigFile(paramFile, OP):\n"
          "    param.fb = _read_ParamConfigFile__xls_param(parameter, 'f_b') * 1e9\n"
-         "    param.x = _read_ParamConfigFile__xls_param(parameter, 'DER_0', True, 0.5)\n")
+         "    param.x = _read_ParamConfigFile__xls_param(parameter, 'DER_0', True, 0.5)\n"
+         "    def _dfe_limits(key, default):\n"
+         "        return np.asarray(_read_ParamConfigFile__xls_param(parameter, key, True, default))\n"
+         "    param.bmax[1:] = _dfe_limits('b_max(2..N_b)', 0.2)\n")
     k = loader_keywords(p)
     expect('loader: required keyword with scale', k.get(('f_b', 'main')) == {'default': None, 'scale': 1e9, 'lines': [9]})
     expect('loader: default', k.get(('DER_0', 'main'), {}).get('default') == '0.5')
     expect('loader: package block keyword with scale', k.get(('C_p', 'package block'), {}).get('scale') == 1e-9)
     expect('loader: keyword read through a helper', k.get(('z_p (NEXT)', 'package block'), {}).get('default') == '7')
+    expect('loader: keyword and default read through a helper of two arguments (SiCoPR e1651c4)',
+           k.get(('b_max(2..N_b)', 'main'), {}).get('default') == '0.2')
     expect('release order', sorted(['4p10p0', '4p9p0', '4p15p0_adaptive_local_search', '4p15p0'], key=release_key)
            == ['4p9p0', '4p10p0', '4p15p0', '4p15p0_adaptive_local_search'])
     return ok
