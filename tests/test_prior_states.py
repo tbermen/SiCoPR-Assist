@@ -33,8 +33,9 @@ def main():
     # 91 from the table of 6 October, 3 added after the maintainer's first use (rows CH01 to CH08), and 4 after his
     # second session (rows XT01 to XT06), 2 with the fetch rows F11 and F12 (7 October, from the IEEE page), and 6
     # after his first GUI session (rows SL01 to SL05 and EX01, 10 October), and 4 after his second (rows RT01 to RT04,
-    # the Run tab's state, 17 October)
-    check('the prior-state file lists 127 strings (110, and 17 of Phase V2-10)', len(states) == 127 and len(set(states)) == 127,
+    # the Run tab's state, 17 October); Phase V2-10 added 17, and its checkpoint rulings (21 October) took one away:
+    # the question of PS11 is open, which no longer arises (PS11 asks nothing since ruling 1)
+    check('the prior-state file lists 126 strings (110, and 16 of Phase V2-10)', len(states) == 126 and len(set(states)) == 126,
           len(states))
     in_table = {r['prior_state'] for r in rows}
     check('every prior_state in the table is in the prior-state file', in_table <= set(states),

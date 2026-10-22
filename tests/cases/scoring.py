@@ -72,18 +72,11 @@ def labels_of(row):
     return ['Case1'] if row['starting_config'] == 'any' else row['starting_config'].split('; ')
 
 
-# Phase V2-10: the mode a row is scored in, and the preset overlay. A row with no mode condition is scored in strict
+# Phase V2-10: the mode a row is scored in. A row with no mode condition is scored in strict
 # mode (translator = off), as every row was before; mode:translator rows in translator mode; mode:any rows in both.
-# The overlay is local and never in the repository: the harness finds it by the environment variable OVERLAY_ENV and
-# names it to the product through the setting preset_overlay, as a user would.
+# The preset overlay of 0.12.0 is gone (owner ruling, 21 October 2026: the preset values ship), and with it the
+# conditions overlay:present and overlay:absent: the table has none since apply_v2_10_rulings.py.
 TRANSLATOR_ENV = 'SICOPR_ASSIST_TRANSLATOR'          # the product's own override of the setting translator
-OVERLAY_ENV = 'SICOPR_ASSIST_OVERLAY'                 # where the test finds the overlay file (outside the repository)
-
-
-def overlay_file():
-    """The preset overlay this machine has for the tests, or None."""
-    p = os.environ.get(OVERLAY_ENV, '').strip()
-    return p if p and os.path.isfile(p) else None
 
 
 def conditions(row):
@@ -100,14 +93,10 @@ def modes(row):
 
 def applies(row):
     """(True, '') when the row's applies_when holds for the engine under test, else (False, why). Conditions joined by
-    '; ' must all hold. overlay:absent always holds: the harness names no overlay unless a row needs one."""
+    '; ' must all hold."""
     for cond in conditions(row):
         kind, _, arg = cond.partition(':')
         if kind == 'mode':
-            continue
-        if kind == 'overlay':
-            if arg == 'present' and overlay_file() is None:
-                return False, 'overlay:present does not hold: no preset overlay on this machine (%s)' % OVERLAY_ENV
             continue
         sup, dflt = engine.supported_releases(), engine.default_release()
         holds = {'loader_reads': lambda: engine.reads_keyword(arg),
@@ -285,16 +274,11 @@ class Scorer:
 
     # ---- prior state and the call
     def context(self, row, label, mode='strict'):
-        """The prior state of a row, in a mode: the setting translator through its environment override, and for a
-        row that needs the overlay the setting preset_overlay in the project settings file."""
+        """The prior state of a row, in a mode: the setting translator through its environment override."""
         ctx = prior_states.Ctx(self.fx, label, row, self.by_id)
         ctx.mode = mode
         ctx.env[TRANSLATOR_ENV] = 'on' if mode == 'translator' else 'off'
-        if 'overlay:present' in conditions(row) and overlay_file():
-            ctx.overlay = overlay_file()
         prior_states.build(row['prior_state'], ctx)
-        if getattr(ctx, 'overlay', None):
-            prior_states.name_overlay(ctx, ctx.overlay)
         return ctx
 
     def phrase_of(self, row, column='phrase'):

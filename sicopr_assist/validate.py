@@ -27,7 +27,8 @@ Every function returns data (Decision 13). A result is a dictionary:
     effect     {'error': loader error or None, 'moved': [loaded fields that moved]}
 
 stop_if stops and ask_if asks; the user may still choose to run an ask by passing its rule id (or its
-code) in allow, which turns it into an announcement. A request for values the config already holds
+code) in allow, which turns it into an announcement. An entry 'rule:keyword' passes that rule for that keyword only
+(a preset's values from the standard, rule Q14). A request for values the config already holds
 stops and says so, and so does a change the engine would not see (rules LF13, LF14, VR01, or a setting
 the loader overrides).
 """
@@ -297,10 +298,17 @@ def _tag(text, rid):
 
 def _result(findings, allow=(), **fields):
     allow = set(allow)
+    scoped = {a.lower() for a in allow if isinstance(a, str) and ':' in a}    # allow may hold None (no rule, no code)
     for f in findings:
-        if f['status'] == 'ask' and (f['rule'] or f['code']) in allow:
+        rid = f['rule'] or f['code']
+        if f['status'] == 'ask' and rid in allow:
             f['status'] = 'announce'
             f['text'] = f['text'] + '; run as asked'
+        elif f['status'] == 'ask' and f['keyword'] and ('%s:%s' % (rid, f['keyword'])).lower() in scoped:
+            # a pass for one rule on one keyword: a value a preset takes from the standard (owner ruling, 21 October
+            # 2026, rule Q14); the same value typed by hand is still asked about
+            f['status'] = 'announce'
+            f['text'] = f['text'] + '; the preset takes it from the standard, so it is not asked about'
     lead = next((f for f in findings if f['status'] == 'stop'), None) or \
         next((f for f in findings if f['status'] == 'ask'), None)
     out = {'status': lead['status'] if lead else 'ok', 'rule': lead['rule'] if lead else None,

@@ -9,9 +9,9 @@ CR, C2C and C2M in 802.3dj and 802.3ck). It never plans anything itself. It retu
     candidates   phrases for the core, best first; the core reads each as typed input, validates and plans it, and the
                  first one it does not miss is the outcome
     outcome      a QUESTION or a STOP of the layer's own: a proposal where an amount or a choice is missing (about 10%
-                 more Rx FFE taps, the CR host classes, the low-power receivers, the 802.3ck C2M run), a which-question
-                 for a word with several readings, or a preset that needs the overlay and does not have it. Every
-                 option of a proposal is a phrase the core resolves (answers)
+                 more Rx FFE taps, the CR host classes, the low-power receivers, the 802.3ck C2M run), or a
+                 which-question for a word with several readings. Every option of a proposal is a phrase the core
+                 resolves (answers)
 
 with the rules that fired, the preset, the proposal and the lines to announce, so the history records them. It never
 writes the run CSV, runs the engine or skips validation (version 1 prompt, section 1).
@@ -21,9 +21,11 @@ layer, nor does a request that is out of scope (email, slides, diagnose, convert
 on a request it understood (an illegal value). Typo tolerance is for command words only, never for keyword names or
 values: a name that is one letter from a keyword is asked about, as the strict core does.
 
-Preset values come from data/presets.csv, each with its source. Values whose only source is a document marked
-redistribute NO are not in this repository: they load from the local overlay file named by the setting preset_overlay,
-and without it the presets that need them stop and say what is missing.
+Preset values come from data/presets.csv, each with its source and licence. Owner ruling, 21 October 2026: COM
+parameter values from the IEEE 802.3 standards and drafts, the COM 3.70 workbooks and OIF-CEI-05.3 ship under the terms
+of the COM configuration workbooks (NOTICE), so every preset works on a fresh install. A value a preset takes from the
+standard is not asked about by rule Q14 (the plan carries a pass for that rule and those keywords only); the same value
+typed by hand still is.
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
@@ -40,7 +42,6 @@ ENV = 'SICOPR_ASSIST_TRANSLATOR'            # on or off: overrides the setting t
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data')
 PRESETS = os.path.join(DATA, 'presets.csv')
 TEMPLATES = os.path.join(DATA, 'templates')
-OVERLAY_COLUMNS = ('preset', 'keyword', 'value')
 CANCEL = 'cancel'
 NONE_OF_THESE = 'none of these'
 
@@ -62,9 +63,8 @@ STANDARDS = {
     '802.3dj': {'f_b': 106.25, 'lane': '200G per lane', 'clause': {r['interface']: r['802.3dj'] for r in _IFACE_ROWS}},
     '802.3ck': {'f_b': 53.125, 'lane': '100G per lane', 'clause': {r['interface']: r['802.3ck'] for r in _IFACE_ROWS}},
 }
-OVERLAY_SOURCE = {'802.3ck': 'IEEE Std 802.3ck-2022 and the IEEE COM 3.70 workbooks',
-                  '802.3dj C2M': 'IEEE P802.3dj/D2.4 (eta_0 of Table 176D-7)',
-                  'OIF': 'OIF-CEI-05.3 (the CEI-112G-XSR and CEI-112G-MR reference receivers)'}
+SOURCES = {'802.3ck': 'IEEE Std 802.3ck-2022 and the IEEE COM 3.70 workbooks',
+           'OIF': 'OIF-CEI-05.3 (the CEI-112G-XSR and CEI-112G-MR reference receivers)'}
 HOSTS = ('HL', 'HN', 'HH')
 CR_PAIRS = (('HL', 'HL'), ('HN', 'HN'), ('HL', 'HN'), ('HH', 'HL'))
 
@@ -73,7 +73,7 @@ OUT_OF_SCOPE = re.compile(r"\b(?:e-?mail|mail|send|slides?|deck|powerpoint|diagn
                           r"optimal|explain\w*)\b", re.I)
 
 
-# ----------------------------------------------------------------------------- mode, data, overlay
+# ----------------------------------------------------------------------------- mode, data
 def is_on(settings_values):
     """Whether translator mode is on: the environment override ENV when set, else the setting translator."""
     env = os.environ.get(ENV, '').strip().lower()
@@ -107,60 +107,19 @@ def preset_rows():
 
 
 def preset(name, when=''):
-    """[(keyword, value)] of a preset in this repository, overlay markers left out."""
-    return [(r['keyword'], r['value']) for r in preset_rows()
-            if r['preset'] == name and r['value'] != 'overlay' and r['keyword'] != '*' and r['when'] in ('', when)]
+    """[(keyword, value)] of a preset, in the order of the preset file."""
+    return [(r['keyword'], r['value']) for r in preset_rows() if r['preset'] == name and r['when'] in ('', when)]
 
 
 def preset_cell(name, keyword):
     return next((r['value'] for r in preset_rows() if r['preset'] == name and r['keyword'] == keyword), None)
 
 
-def read_overlay(path):
-    """({preset: [(keyword, value)]}, problem or None) of the overlay file at path."""
-    if not path:
-        return None, None
-    if not os.path.isfile(path):
-        return None, 'the preset overlay %s named by the setting preset_overlay does not exist' % path
-    try:
-        with open(path, newline='', encoding='utf-8') as f:
-            rows = list(csv.DictReader(f))
-    except (OSError, UnicodeDecodeError, csv.Error) as e:
-        return None, 'the preset overlay %s cannot be read: %s' % (path, e)
-    if rows and not set(OVERLAY_COLUMNS) <= set(rows[0]):
-        return None, 'the preset overlay %s lacks the columns %s' % (path, ', '.join(OVERLAY_COLUMNS))
-    out = {}
-    for r in rows:
-        out.setdefault(r['preset'].strip(), []).append((r['keyword'].strip(), r['value'].strip()))
-    return out, None
-
-
-class Overlay:
-    """The overlay named by the settings, read once per command."""
-
-    def __init__(self, path):
-        self.path = path
-        self.values, self.problem = read_overlay(path)
-
-    def has(self, name):
-        return bool(self.values and self.values.get(name))
-
-    def get(self, name):
-        return list((self.values or {}).get(name) or [])
-
-
-def overlay_stop(name, source_key, ov, extra=''):
-    why = ov.problem + '; ' if ov.problem else ''
-    return ('The %s preset needs values whose only source is %s (redistribute NO), which are not shipped with '
-            'SiCoPR-Assist: %sname the preset overlay file in the settings (preset_overlay) to use it. Missing: %s. '
-            'Nothing changes and nothing runs.%s' % (name, OVERLAY_SOURCE[source_key], why, _missing(name), extra))
-
-
-def _missing(name):
-    rows = [r for r in preset_rows() if r['preset'] == name and r['value'] == 'overlay']
-    if any(r['keyword'] == '*' for r in rows):
-        return 'every value of the preset (the clause tables)'
-    return ', '.join(r['keyword'] for r in rows) or 'its values'
+def q14_pass(values):
+    """Owner ruling, 21 October 2026: a value a preset takes from the standard does not trigger rule Q14. The pass names
+    the rule and each keyword of the preset (validate.py reads 'Q14:<keyword>'), so a value typed by hand is still
+    asked about."""
+    return {'allow': ['Q14:%s' % k for k, _ in values]}
 
 
 # ----------------------------------------------------------------------------- the config in view
@@ -337,20 +296,16 @@ def question(text, options, answers, fired, announce=(), preset_name=None, propo
     return result(fired, outcome=out, answers=answers, announce=announce, preset_name=preset_name, proposal=proposal)
 
 
-def stop(reason, fired, preset_name=None):
-    return result(fired, outcome={'type': 'STOP', 'reason': reason}, preset_name=preset_name)
-
-
 def _and(items):
     return ' and '.join('%s = %s' % (k, v) for k, v in items)
 
 
 class View:
-    """What the layer reads from the project: the working config in view, the history, the last run's channels, the
-    overlay. Built by the core from its Context."""
+    """What the layer reads from the project: the working config in view, the history, the last run's channels.
+    Built by the core from its Context."""
 
-    def __init__(self, wc, history, last, channels, root, folder_wc=None, folder_config=None, overlay=None,
-                 selection=None, project=None):
+    def __init__(self, wc, history, last, channels, root, folder_wc=None, folder_config=None, selection=None,
+                 project=None):
         self.wc = wc                       # the working config of the last run, or None
         self.history = history or []
         self.last = last                   # the last history record that names a working config
@@ -358,7 +313,6 @@ class View:
         self.root = root
         self.folder_wc = folder_wc         # the one config in the folder, imported, when there is no run yet
         self.folder_config = folder_config
-        self.overlay = overlay or Overlay(None)
         self.selection = selection
         self.project = project
 
@@ -1123,8 +1077,6 @@ def _low_power(text, view, fired):
     wc = view.config
     if wc is None:
         return None
-    ov = view.overlay
-    full = ov.has('low power CTLE only') and ov.has('low power long DFE')
     lead = 'Re-run with' if view.has_run() else 'Run COM on these files with'
     mr = preset('low power MR-like')
     nofl = mr + preset('low power no floating taps')
@@ -1139,21 +1091,13 @@ def _low_power(text, view, fired):
             'current config. (1) MR-like (OIF CEI-224G-MR, the same structure as 802.3dj C2C): %s. (2) as 1 with no '
             'floating taps (N_bg = 0). (3) a short fixed FFE, proposed 2 pre and 2 post, MLSE = 0, no floating taps. '
             % _and(mr).replace(' and ', ', '))
-    if full:
-        ctle_full = ctle + ov.get('low power CTLE only')
-        dfe = preset('low power long DFE') + ov.get('low power long DFE')
-        answers['CTLE only'] = {'phrase': '%s %s.' % (lead, _and(ctle_full))}
-        answers['long DFE (112G-MR-like)'] = {'phrase': '%s %s.' % (lead, _and(dfe))}
-        txt = head + ('(4) CTLE only (XSR-like): no FFE, no DFE, no MLSE, N_qb = 0, the XSR CTLE ranges from the overlay; '
-                      'on a backplane or cable channel COM will be strongly negative. (5) the 112G-MR-like 14-tap DFE '
-                      'from the overlay, listed for completeness: not lower power at 106.25 GBd. Which?')
-        opts = list(LP_OPTIONS) + [CANCEL]
-    else:
-        answers['CTLE only'] = {'phrase': '%s %s.' % (lead, _and(ctle))}
-        txt = head + ('(4) CTLE only: no FFE, no DFE, no MLSE, N_qb = 0, the current CTLE ranges kept; on a backplane or '
-                      'cable channel COM will be strongly negative. The 112G-MR-like DFE needs the overlay (%s values) '
-                      'and is left out. Which?' % OVERLAY_SOURCE['OIF'])
-        opts = list(LP_OPTIONS[:4]) + [CANCEL]
+    dfe = preset('low power long DFE')
+    answers['CTLE only'] = {'phrase': '%s %s.' % (lead, _and(ctle)), 'mods': q14_pass(ctle)}
+    answers['long DFE (112G-MR-like)'] = {'phrase': '%s %s.' % (lead, _and(dfe)), 'mods': q14_pass(dfe)}
+    txt = head + ('(4) CTLE only (XSR-like): no FFE, no DFE, no MLSE, N_qb = 0, the XSR CTLE ranges of %s; on a '
+                  'backplane or cable channel COM will be strongly negative. (5) the 112G-MR-like 14-tap DFE of '
+                  'OIF-CEI-05.3, listed for completeness: not lower power at 106.25 GBd. Which?' % SOURCES['OIF'])
+    opts = list(LP_OPTIONS) + [CANCEL]
     if re.search(r'\bdoes\s+com\s+still\s+pass\b|\bstill\s+pass\b', low):
         txt += ' The summary of the run answers whether COM still passes.'
     return question(txt, opts, answers, fired + ['proposal: the low-power receivers'],
@@ -1165,14 +1109,12 @@ def _xsr(text, view, fired):
     if not re.search(r'\bxsr\b', low) or view.config is None:
         return None
     lead = 'Re-run with' if view.has_run() else 'Run COM on these files with'
-    vals = preset('low power CTLE only') + (view.overlay.get('low power CTLE only') if
-                                             view.overlay.has('low power CTLE only') else [])
+    vals = preset('low power CTLE only')
     opt = 'CTLE only (XSR-like)'
-    txt = ('an XSR receiver is CTLE only (OIF CEI-112G-XSR): %s%s. On a backplane or cable channel COM will be strongly '
-           'negative. Run it?' % (_and(vals).replace(' and ', ', '),
-                                  '' if view.overlay.has('low power CTLE only') else
-                                  ', the current CTLE ranges kept (the XSR ranges need the overlay)'))
-    return question(txt, [opt, CANCEL], {opt: {'phrase': '%s %s.' % (lead, _and(vals))}, CANCEL: None},
+    txt = ('an XSR receiver is CTLE only (OIF CEI-112G-XSR): %s. On a backplane or cable channel COM will be strongly '
+           'negative. Run it?' % _and(vals).replace(' and ', ', '))
+    return question(txt, [opt, CANCEL], {opt: {'phrase': '%s %s.' % (lead, _and(vals)), 'mods': q14_pass(vals)},
+                                         CANCEL: None},
                     fired + ['proposal: the XSR-like receiver'], proposal=opt)
 
 
@@ -1261,7 +1203,7 @@ def _no_config_question(iface, view, fired):
     ck = '802.3ck %s' % iface
     vals = _dj_values(iface, None)
     txt = ('there is no config in view to take the standard from, so 802.3dj is proposed: %s (%s, %s) from the shipped '
-           '802.3dj KR workbook%s; 802.3ck %s needs the overlay'
+           '802.3dj KR workbook%s; 802.3ck %s is the other option'
            % (dj, STANDARDS['802.3dj']['clause'][iface], STANDARDS['802.3dj']['lane'],
               ' with %s and both package tests' % _and(vals).replace(' and ', ', ') if vals else '', iface))
     answers = {dj: {'phrase': 'Run the example with %s.' % _and(vals) if vals else 'Run the example.'},
@@ -1315,16 +1257,12 @@ def _dj(iface, low, view, fired, lead, name):
         return result(fired, candidates=[_plan_phrase(view, vals)], announce=lines, preset_name=name)
     if iface == CR:
         return _dj_cr(low, view, fired, lead, name)
-    # C2M: the 802-COM egress template, with the overlay's eta_0
-    ov = view.overlay
-    if not ov.has('802.3dj C2M'):
-        return stop(overlay_stop('802.3dj C2M', '802.3dj C2M', ov, ' The 802-COM template itself ships; its eta_0 '
-                                 '(7.9e-9) is not the draft value.'), fired, preset_name=name)
+    # C2M: the 802-COM egress template, with the draft's eta_0 (the template holds 7.9e-9)
     template = os.path.join(TEMPLATES, preset_cell('802.3dj C2M', 'template'))
     vals = preset('802.3dj C2M')
     vals = [(k, v) for k, v in vals if k != 'template']
-    order = ['c(-2)', 'c(-1)', 'c(1)']
-    vals = [x for x in vals if x[0] in order] + ov.get('802.3dj C2M') + [x for x in vals if x[0] not in order]
+    order = ['c(-2)', 'c(-1)', 'c(1)', 'eta_0']
+    vals = [x for o in order for x in vals if x[0] == o] + [x for x in vals if x[0] not in order]
     lines = lead + ['the base workbook is the 802-COM C2M TP0-TP2 egress template (BSD-3, shipped with SiCoPR-Assist); '
                     'the config in the folder is not used',
                     'the Tx FFE ranges go into the value cells (the template holds 0 there)',
@@ -1423,36 +1361,42 @@ def _vals_text(vals):
     return vals
 
 
+def _q14_line(values):
+    """The announcement that rule Q14 did not ask about the preset's DFE limits (b_min above 0), when it has some."""
+    keys = [k for k, _ in values if k.lower().startswith('b_min')]
+    if not keys:
+        return []
+    return ['rule Q14 does not ask about %s: a value a preset takes from the standard is not a validation question '
+            '(owner ruling, 21 October 2026); the same value typed by hand still is' % ' and '.join(keys)]
+
+
 def _ck(iface, low, view, fired, lead, name):
-    ov = view.overlay
     key = '802.3ck %s' % iface if iface != C2M else '802.3ck %s eye' % C2M
-    if not ov.has(key) or (iface == C2M and not ov.has('802.3ck %s' % C2C)):
-        extra = ' (both of its runs need them)' if iface == C2M else ''
-        return stop(overlay_stop(name, '802.3ck', ov) + extra, fired, preset_name=name)
     wc = view.config
     if iface == C2M:
-        eye = _ck_values(wc, ov.get('802.3ck %s eye' % C2M))
-        c2c = _ck_values(wc, ov.get('802.3ck %s' % C2C))
+        eye = _ck_values(wc, preset('802.3ck %s eye' % C2M))
+        c2c = _ck_values(wc, preset('802.3ck %s' % C2C))
         txt = ('802.3ck C2M (Annex 120G) has no COM: hosts and modules are specified by eye height and VEC through the '
                '120G-11 reference receiver (a CTLE and a 4-tap DFE). Which run? The first is PMD_type = C2M with that '
-               'receiver (keywords from the overlay; the verdict is on VEC Pass threshold and EH_min, not COM); the second '
+               'receiver (the 120G-11 values; the verdict is on VEC Pass threshold and EH_min, not COM); the second '
                'is COM with the 802.3ck C2C (120F) parameters, an approximation and not a C2M compliance result%s'
                % (', each on the last run\'s channels' if view.has_run() else ''))
         opts = ['eye height and VEC', 'C2C-parameter COM', CANCEL]
-        answers = {'eye height and VEC': {'phrase': _plan_phrase(view, eye, rebuild=True)},
-                   'C2C-parameter COM': {'phrase': _plan_phrase(view, c2c, rebuild=True)}, CANCEL: None}
+        answers = {'eye height and VEC': {'phrase': _plan_phrase(view, eye, rebuild=True), 'mods': q14_pass(eye)},
+                   'C2C-parameter COM': {'phrase': _plan_phrase(view, c2c, rebuild=True), 'mods': q14_pass(c2c)},
+                   CANCEL: None}
         return question(txt, opts, answers, fired + ['proposal: the 802.3ck C2M run'], announce=lead, preset_name=name)
-    vals = _ck_values(wc, ov.get(key))
-    lines = lead + ['the values are the preset overlay\'s (%s), on %s' % (OVERLAY_SOURCE['802.3ck'],
-                                                                          'the working config of the last run'
-                                                                          if view.has_run() and not _rebuild(view) else
-                                                                          'the workbook'),
+    vals = _ck_values(wc, preset(key))
+    lines = lead + ['the values are the standard\'s (%s, shipped under the COM workbook terms), on %s'
+                    % (SOURCES['802.3ck'], 'the working config of the last run' if view.has_run() and not _rebuild(view)
+                       else 'the workbook'),
                     'the f_b links follow (f_z, f_p1, f_p2, f_HP_PZ, f_v, f_f, f_n)', _run_control_line(wc)]
-    return result(fired, candidates=[_plan_phrase(view, vals)], announce=lines, preset_name=name)
+    lines += _q14_line(vals)
+    return result(fired, candidates=[_plan_phrase(view, vals)], announce=lines, preset_name=name, mods=q14_pass(vals))
 
 
 def _ck_values(wc, values):
-    """The overlay's values for the config in view: 802.3ck has one package model, written into the class A block (the
+    """The preset's values for the config in view: 802.3ck has one package model, written into the class A block (the
     PKG_NAME is set to it first when the config in view selects another block)."""
     a = block_of_class(wc, 'A') if wc is not None else None
     sel = selected_blocks(wc) if wc is not None else []

@@ -121,7 +121,7 @@ def setting_defaults():
                 out[k] = (float(raw), sec)
             elif re.fullmatch(r'\d+', raw.strip()):
                 out[k] = (int(raw), sec)
-            else:                                   # a text setting: a path, empty when not set (preset_overlay)
+            else:                                   # a text setting: a path, empty when not set
                 out[k] = (raw.strip(), sec)
     return out
 

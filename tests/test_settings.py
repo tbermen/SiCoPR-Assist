@@ -5,9 +5,10 @@ Built-in defaults, then the user file (<home>\\.sicopr\\assist.ini), then the pr
 value in force, and never stops anything. A file with no section heading is accepted, and a setting is
 accepted under either heading.
 
-For each of the 15 settings (13, and translator and preset_overlay of Phase V2-10): the default; the user file; the project file over the user file (the user value is
-listed as overridden); a bad value (warning, default kept). Once each: an unknown name, an unreadable file (bytes
-that are not UTF-8, and text that cannot be parsed), a file with no heading, a setting under the other heading.
+For each of the 14 settings (13, and translator of Phase V2-10): the default; the user file; the project file over
+the user file (the user value is listed as overridden); a bad value (warning, default kept). Once each: an unknown name,
+an unreadable file (bytes that are not UTF-8, and text that cannot be parsed), a file with no heading, a setting under
+the other heading, and preset_overlay of 0.12.0 (gone in 0.12.1: nothing needs an overlay).
 Then the same through the core: Show settings lists every value with where it came from, and a warning reaches
 the announce lines of any outcome (rows SE01, SE02, SE06 to SE08).
 
@@ -45,17 +46,12 @@ CASES = {
     'mask_numbers': ('off', 'on', 'off', 'perhaps'),
     'feedback_notice': ('on', 'off', 'on', '2'),
     'translator': ('on', 'off', 'on', 'maybe'),
-    # a path: any text is taken as it is, and whether the file is there is found out when it is used (translate.py)
-    'preset_overlay': ('', 'D:/work/overlay_user.csv', 'D:/work/overlay_project.csv', None),
 }
-TEXT = ('preset_overlay',)
 HEADING = {k: ('feedback' if k.startswith(('mask_', 'feedback_notice')) and k != 'feedback_notice_gap' else
-               'translator' if k in ('translator', 'preset_overlay') else 'limits') for k in CASES}
+               'translator' if k == 'translator' else 'limits') for k in CASES}
 
 
 def typed(text, name=None):
-    if name in TEXT:
-        return text.strip()
     t = text.strip().lower()
     if t in ('on', 'off'):
         return t == 'on'
@@ -94,7 +90,7 @@ class Place:
 
 def main():
     defaults = P.setting_defaults()
-    check('the shipped example names exactly the 15 settings', sorted(defaults) == sorted(CASES), sorted(defaults))
+    check('the shipped example names exactly the 14 settings', sorted(defaults) == sorted(CASES), sorted(defaults))
     for name, (dflt, user, proj, bad) in CASES.items():
         with Place() as pl:
             s = pl.read()
@@ -110,8 +106,6 @@ def main():
                   % (name, proj, user), s['values'][name] == typed(proj, name) and s['sources'][name] == pp
                   and s['overridden'].get(name) == [{'value': typed(user, name), 'source': up}] and not s['warnings'],
                   (s['values'][name], s['sources'][name], s['overridden'].get(name)))
-        if bad is None:
-            continue
         with Place() as pl:
             pp = pl.write('project', '[%s]\n%s = %s\n' % (HEADING[name], name, bad))
             s = pl.read()
@@ -119,6 +113,13 @@ def main():
                   and s['sources'][name] == 'default' and len(s['warnings']) == 1
                   and name in s['warnings'][0] and bad in s['warnings'][0], (s['values'][name], s['warnings']))
 
+    with Place() as pl:
+        pl.write('project', '[translator]\npreset_overlay = D:/work/overlay.csv\n')
+        s = pl.read()
+        check('preset_overlay of 0.12.0 is not a setting any more (owner ruling, 21 October 2026: the preset values '
+              'ship): a file that still has it warns and changes nothing', len(s['warnings']) == 1 and
+              'preset_overlay' in s['warnings'][0] and s['values'] == {k: v for k, (v, _) in defaults.items()},
+              s['warnings'])
     with Place() as pl:
         pl.write('project', '[limits]\nmax_runs = 50\n')
         s = pl.read()

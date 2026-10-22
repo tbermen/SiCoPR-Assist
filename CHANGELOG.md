@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.12.1 (21 October 2026)
+
+The maintainer's rulings at the Phase V2-10 checkpoint (21 October 2026). The use-case table grows to 1050 rows (46
+rows of groups PS, PP and SY changed, 9 SY rows added; every other row byte for byte as in 0.12.0), the frozen L4 list
+to 802 rows (the 660 of V2-9 unchanged) and the review list to 248.
+
+- **Preset values skip the validation question.** A value a preset takes from the standard (802.3ck `b_min(1) = 0.3`
+  and the rest) does not trigger rule Q14: the 802.3ck KR, CR and C2C presets, "100G per lane backplane", and both
+  802.3ck C2M runs plan in one step. The plan carries a pass for rule Q14 on the preset's own keywords only
+  (`validate.py` reads `Q14:<keyword>`), so the same value typed by hand still asks, in strict mode and in translator
+  mode. The plan says that Q14 did not ask and why.
+- **Standard values ship.** COM parameter values taken from IEEE Std 802.3ck-2022, IEEE P802.3dj/D2.4, the IEEE COM
+  3.70 workbooks and the public OIF-CEI-05.3 are in `sicopr_assist\data\presets.csv` under the same terms as the COM
+  configuration workbooks (BSD-3-Clause, Copyright 2025 802-COM Authors). Every value names its source and carries a
+  licence tag (new column `license`); `NOTICE` carries the workbooks' License Notice. Nothing whose only source is an
+  OIF member working text is shipped (low-power option 1 takes the 802.3dj C2C values of the 802-COM C2C template).
+- **No overlay.** Every preset works on a fresh install: 802.3ck KR, CR, C2C and C2M, the 802.3dj C2M `eta_0`, and
+  all five low-power receivers (CTLE only now takes the XSR ranges, and the long DFE is always offered). The setting
+  `preset_overlay` is gone; a settings file that still has it warns and changes nothing.
+- **802.3ck C2M eye height and VEC** takes `TDR_W_TXPKG = 1`, the value of its COM 3.70 workbook, now that SiCoPR 1.1.3
+  runs it (0.12.0 held 0, the workaround for the make_full_pkg failure).
+- **Translator-mode rows for strict rows the translator reads**: SY67 (PH15), SY68 (TU02, which still asks with no
+  run) and SY69 to SY74 (TU14 to TU19); the strict rows keep their expectations.
+- Tests: `tests\test_translate.py` replaces gate V10.6's overlay checks with the source and licence checks, the License
+  Notice in NOTICE and README, and the presets on a fresh install (ruling 1, 4 and 5 checks); `tests\test_settings.py`
+  covers the removed setting; the overlay conditions of the harness are gone.
+
 ## 0.12.0 (21 October 2026)
 
 Version 2, Phase V2-10: rules and presets. The owner: "I want the user to be able to request KR, CR, C2M or C2C, or

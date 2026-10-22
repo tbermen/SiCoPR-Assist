@@ -574,8 +574,7 @@ def _view(ctx):
         folder_wc = tutor._imported(src) if src else None
     return translate.View(wc, [r for r in ctx.history if is_command(r)], ctx.last,
                           [(p, r or 'thru') for p, _, r in ctx.channels()], ctx.root, folder_wc=folder_wc,
-                          folder_config=src, overlay=translate.Overlay(ctx.setting('preset_overlay')),
-                          selection=ctx.selection, project=ctx.project)
+                          folder_config=src, selection=ctx.selection, project=ctx.project)
 
 
 def _missed(o):
@@ -594,7 +593,7 @@ def _missed(o):
 def _resolve_any(phrase, ctx, mods, layer=True):
     """(outcome, answers, resume): the strict core's reading, and in translator mode the layer's when the strict core
     missed (translate.py). The layer hands the core phrases it resolves, or asks its own question (a proposal, a
-    which-question) or stops (a preset without its overlay); the core still validates and plans everything. Every
+    which-question); the core still validates and plans everything. Every
     command in translator mode records what the layer did (translation)."""
     out, answers, resume = _resolve(phrase, ctx, mods)
     if not layer or not translator_on(ctx):
@@ -631,6 +630,8 @@ def _resolve_any(phrase, ctx, mods, layer=True):
         return out, answers, resume
     merged = dict(t['mods'])
     merged.update(mods)
+    if t['mods'].get('allow') and mods.get('allow'):       # a preset's pass on Q14 joins the user's own answers
+        merged['allow'] = list(dict.fromkeys(list(mods['allow']) + list(t['mods']['allow'])))
     for cand in t['candidates']:
         cctx = Context(ctx.project, ctx.selection)        # each reading starts from the project as it is
         o2, a2 = _plan(_replaced(cand, mods), cctx, merged)
@@ -740,8 +741,9 @@ def _answer(phrase, ctx, pending):
     if what.get('stop'):
         return _stop(what['stop'], pattern='answer: %s' % chosen) + (None,)
     if what.get('phrase'):
-        # an option of a translator's question is a phrase the core resolves (Decision 26, item 4)
-        out, ans, res = _resolve_any(what['phrase'], ctx, {})
+        # an option of a translator's question is a phrase the core resolves (Decision 26, item 4), with the
+        # option's own modifications (a preset's pass on rule Q14 for its keywords, owner ruling 21 October 2026)
+        out, ans, res = _resolve_any(what['phrase'], ctx, copy.deepcopy(what.get('mods') or {}))
         out['pattern'] = 'answer: %s; %s' % (chosen, out['pattern'])
         return out, ans, res
     for k, v in what.items():

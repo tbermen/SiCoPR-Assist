@@ -789,8 +789,8 @@ def gate_v101(rows, results, full):
 
 def gate_v102(rows, results, full):
     """Gate V10.2: every must PS, SY, PP and CF row passes L1 and every other level that applies, in translator mode
-    (CF in both modes); only the new rows entered the frozen list. Rows that need the overlay apply only where it is
-    (scoring.OVERLAY_ENV)."""
+    (CF in both modes); only the new rows entered the frozen list. Since the rulings of 21 October 2026 no row needs a
+    preset overlay: every new row applies on a fresh install."""
     import scoring
     want = [(r, label) for r in rows if r['group'] in NEW_GROUPS_V10 and r['priority'] == 'must'
             for label in scoring.labels_of(r)]
@@ -798,8 +798,8 @@ def gate_v102(rows, results, full):
     applicable = [r for r in got if r['applies'] == 'yes']
     check('V10.2: the must PS, SY, PP and CF rows were scored (%d pairs, %d applicable here)' % (len(want), len(applicable)),
           len(got) == len(want) and applicable, len(got))
-    check('V10.2: the preset overlay is on this machine, so every new row applies (overlay:present rows too)',
-          scoring.overlay_file() is not None and len(applicable) == len(got),
+    check('V10.2: every new row applies, with no preset overlay (the preset values ship) and no overlay condition',
+          len(applicable) == len(got) and not any(c.startswith('overlay:') for r in rows for c in scoring.conditions(r)),
           '%d of %d pairs apply' % (len(applicable), len(got)))
     check('V10.2: L3 ran in full mode (SICOPR_ASSIST_FULL=1)', full)
     board(applicable, 'V10.2: the new rows')

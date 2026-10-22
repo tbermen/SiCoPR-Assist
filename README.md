@@ -224,7 +224,6 @@ force and where each one came from. The example file
 | `max_download_mb` | 500 | a channel download larger than this many megabytes asks first |
 | `download_retries` | 1 | how many more times an interrupted download is tried before the tool stops |
 | `translator` | on | translator mode: the rules-and-presets layer reads a phrase the strict core misses; off = strict mode only |
-| `preset_overlay` | (empty) | a local CSV file with the preset values that may not be shipped (see *Translator mode*) |
 
 ## Translator mode
 
@@ -248,8 +247,10 @@ agian`), never in a keyword name or a value: `DER_O` is asked about.
   view, by `f_b`), `Switch to 802.3ck.` (the interface in view). 802.3dj KR and C2C start from the
   shipped KR workbook; 802.3dj CR asks for the host classes with HL to HL proposed; 802.3dj C2M starts
   from the 802-COM C2M egress template, shipped in `sicopr_assist\data\templates` with its License
-  Notice sheet, and is informative margin, not pass or fail; every 802.3ck preset and the 802.3dj C2M
-  `eta_0` need the overlay.
+  Notice sheet, and is informative margin, not pass or fail. 802.3ck KR, CR and C2C run in one step
+  as a plan: a value a preset takes from the standard (such as `b_min(1) = 0.3`) is not asked about by
+  rule Q14, while the same value typed by hand still is. 802.3ck C2M asks which run, eye height and VEC
+  (with the workbook's `TDR_W_TXPKG = 1`) or a C2C-parameter COM.
 - **Proposals**: `Give me more Rx FFE and re-run my setup.` proposes about 10% more taps with the
   counts; `Restrict the receiver equalization to low power.` offers the low-power receivers. Each
   option is a phrase the core resolves.
@@ -258,13 +259,12 @@ Every command in translator mode records in the history the wording, whether the
 it, the rules or preset that fired, the phrase handed to the core, any proposal, and whether you
 confirmed, changed or declined it; Export feedback carries them.
 
-**The overlay.** Preset values whose only source is a document that may not be redistributed (IEEE Std
-802.3ck-2022, the IEEE P802.3dj drafts, the IEEE COM 3.70 workbooks, OIF Implementation Agreements) are
-not in this repository. Each value in `sicopr_assist\data\presets.csv` names its source. Put the others
-in a local CSV with the columns `preset, keyword, value` (and, as you like, `source`) and name it in the
-settings, for example `preset_overlay = D:\work\presets_overlay.csv` under `[translator]`. Without it,
-the presets that need it stop and say which values are missing; 802.3dj KR, C2C and CR, the low-power
-receivers 1 to 4 and everything else work without it.
+**Preset values and their terms.** Every value in `sicopr_assist\data\presets.csv` names its source
+(document and table and page, or workbook and cell) and its licence. COM parameter values taken from IEEE
+Std 802.3ck-2022, IEEE P802.3dj/D2.4, the IEEE COM 3.70 workbooks and OIF-CEI-05.3 ship under the same
+terms as the COM configuration workbooks: BSD-3-Clause, Copyright 2025 802-COM Authors (the License
+Notice is in `NOTICE`). The documents themselves are not shipped, and nothing whose only source is an OIF
+member working text is. Every preset works on a fresh install; there is no overlay file to set up.
 
 ## The dashboard
 
@@ -532,7 +532,7 @@ selection in the tabs, the command box, and the example that runs from an empty 
 follows the second: the Run tab and the panel as one. Version 0.10.0 follows the third: GUI first, with a
 run's output in the Run tab, and three phrasings of that session. Version 0.11.0 streamlines the panel: it shows
 only what SiCoPR's GUI does not. Version 0.12.0 adds translator mode: rules and interface presets in front of the
-strict core, and five fixes of the core the presets needed.
+strict core, and five fixes of the core the presets needed; 0.12.1 applies the checkpoint rulings (the standard's values ship, presets run in one step).
 
 ## What is known to be incomplete
 
@@ -541,7 +541,7 @@ strict core, and five fixes of the core the presets needed.
 - A re-run with another channel file replaces one THRU, or one FEXT or NEXT file. When the last run
   had several FEXT (or NEXT) files, naming one of them stops and asks for the whole set with its
   config.
-- 240 of the 1041 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
+- 248 of the 1050 rows (the review list) have an expected detail that is a sentence, not a list of steps or options.
   They are scored at L1 (and L2 and L3 where those apply) and listed for a person to review.
 - Four behaviours are assumptions not yet confirmed by the maintainer: matching a typo in an action
   or filler word (`agian` read as `again`, never for a parameter name); the trouble thresholds of

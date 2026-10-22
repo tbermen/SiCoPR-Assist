@@ -656,27 +656,6 @@ def f1_complete(ctx):
 
 
 # ----------------------------------------------------------------------------- Phase V2-10: rules and presets (21 October)
-def name_overlay(ctx, path):
-    """The setting preset_overlay in the project settings file, added to what the prior state wrote there: a row that
-    needs the overlay names it as a user would (the harness finds the file by scoring.OVERLAY_ENV)."""
-    sp = ctx.project.settings_path
-    os.makedirs(os.path.dirname(sp), exist_ok=True)
-    old = ''
-    if os.path.exists(sp):
-        with open(sp, encoding='utf-8') as f:
-            old = f.read()
-    with open(sp, 'w', encoding='utf-8', newline='\n') as f:
-        f.write(old + ('' if not old or old.endswith('\n') else '\n') + '[translator]\npreset_overlay = %s\n' % path)
-
-
-def overlay_values(path, preset):
-    """[(keyword, value)] of one preset of the local overlay file, in its order. Test side only: the values may not be
-    in the repository, so they are read from the file and never written here."""
-    import csv
-    with open(path, newline='', encoding='utf-8') as f:
-        return [(r['keyword'], r['value']) for r in csv.DictReader(f) if r['preset'] == preset]
-
-
 def keys_for(wc, pairs):
     """{oracle key: value} for keyword pairs as a phrase names them: a keyword of the main area there, a package keyword
     in the selected block (the block PKG_NAME names for TX), anything else added to the main area."""
@@ -771,15 +750,12 @@ def dj_c2c_run(ctx):
 
 
 def ck_c2c_run(ctx):
-    """The run-complete state, then a re-run with the overlay's 802.3ck C2C change list. Seeded only with the overlay:
-    its values may not be in the repository, and every row on this state needs it (overlay:present). Without it the
-    state is the run-complete state alone."""
+    """The run-complete state, then a re-run with the 802.3ck C2C change list of the shipped presets file (the values
+    0.12.0 read from the local overlay; owner ruling, 21 October 2026: they ship)."""
+    from sicopr_assist import translate
     seed_run(ctx)
-    path = getattr(ctx, 'overlay', None)
-    if not path:
-        return
     before = ctx.prior_wc
-    pairs = overlay_values(path, '802.3ck C2C')
+    pairs = translate.preset('802.3ck C2C')
     values = keys_for(before, pairs)
     wc = with_values(before, values)
     seed_run(ctx, phrase='Make it an 802.3ck C2C config and re-run.', wc=wc, overrides=overrides_of(before, values),
@@ -1031,14 +1007,13 @@ BUILDERS = {
     r'run complete with the starting config and data\thru.s4p, then a re-run as the 802.3dj C2C preset '
     r'(ffe_pre_tap_len = 5, N_f = 50, MLSE = 0, DER_0 = 6.7e-6, ERL Pass threshold = 9.7, both package tests)':
         dj_c2c_run,
-    r'run complete with the starting config and data\thru.s4p, then a re-run as the 802.3ck C2C preset with the overlay '
+    r'run complete with the starting config and data\thru.s4p, then a re-run as the 802.3ck C2C preset with the shipped '
     r'values': ck_c2c_run,
     r'none; data\config.xlsx is the starting config saved as a strict OOXML workbook, and data\thru.s4p exists':
         strict_ooxml,
     r'run complete in eye height and VEC mode: the starting config with PMD_type = C2M, VEC Pass threshold = 10 and '
     r'EH_min = 12, on data\thru.s4p; seeded results COM 4.24, VEC_dB 8.6 and VEO_mV 9.1': c2m_eye_run,
     'the question of PS05 is open': lambda c: seed_question(c, 'PS05'),
-    'the question of PS11 is open': lambda c: seed_question(c, 'PS11'),
     'the question of PS24 is open': lambda c: seed_question(c, 'PS24'),
     'the question of PP01 is open': lambda c: seed_question(c, 'PP01'),
     'the question of PP08 is open': lambda c: seed_question(c, 'PP08'),
