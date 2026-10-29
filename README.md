@@ -51,14 +51,21 @@ never written to.
 
 ## Install
 
-You need Python 3.10 or later and SiCoPR 1.1.1 or later. SiCoPR is not on PyPI. It is public at
-`github.com/tbermen/SiCoPR`; install it from a checkout first, then this package:
+You need Python 3.10 or later and SiCoPR 1.1.4 or later. SiCoPR-Assist refuses an older SiCoPR,
+because before 1.1.4 SiCoPR evaluated some config cell text as Python (see `SECURITY.md`). SiCoPR is
+not on PyPI. It is public at `github.com/tbermen/SiCoPR`; install it from a checkout first, then this
+package:
 
 ```powershell
-git clone https://github.com/tbermen/SiCoPR
+git clone --branch v1.1.4 https://github.com/tbermen/SiCoPR
+git clone https://github.com/tbermen/SiCoPR-Assist
 pip install -e .\SiCoPR
-pip install -e .\sicopr_assist          # this repository
+pip install -e .\SiCoPR-Assist
 ```
+
+A COM run takes a few minutes: about 5 to 10 minutes for an 802.3dj configuration and 1 to 2 minutes for
+an 802.3ck one on a current laptop. `sicopr-assist "Run the example."` in an empty folder is a good first
+test.
 
 SiCoPR has to be installed from a checkout, because SiCoPR-Assist reads `VERSION.json` and the
 shipped workbooks from SiCoPR's folder. It finds that folder through the environment variable
@@ -442,8 +449,9 @@ files in the roles they were selected in, and the example in an empty folder (wi
 SiCoPR-Assist adds a panel on the right of SiCoPR's own GUI, where the same phrases are typed. SiCoPR's
 GUI stays the tool, used as without SiCoPR-Assist; the panel is a way to drive it by typing. Its
 design is `docs\GUI_DESIGN.md`. It needs a SiCoPR whose GUI has the panel slot (`gui\README.md` of
-SiCoPR, *Panels*); SiCoPR 1.1.2 does not have it yet (the slot is on SiCoPR's branch `gui-panel-slot`, based on
-1.1.2), and `sicopr-assist gui` says so and stops.
+SiCoPR, *Panels*). **No released SiCoPR has the panel slot yet** (1.1.4 does not); it will come in a
+later SiCoPR release. Until then `sicopr-assist gui` says so and stops, and SiCoPR-Assist is used from
+the command line as described above.
 
 ```powershell
 cd C:\my\project

@@ -1177,8 +1177,14 @@ def _presets(text, view, fired):
     if std is None:
         std = standard_of(wc) if wc else None
         how_std = 'taken from the config in view (f_b = %s)' % _fmt(_num(_get(wc, 'f_b'))) if std else ''
-    if std is None:
+    if std is None or (wc is None and std == '802.3dj'):
         return _no_config_question(iface, view, fired)
+    if wc is None:                   # 802.3ck named, no config in view: the preset is built on a config
+        return result(fired + ['preset: no config in view'],
+                      outcome={'type': 'STOP', 'reason': 'There is no config in this folder for the 802.3ck %s preset '
+                               'to start from. Put a config in the folder first (data\\config.xlsx), or start with '
+                               'Run the example., then: Setup a 802.3ck config for %s and run my channels.'
+                               % (iface, iface)})
     name = '%s %s' % (std, iface)
     fired = fired + ['preset: %s' % name]
     lead = ['the preset that fired: %s (%s, %s)%s' % (name, STANDARDS[std]['clause'][iface], STANDARDS[std]['lane'],
@@ -1367,7 +1373,7 @@ def _q14_line(values):
     if not keys:
         return []
     return ['rule Q14 does not ask about %s: a value a preset takes from the standard is not a validation question '
-            '(owner ruling, 21 October 2026); the same value typed by hand still is' % ' and '.join(keys)]
+            '(the value comes from IEEE Std 802.3ck-2022); the same value typed by hand still is' % ' and '.join(keys)]
 
 
 def _ck(iface, low, view, fired, lead, name):

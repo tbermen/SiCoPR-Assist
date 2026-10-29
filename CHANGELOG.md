@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.12.3 (29 October 2026): first public release
+
+- **Security: SiCoPR 1.1.4 or later is required.** SiCoPR 1.1.3 and earlier evaluated some config cell text
+  as Python, so a crafted workbook could run code when SiCoPR-Assist loaded it. SiCoPR 1.1.4 reads every
+  cell with a MATLAB-subset evaluator. `engine.folder()` now refuses a SiCoPR without it, with a message that
+  says why (`tests\test_engine_minimum.py`, shown failing without the check). `SICOPR_REF` is SiCoPR v1.1.4.
+- **Contributions are issues only.** Pull requests are not accepted (`CONTRIBUTING.md`). `SECURITY.md`
+  describes private vulnerability reporting. An issue template asks for the phrase, what was meant and the
+  answer.
+- **A named-standard preset in a folder with no config.** "Setup a 802.3dj config for C2C and run my channels."
+  in a folder holding only channel files stopped inside the translator, and the user saw the strict "could not be
+  placed" question. 802.3dj now gets the no-config proposal; 802.3ck gets a STOP that says to put a config in the
+  folder (`tests\test_preset_no_config.py`, shown failing without the fix).
+- The README's install steps clone both repositories and pin SiCoPR v1.1.4, and say how long a run takes.
+- A plan's announcement gives the source of a preset value that rule Q14 does not ask about.
+- CI runs with a read-only token.
+- The GUI section says plainly that no released SiCoPR has the panel slot yet; the command line is the way
+  to use SiCoPR-Assist until it does.
+
 ## 0.12.2 (21 October 2026)
 
 Tested with SiCoPR commit `e1651c4` (config value cells read as MATLAB evaluates them, SiCoPR finding F19), recorded

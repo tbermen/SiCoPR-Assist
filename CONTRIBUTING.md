@@ -23,17 +23,19 @@ or changes a result. Report it to SiCoPR (`github.com/tbermen/SiCoPR`).
 
 ## Pull requests
 
-Pull requests are by arrangement with the maintainer. Please open an issue first and wait for a
-reply. Every commit in a pull request must be signed off (`git commit -s`), which certifies the
-Developer Certificate of Origin (https://developercertificate.org/) for that commit.
+**Pull requests are not accepted.** Contributions come in as issues: a phrase that was not understood,
+a wrong plan, a defect, or an idea. If an idea in an issue is right, the maintainer writes the change
+from the description and credits the reporter in the commit message. Every line in the repository then
+comes from the maintainer, which keeps the licence record simple.
 
-If a change is agreed:
+Security reports: see `SECURITY.md`.
+
+For reference, the rules the maintainer follows for a change:
 
 - Follow the use-case table (`tests\cases\sicopr_use_cases.csv`). It is the specification. A row
   that looks wrong is raised in an issue, not edited to make a score pass.
 - Every new check must be shown to fail once: break what it guards, watch it fail, then restore it.
 - `powershell -ExecutionPolicy Bypass -File tests\run_all.ps1` must end with `All tests passed`.
 - New source files carry the two lines `# Copyright 2026 Todd Bermensolo` and
-  `# SPDX-License-Identifier: BSD-3-Clause` after the module docstring. Contributions are accepted
-  under BSD-3-Clause.
+  `# SPDX-License-Identifier: BSD-3-Clause` after the module docstring.
 - Plain words and short sentences in messages and documents. No em dashes and no emoji.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sicopr-assist"
-version = "0.12.2"
+version = "0.12.3"
 description = "A rules-based front end that turns phrases into SiCoPR runs"
 readme = "README.md"
 requires-python = ">=3.10"

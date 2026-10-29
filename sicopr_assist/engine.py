@@ -33,12 +33,25 @@ class EngineMissing(RuntimeError):
     pass
 
 
+TOO_OLD = ('The SiCoPR in %s is older than 1.1.4. Before 1.1.4 SiCoPR evaluated some config cell text as '
+           'Python, so a workbook from someone else could run code when it was loaded. Update SiCoPR to 1.1.4 or '
+           'later (git pull in its checkout).')
+
+
+def safe_reader(source):
+    """True when the engine source reads config cells with SiCoPR's MATLAB-subset evaluator (1.1.4 and later)."""
+    return 'def xls_eval(' in source
+
+
 def folder():
-    """The SiCoPR folder, the one that holds sicopr.py."""
+    """The SiCoPR folder, the one that holds sicopr.py. A SiCoPR older than 1.1.4 is refused."""
     if 'folder' not in _cache:
         path = schema_check.find_sicopr()
         if not path or not os.path.exists(os.path.join(path, 'sicopr.py')):
             raise EngineMissing(INSTALL_HINT)
+        with open(os.path.join(path, 'sicopr.py'), encoding='utf-8') as f:
+            if not safe_reader(f.read()):
+                raise EngineMissing(TOO_OLD % os.path.abspath(path))
         _cache['folder'] = os.path.abspath(path)
     return _cache['folder']
 
