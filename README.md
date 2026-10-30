@@ -52,12 +52,12 @@ never written to.
 ## Install
 
 You need Python 3.10 or later and SiCoPR 1.1.4 or later. SiCoPR-Assist refuses an older SiCoPR,
-because before 1.1.4 SiCoPR evaluated some config cell text as Python (see `SECURITY.md`). SiCoPR is
-not on PyPI. It is public at `github.com/tbermen/SiCoPR`; install it from a checkout first, then this
-package:
+because before 1.1.4 SiCoPR evaluated some config cell text as Python (see `SECURITY.md`). The GUI
+panel needs SiCoPR 1.2.0 or later. Install SiCoPR from a checkout of `github.com/tbermen/SiCoPR` first,
+then this package:
 
 ```powershell
-git clone --branch v1.1.4 https://github.com/tbermen/SiCoPR
+git clone --branch v1.2.1 https://github.com/tbermen/SiCoPR
 git clone https://github.com/tbermen/SiCoPR-Assist
 pip install -e .\SiCoPR
 pip install -e .\SiCoPR-Assist
@@ -67,8 +67,9 @@ A COM run takes a few minutes: about 5 to 10 minutes for an 802.3dj configuratio
 an 802.3ck one on a current laptop. `sicopr-assist "Run the example."` in an empty folder is a good first
 test.
 
-SiCoPR has to be installed from a checkout, because SiCoPR-Assist reads `VERSION.json` and the
-shipped workbooks from SiCoPR's folder. It finds that folder through the environment variable
+SiCoPR has to be installed from a checkout, because SiCoPR-Assist reads `VERSION.json`, the
+shipped workbooks and the GUI from SiCoPR's folder. `pip install sicopr` from PyPI gives the engine
+alone, without them, and is not enough for SiCoPR-Assist. It finds that folder through the environment variable
 `SICOPR_REPO` when it is set, and otherwise through the installed `sicopr` module. It only reads
 SiCoPR; it never writes there.
 
@@ -80,7 +81,7 @@ also passes its tests in CI on Linux (Python 3.10, 3.12 and 3.14). On Linux or m
 read:
 
 ```bash
-git clone --branch v1.1.4 https://github.com/tbermen/SiCoPR
+git clone --branch v1.2.1 https://github.com/tbermen/SiCoPR
 git clone https://github.com/tbermen/SiCoPR-Assist
 pip install -e ./SiCoPR
 pip install -e ./SiCoPR-Assist
@@ -475,9 +476,8 @@ the selection in the GUI's tabs is read and planned, and the example in an empty
 SiCoPR-Assist adds a panel on the right of SiCoPR's own GUI, where the same phrases are typed. SiCoPR's
 GUI stays the tool, used as without SiCoPR-Assist; the panel is a way to drive it by typing. Its
 design is `docs\GUI_DESIGN.md`. It needs a SiCoPR whose GUI has the panel slot (`gui\README.md` of
-SiCoPR, *Panels*). **No released SiCoPR has the panel slot yet** (1.1.4 does not); it will come in a
-later SiCoPR release. Until then `sicopr-assist gui` says so and stops, and SiCoPR-Assist is used from
-the command line as described above.
+SiCoPR, *Panels*), which SiCoPR has from 1.2.0. With an older SiCoPR, `sicopr-assist gui` says so and
+stops, and SiCoPR-Assist is used from the command line as described above.
 
 ```powershell
 cd C:\my\project

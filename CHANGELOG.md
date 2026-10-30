@@ -5,7 +5,8 @@ Each version starts with a short summary of what a user sees. The details below 
 ## 0.13.0 (29 October 2026)
 
 Safer channel downloads, a `--json` that a program can read, a tutor that offers only what works now,
-plan announcements that match what the plan runs, and the usual files of a public project.
+plan announcements that match what the plan runs, and the usual files of a public project. The GUI
+panel works with a released SiCoPR: 1.2.0 and later have its slot.
 
 - **Channel download is held to the IEEE site.** Only `https://www.ieee802.org` is read, for the tools
   page, every zip and after every redirect (or the one site `SICOPR_ASSIST_FETCH_INDEX` names). A zip

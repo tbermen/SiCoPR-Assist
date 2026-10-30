@@ -22,7 +22,7 @@ host and the stand-in child (tests\\cases\\standin_child.py), so no COM runs:
   following          another workbook opened in the Config view is followed (V5.4)
 
 The checks that need SiCoPR's GUI with the panel slot (the real server routing to the panel) print SKIP when the
-SiCoPR in use has no slot, as CI's SICOPR_REF does not yet; the rest need only SiCoPR's gui.app as it is.
+SiCoPR in use has no slot (SiCoPR before 1.2.0); the rest need only SiCoPR's gui.app as it is.
 With the four starting workbooks absent it prints SKIP and exits 0.
 """
 # Copyright 2026 Todd Bermensolo

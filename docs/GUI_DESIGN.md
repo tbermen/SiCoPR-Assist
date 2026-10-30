@@ -47,8 +47,8 @@ names a folder layout: the project folder is given or browsed, and SiCoPR is fou
 it (`engine.folder()`). It adds no dependency: the standard library on the server, plain JavaScript in the page, no
 external scripts or fonts, and colours from SiCoPR's own style variables.
 
-**SiCoPR versions.** The panel needs a SiCoPR whose GUI has the panel slot. No released SiCoPR has it yet; a later
-SiCoPR release will. Until then `sicopr-assist gui` says so and stops, and SiCoPR-Assist is used from the command line.
+**SiCoPR versions.** The panel needs a SiCoPR whose GUI has the panel slot, which SiCoPR has from 1.2.0. With an
+older SiCoPR, `sicopr-assist gui` says so and stops, and SiCoPR-Assist is used from the command line.
 
 ## 4. The contract with SiCoPR's GUI
 

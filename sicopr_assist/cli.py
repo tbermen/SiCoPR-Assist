@@ -122,7 +122,7 @@ def gui(argv):
         return 2
     if not has_slot:
         print("The SiCoPR at %s has no panel slot in its GUI (gui/app.py does not load sicopr.gui_panels), so the "
-              "Assist panel cannot be shown there. Use a SiCoPR with the slot, or the command line." % engine.folder())
+              "Assist panel cannot be shown there. Use SiCoPR 1.2.0 or later, or the command line." % engine.folder())
         return 2
     print('SiCoPR-Assist %s: project %s' % (__version__, folder))
     return run.start_gui(app, folder, args.port, args.no_browser)
