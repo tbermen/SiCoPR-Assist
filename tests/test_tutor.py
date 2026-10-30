@@ -222,8 +222,9 @@ def row_checks(fx):
         fx.remove_project(ctx.root)
     o, ctx, _ = handle('TU12', 'What can I say?')
     check('TU12: What can I say? still works with tutor_until_commands = 0 (no run yet: it offers the run)',
-          o['type'] == 'PLAN' and (o.get('tutor') or {}).get('phrases') == [r'Run COM on data\thru.s4p with '
-                                                                            r'data\config.xlsx'], lines(o)[:200])
+          o['type'] == 'PLAN' and (o.get('tutor') or {}).get('phrases') == [
+              'Run COM on %s with %s' % (os.path.join('data', 'thru.s4p'), os.path.join('data', 'config.xlsx'))],
+          lines(o)[:200])
     import io
     from sicopr_assist import cli
     buf = io.StringIO()
