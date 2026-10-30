@@ -12,20 +12,20 @@
  * THRU, FEXT and NEXT files of the Run tab (sicopr:channels). The panel keeps that selection and hands it to the core
  * with every phrase, so "the selected config and channels" means those files.
  *
- * The Run tab and the panel work as one (Decision 23). A PLAN that runs COM fills the Run tab (sicopr:set-run): its
+ * The Run tab and the panel work as one. A PLAN that runs COM fills the Run tab (sicopr:set-run): its
  * files, its two options, and in its command box the command the panel will run, which is the working config's run
  * CSV and not the workbook. A change made in the Run tab comes back with sicopr:channels (files and options), is part
  * of the selection, and updates that command. "Run the command." runs exactly that setup; while the panel has the Run
  * tab assembled, the Run tab's own Run button is handed here (sicopr:run-request) and is that phrase.
  *
- * GUI first (Decision 24). SiCoPR's GUI is the tool, used as without the panel; the panel drives it by typing. A run
+ * GUI first. SiCoPR's GUI is the tool, used as without the panel; the panel drives it by typing. A run
  * the panel carries out streams its lines to the Run tab's Output (sicopr:output), with its status line and Stop
  * there (sicopr:stop-request), and the page shows the Run tab when it starts, unless the user is in the middle of an
  * edit in Config. The panel keeps short replies: the plan as a short list with the long text folded behind details,
  * a question with its buttons, one line while a plan runs, then the headline result (or a batch's short table) with
  * the buttons that open it in Results.
  *
- * The panel shows only what the GUI does not (Decision 25). No selection line: the Run tab shows its files and options,
+ * The panel shows only what the GUI does not. No selection line: the Run tab shows its files and options,
  * and a reply that used them says so. The project folder, Browse and the version are in Settings; the top line is
  * only the working config (the title is the slot's header). A plan is one line that says where its effect can be seen, its steps and
  * announcements under details. The examples under the box show only while it is empty and the user is new (fewer
@@ -84,14 +84,14 @@
   // a workbook the user opened in the Config view is being followed, or its keep-or-start question is open: the
   // view stays on it, and nothing here pulls it back to the source of the working config meanwhile
   let FOLLOWING = false;
-  // what is selected in the tabs: the workbook of the Config tab and the channel files of the Run tab (Decision 20)
+  // what is selected in the tabs: the workbook of the Config tab and the channel files of the Run tab
   const SELECTION = { config: null, thru: null, fext: [], next: [],
     options: { export_mat: false, eye_under_mlse: false } };
   const RUN_COMMAND = 'Run the command.';   // what the Run tab's Run button is, while the panel has it assembled
   let ASSEMBLED = null;     // the setup this panel last put in the Run tab (sicopr:set-run), or null
   let JOB_TAB = null;       // the Run tab setup of the plan being carried out, if it has one
   const BOX_MAX_PX = 220;   // the command box grows with its content up to here, then scrolls
-  const IN_VIEW = 3;        // exchanges kept in view; older ones go to the History fold (Decision 25)
+  const IN_VIEW = 3;        // exchanges kept in view; older ones go to the History fold
   let CUR = null;           // the exchange the replies of the last command go to
   let TUTOR = null;         // the tutor of the last PLAN (new user, or What can I say?), shown under the box
   // what the core's pattern holds when a phrase used the GUI's setup (the selection, or the Run tab)
@@ -150,7 +150,7 @@
     c.scrollTop = c.scrollHeight;
   }
 
-  /* Long text (the announcements, a run's summary lines) folded behind a details toggle (Decision 24). */
+  /* Long text (the announcements, a run's summary lines) folded behind a details toggle. */
   function details(box, lines) {
     if (!(lines || []).length) return;
     const d = el('details', 'adetails');
@@ -159,7 +159,7 @@
     box.appendChild(d);
   }
 
-  /* A plan in one line that says where its effect can be seen (Decision 25): 2 changes, highlighted in Config;
+  /* A plan in one line that says where its effect can be seen: 2 changes, highlighted in Config;
    * running in the Run tab; 3 points: output in the Run tab. A plan that used the GUI's setup says so first. */
   function planLine(out) {
     const ops = (out.steps || []).map((s) => s.op || s);
@@ -214,7 +214,7 @@
     return box;
   }
 
-  /* The tutor's lines (Decision 11); an example phrase is a link that puts it in the command box. */
+  /* The tutor's lines; an example phrase is a link that puts it in the command box. */
   function tutorLines(box, tutor) {
     if (!tutor || !(tutor.lines || []).length) return;
     const t = el('div', 'atutor');
@@ -354,7 +354,7 @@
     box.focus();
   }
 
-  /* The examples under the box show only when they help (Decision 25): while the box is empty and the history holds
+  /* The examples under the box show only when they help: while the box is empty and the history holds
    * fewer successful commands than tutor_until_commands (the server says so, tutor_due), and always after What can I
    * say? (row TU03); never while a plan runs. */
   function showExamples() {
@@ -364,7 +364,7 @@
     host.hidden = $a('#aCmd').disabled || !host.childElementCount || !(asked || due);
   }
 
-  /* Up to four phrases that work now, under the command box; clicking one puts it in the box (Decision 21). After a
+  /* Up to four phrases that work now, under the command box; clicking one puts it in the box. After a
    * PLAN with the tutor's lines (a new user's, or What can I say?), those lines are shown here instead. */
   async function loadExamples() {
     if (!STATE || !STATE.project) return;
@@ -396,7 +396,7 @@
 
   /* --------------------------------------------------------- the Run tab */
   /* The Run tab shows the setup the panel runs: a plan's files, options and command, or, after a change in the Run
-   * tab, the command for what it holds now (Decision 23). */
+   * tab, the command for what it holds now. */
   function assemble(tab) {
     ASSEMBLED = tab;
     emit('set-run', tab);
@@ -461,7 +461,7 @@
       + Math.round(st.elapsed) + ' s';
   }
 
-  /* The lines of a plan that runs go to the Run tab's Output (Decision 24), as a run of the Run tab's own; when it
+  /* The lines of a plan that runs go to the Run tab's Output, as a run of the Run tab's own; when it
    * starts the page shows the Run tab, unless the user is in the middle of an edit in Config. */
   function toRunTab(st) {
     if (!st.runs) return;
@@ -497,7 +497,7 @@
     await finished(st);
   }
 
-  /* A batch's reply: its short table, one row per point (Decision 24). */
+  /* A batch's reply: its short table, one row per point. */
   function batchTable(b) {
     const t = el('table', 'atable');
     const head = el('tr');
@@ -515,7 +515,7 @@
     for (const o of st.outcomes || []) entry('(the plan made from the download)', o, 'next');
     if (st.error) note('the plan could not be carried out: ' + st.error, 'abad');
     const done = Object.assign({}, st.done || {});
-    // the tutor's lines of the plan's show_tutor step are under the box (Decision 25), not in its reply
+    // the tutor's lines of the plan's show_tutor step are under the box, not in its reply
     const taught = new Set((((TUTOR || {}).lines) || []).map((x) => x.trim()));
     done.lines = (done.lines || []).filter((x) => !taught.has(String(x).trim()));
     if (st.stopped) note('stopped: the run under way was terminated and nothing after it started', 'abad');
@@ -541,7 +541,7 @@
       for (const rid of runs) {
         const r = await resultCard(rid, done.lines);
         // a run made with Output dynamic results ticked opens in Results, dynamic, which builds its dashboard there,
-        // as a run started from the Run tab with that box ticked does (Decision 23)
+        // as a run started from the Run tab with that box ticked does
         if (r && r.export_mat && JOB_TAB && JOB_TAB.options && JOB_TAB.options.export_mat
             && !(st.pages || []).length) {
           emit('show', { view: 'dynamic', run: r.folder, build: true });
@@ -587,7 +587,7 @@
   }
 
   /* Results, dynamic opened on a run with no .mat export has nothing to show: said here, with the phrase that makes
-   * one (Decision 23, the vocabulary). */
+   * one (the vocabulary). */
   function noDynamic(rid, phrase) {
     const box = el('div', 'anote amuted');
     box.appendChild(document.createTextNode(rid + ' was run without the .mat export, so Results, dynamic has nothing '
@@ -637,8 +637,8 @@
       .catch(() => {});
   });
 
-  /* The channel files and options of the Run tab (Decisions 20 and 23): kept and handed to the core with the next
-   * phrase. The Run tab shows them, so the panel does not (Decision 25). */
+  /* The channel files and options of the Run tab: kept and handed to the core with the next
+   * phrase. The Run tab shows them, so the panel does not. */
   window.addEventListener('sicopr:channels', (e) => {
     const d = e.detail || {};
     SELECTION.thru = d.thru || null;
@@ -648,13 +648,13 @@
     SELECTION.options = { export_mat: o.export_mat === true, eye_under_mlse: o.eye_under_mlse === true };
     (async () => {
       if (!STATE) await refresh();
-      // a change the user made in the Run tab while it holds this panel's setup: its command follows (Decision 23);
+      // a change the user made in the Run tab while it holds this panel's setup: its command follows;
       // a change the panel made itself (cause panel) needs nothing more
       if (ASSEMBLED && d.cause !== 'panel' && STATE.project) await reassemble();
     })().catch((x) => report('channels event', String(x.message || x)));
   });
 
-  /* The Run tab's Run button, while this panel has the Run tab assembled (Decision 23): taken here and carried out as
+  /* The Run tab's Run button, while this panel has the Run tab assembled: taken here and carried out as
    * Run the command., with the files and options it was pressed with; one history record, the same plan, the same
    * progress. Without an assembled Run tab the button is left to SiCoPR. */
   window.addEventListener('sicopr:run-request', (e) => {
@@ -667,13 +667,13 @@
     const o = d.options || {};
     SELECTION.options = { export_mat: o.export_mat === true, eye_under_mlse: o.eye_under_mlse === true };
     if ($a('#aCmd').disabled) {
-      note('a plan is being carried out; the Run button runs when it ends, or press Stop here', 'abad');
+      note('a plan is being carried out; the Run button runs when it ends, or press Stop in the Run tab', 'abad');
       return;
     }
     send(RUN_COMMAND, 'Run button').catch((x) => note(x.message, 'abad'));
   });
 
-  /* Stop in the Run tab while its Output shows this panel's run (Decision 24): the plan is stopped here. */
+  /* Stop in the Run tab while its Output shows this panel's run: the plan is stopped here. */
   window.addEventListener('sicopr:stop-request', (e) => {
     const d = e.detail || {};
     if (!String(d.job || '').startsWith('SiCoPR-Assist #')) return;
@@ -778,10 +778,10 @@
   }
 
   async function init() {
-    focusBox(100);                       // the command box is where a new user starts (Decision 21)
+    focusBox(100);                       // the command box is where a new user starts
     await refresh();
     if (!STATE.project) {
-      // Browse is in Settings (Decision 25): opened, so a first start shows where to choose the folder
+      // Browse is in Settings: opened, so a first start shows where to choose the folder
       $a('#aSettings').open = true;
       note('Choose the project folder with Browse, in Settings: the folder that holds (or will hold) .sicopr.',
         'amuted');

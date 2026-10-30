@@ -1,8 +1,8 @@
-"""Translator mode (Decision 26, Phase V2-10): a layer of rules and interface presets in front of the strict core.
+"""Translator mode: a layer of rules and interface presets in front of the strict core.
 
 When the strict reading of a phrase misses (a word it cannot place, a name that is not a COM keyword, nothing matched),
-this layer reads the phrase again with what the strict core does not know: the owner's rulings and the study's synonym
-list (baud rate is f_b, DFE taps is N_b, SNDR is SNR_TX), filler and typos in command words, references to the
+this layer reads the phrase again with what the strict core does not know: a list of the words
+engineers use (baud rate is f_b, DFE taps is N_b, SNDR is SNR_TX), filler and typos in command words, references to the
 project's files (the 500mm thru, the original thru, the other package), number words, and the interface presets (KR,
 CR, C2C and C2M in 802.3dj and 802.3ck). It never plans anything itself. It returns:
 
@@ -14,9 +14,9 @@ CR, C2C and C2M in 802.3dj and 802.3ck). It never plans anything itself. It retu
                  resolves (answers)
 
 with the rules that fired, the preset, the proposal and the lines to announce, so the history records them. It never
-writes the run CSV, runs the engine or skips validation (version 1 prompt, section 1).
+writes the run CSV, runs the engine or skips validation.
 
-The miss gate (decision 26, item 5) is applied by the core and here: a reply to a pending question never reaches the
+The miss gate is applied by the core and here: a reply to a pending question never reaches the
 layer, nor does a request that is out of scope (email, slides, diagnose, convert, optimise) or a value the core refused
 on a request it understood (an illegal value). Typo tolerance is for command words only, never for keyword names or
 values: a name that is one letter from a keyword is asked about, as the strict core does.
@@ -46,7 +46,7 @@ CANCEL = 'cancel'
 NONE_OF_THESE = 'none of these'
 
 # the interfaces, their words and their clause in each standard: data/interfaces.csv (the names are data, not code:
-# two of them are also values of PMD_type, which the code never names, gate G3.3)
+# two of them are also values of PMD_type, which the code never names)
 INTERFACES = os.path.join(DATA, 'interfaces.csv')
 
 
@@ -216,7 +216,7 @@ def interface_named(text):
     return next((i for i, rx in IFACE_WORDS if rx.search(text)), None)
 
 
-# filler and politeness around a known form (decision 26, item 3: command words only)
+# filler and politeness around a known form (command words only)
 FILLER = (
     (r'^\s*(?:hey|hi|ok|okay)[,!]?\s+', ''),
     (r"^\s*(?:can|could|would) you(?: please)?\s+", ''),
@@ -518,7 +518,7 @@ def _validation_outcome(o):
         'ask ' not in (o.get('pattern') or '')
 
 
-# ----------------------------------------------------------------------------- synonyms (the owner's rulings and the study's list)
+# ----------------------------------------------------------------------------- synonyms (the words engineers use)
 VERB_SET = r'(?:raise|lower|increase|decrease|bump|bring|move|change|set|put|make)'
 SYNONYMS = (
     # (rule name, pattern, replacement); applied in order, each once over the phrase

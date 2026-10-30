@@ -3,7 +3,7 @@
 /* The SiCoPR-Assist panel. Colours come from SiCoPR's own variables, so it follows the page's theme. */
 #panel-assist { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 #panel-assist .aline { display: flex; align-items: center; gap: 8px; }
-/* the top line (Decision 25): with a working config, its short state (the title is the slot's header); the project
+/* the top line: with a working config, its short state (the title is the slot's header); the project
    is in Settings */
 #panel-assist .atop { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 #panel-assist .atop[hidden] { display: none; }
@@ -25,7 +25,7 @@
 #panel-assist .aplan, #panel-assist .aq { font-weight: 600; margin-top: 4px; }
 #panel-assist .astop { color: var(--warn); background: var(--warn-soft); border-radius: 6px; padding: 4px 8px;
   margin-top: 4px; }
-/* a plan in one line that says where its effect can be seen; its steps are under details (Decision 25) */
+/* a plan in one line that says where its effect can be seen; its steps are under details */
 #panel-assist .aoneline { font-weight: 600; margin-top: 4px; overflow-wrap: anywhere; }
 #panel-assist .aopts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 #panel-assist .atutor { margin-top: 6px; color: var(--muted); font-size: 12px; }
@@ -33,7 +33,7 @@
 /* a long path in a note or an announced line wraps, so the conversation never scrolls sideways */
 #panel-assist .anote { font-size: 12px; overflow-wrap: anywhere; }
 #panel-assist .anote.abad { color: var(--warn); }
-/* GUI first (Decision 24): while a plan runs the panel shows one line; the run's output is in the Run tab */
+/* GUI first: while a plan runs the panel shows one line; the run's output is in the Run tab */
 #panel-assist .arunning { display: flex; align-items: center; gap: 8px; justify-content: space-between;
   font-size: 12px; border: 1px dashed var(--accent); border-radius: 8px; padding: 5px 8px; }
 /* display:flex above beats the browser's [hidden] rule; each class that sets display has its own (SiCoPR's rule) */
@@ -45,7 +45,7 @@
 #panel-assist .atable th, #panel-assist .atable td { border-bottom: 1px solid var(--line); padding: 2px 4px;
   text-align: left; overflow-wrap: anywhere; }
 #panel-assist .apending { border-top: 1px solid var(--line); padding-top: 6px; }
-/* The command box is the first thing a new user looks for (Decision 21): its own block with a label, a border in
+/* The command box is the first thing a new user looks for: its own block with a label, a border in
    the accent colour and three lines of height, kept in view at the bottom of the panel while the conversation
    scrolls above it. */
 #panel-assist .acommand { position: sticky; bottom: 0; z-index: 2; display: flex; flex-direction: column; gap: 5px;

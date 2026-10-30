@@ -452,9 +452,14 @@ def main(argv=None):
         # git writes the old file itself, so no shell redirection is involved (PowerShell's ">" re-encodes text)
         import subprocess
         import tempfile
+        from sicopr_assist import engine
+        git = engine.program('git')              # by its full path, never a git in the current folder
+        if git is None:
+            print('git was not found on PATH')
+            return 2
         commit = args.remap_from_commit or json.load(
             open(os.path.splitext(args.schema)[0] + '.meta.json', encoding='utf-8'))['sicopr']['commit']
-        got = subprocess.run(['git', '-C', repo, 'show', '%s:sicopr.py' % commit], capture_output=True)
+        got = subprocess.run([git, '-C', repo, 'show', '%s:sicopr.py' % commit], capture_output=True)
         if got.returncode != 0:
             print('git could not show sicopr.py at %s: %s' % (commit, got.stderr.decode('utf-8', 'replace').strip()))
             return 2
@@ -462,8 +467,8 @@ def main(argv=None):
         with os.fdopen(fd, 'wb') as fh:
             fh.write(got.stdout)
         args.remap_port_lines = old_path
-        head = subprocess.run(['git', '-C', repo, 'rev-parse', 'HEAD'], capture_output=True, text=True)
-        dirty = subprocess.run(['git', '-C', repo, 'status', '--porcelain', '--', 'sicopr.py'], capture_output=True, text=True)
+        head = subprocess.run([git, '-C', repo, 'rev-parse', 'HEAD'], capture_output=True, text=True)
+        dirty = subprocess.run([git, '-C', repo, 'status', '--porcelain', '--', 'sicopr.py'], capture_output=True, text=True)
         if head.returncode == 0 and not dirty.stdout.strip():
             new_commit = head.stdout.strip()
         else:

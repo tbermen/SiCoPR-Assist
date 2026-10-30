@@ -6,22 +6,22 @@ steps say. It refuses any other outcome: a plan reaches the engine only through 
 core). Each config is validated again before its run CSV is written.
 
 A run is one child process (run_case.py) started from an argument list, with no shell and unbuffered output,
-one at a time. Each run gets the next run id and writes, under the project's .sicopr folder (Decision 3):
+one at a time. Each run gets the next run id and writes, under the project's .sicopr folder:
 
     configs\\run_NNNN.json    the working config, with RESULT_DIR set to the run's own folder (row CP09)
-    configs\\run_NNNN.csv     what the engine read (Decision 2)
+    configs\\run_NNNN.csv     what the engine read
     runs\\run_NNNN\\          RESULT_DIR: the engine's own report, run.log, result.json
 
 A point whose loaded parameters, channel files and engine equal an earlier run's is reused, not run again
-(Decision 6). A point that fails validation is skipped and reported, and a batch goes on (Decision 7).
+. A point that fails validation is skipped and reported, and a batch goes on.
 
 A channel download (rows F1 to F12) is carried out in two parts. First the zip: downloaded with fetch.py into
 .sicopr\\cache\\<interface>\\ (unless it is there), unpacked with every path checked, and its inventory written; the
 core then plans the run matrix from the cache (core.fetch_followup), and that outcome is handed back under "next".
 Then that plan, a batch whose points each name their own channel files.
-Everything returned is data: the lines to show are in the result's "lines" (Decision 13).
+Everything returned is data: the lines to show are in the result's "lines".
 
-While a plan is carried out (Decision 17), each line is handed to the progress callback as (kind, text) as it
+While a plan is carried out, each line is handed to the progress callback as (kind, text) as it
 happens: a "status" line as each step starts (the step, the run id, and for a batch the point n of N), every
 "engine" line the child prints, as it arrives and unchanged, and a "status" line that ends each run with its
 elapsed time and headline result. line_text gives the form shown: an engine line is indented. run.log in the run
@@ -125,7 +125,7 @@ def child_argv(project, rid, channels, export=False, eye=False, fp_hash=None, no
 
 
 def run_tab_command(project, channels, export=False, eye=False):
-    """The command a run of these channel files and options would be, as the Run tab shows it (Decision 23): the
+    """The command a run of these channel files and options would be, as the Run tab shows it: the
     child on the run CSV of the next run id, python first, paths under the project folder relative to it, without
     the bookkeeping arguments (--fingerprint, --note) that are filled in when it starts."""
     rid = project.next_run_id()
@@ -160,7 +160,7 @@ def _run_tab(project, ctx, channels, export, eye, source):
 
 
 def run_tab_setup(project, out):
-    """What a PLAN runs, as the Run tab of SiCoPR's GUI shows it when the panel assembles it (Decision 23): the
+    """What a PLAN runs, as the Run tab of SiCoPR's GUI shows it when the panel assembles it: the
     detail of sicopr:set-run, or None when the plan has no single COM run (a batch, a plan that runs nothing, the
     dashboard of an earlier run). Called before the plan is carried out: the command names the next run id."""
     if out.get('type') != 'PLAN' or out.get('points'):
@@ -177,7 +177,7 @@ def run_tab_setup(project, out):
     if not channels:
         return None
     run_com = next((a for op, a in steps if op == 'run_com'), {})
-    imported = next((a for op, a in steps if op == 'import_config'), None)
+    imported = next((a for op, a in steps if op == 'import_config'), None) or _config_json(steps)
     source = (imported or {}).get('path') or ((ctx.last or {}).get('source') or {}).get('path')
     return _run_tab(project, ctx, channels, bool(run_com.get('export_mat')) or exp is not None,
                     bool(run_com.get('eye_under_mlse')), source)
@@ -196,6 +196,11 @@ def run_tab_preview(project, selection):
     return _run_tab(project, ctx, channels, sel['options']['export_mat'], sel['options']['eye_under_mlse'], source)
 
 
+def _config_json(steps):
+    """The args of the validate_config step that names a config JSON the plan runs as it is (row CP14), or None."""
+    return next((a for op, a in steps if op == 'validate_config' and a.get('path')), None)
+
+
 def plan_channels(ctx, steps):
     """[(path, role)]: the channel files the run of a plan uses, in order. Those of the last run; the files the plan
     imports with its config (in the roles the plan gives them, the selection in the GUI's tabs, else from their
@@ -203,7 +208,7 @@ def plan_channels(ctx, steps):
     ops = [op for op, _ in steps]
     last = ctx.last or {}
     channels = [(c['path'], c.get('role') or 'thru') for c in last.get('channels') or []]
-    imported = next((a for op, a in steps if op == 'import_config'), None)
+    imported = next((a for op, a in steps if op == 'import_config'), None) or _config_json(steps)
     if imported is not None or 'clear_overrides' in ops:
         named = next((a.get('channels') for op, a in steps if op in ('validate_inputs', 'run_com') and a.get('channels')),
                      None)
@@ -244,7 +249,7 @@ class _Runner:
         self.held = []                              # lines said while no run.log is open
 
     def say(self, kind, text):
-        """One progress line (Decision 17): to the callback, and to run.log in the form shown."""
+        """One progress line: to the callback, and to run.log in the form shown."""
         if self.progress:
             self.progress(kind, text)
         line = line_text(kind, text)
@@ -271,7 +276,7 @@ class _Runner:
     def run_point(self, wc, channels, head, notes=(), export=False, eye=False):
         """One point: reuse an equal earlier run, or run it. head starts its status line (the step, and for a batch
         the point n of N). export: the engine's .mat export is on (the dashboard needs it), and only a run that had it
-        is reused. eye: --eye-under-mlse (Decision 23), and only a run with the same setting is reused. Returns
+        is reused. eye: --eye-under-mlse, and only a run with the same setting is reused. Returns
         {'run_id', 'new', 'reused_from', 'skipped', 'status', 'message'}."""
         if self.cancel is not None and self.cancel.is_set():
             self.say('status', '%s: skipped, %s' % (head, STOPPED))
@@ -383,7 +388,7 @@ def _headline(rec):
 
 def _step_detail(op, a):
     """What a status line says about a step besides its name."""
-    if op == 'import_config':
+    if op == 'import_config' or op == 'validate_config':
         return a.get('path') or ''
     if op in ('set_param', 'add_param'):
         return '%s: %s -> %s' % (validate.name_of(a['json_path']), validate.show(a.get('before')),
@@ -413,9 +418,9 @@ def _step_detail(op, a):
 
 
 def _apply_channel(channels, a):
-    """[(path, role)] after one set_channel step (Decision 18): the THRU is replaced; an aggressor replaces the
+    """[(path, role)] after one set_channel step: the THRU is replaced; an aggressor replaces the
     one it names, or is added. Applying the same step twice changes nothing, so a replayed plan is safe."""
-    if a.get('role') == 'crosstalk':             # Decision 19: the THRU is kept and the aggressors are replaced
+    if a.get('role') == 'crosstalk':             # the THRU is kept and the aggressors are replaced
         thru = [(p, r) for p, r in channels if r == 'thru'][:1]
         return thru + [(p, 'fext') for p in a.get('fext') or []] + [(p, 'next') for p in a.get('next') or []]
     role, after, before = a.get('role') or 'thru', a['after'], a.get('before')
@@ -435,16 +440,30 @@ def _apply_channel(channels, a):
     return out
 
 
+def file_manager():
+    """The file manager by its full path, so that a program of the same name in the project folder is never the one
+    started: explorer.exe in the Windows folder, /usr/bin/open on macOS, xdg-open from PATH elsewhere (never from the
+    current folder). None when there is none."""
+    if sys.platform.startswith('win'):
+        return os.path.join(os.environ.get('SystemRoot') or r'C:\Windows', 'explorer.exe')
+    if sys.platform == 'darwin':
+        return '/usr/bin/open'
+    return engine.program('xdg-open')
+
+
 def open_folder(path):
     """Open the folder that holds path in the file manager, with the file selected where the system can (row FB06).
     Returns a line to show, or None. Started from an argument list, no shell; a failure is reported, not raised."""
+    fm = file_manager()
     try:
+        if fm is None:
+            raise OSError('no file manager was found (xdg-open is not on PATH)')
         if sys.platform.startswith('win'):
-            subprocess.Popen(['explorer', '/select,' + os.path.abspath(path)])
+            subprocess.Popen([fm, '/select,' + os.path.abspath(path)])
         elif sys.platform == 'darwin':
-            subprocess.Popen(['open', '-R', os.path.abspath(path)])
+            subprocess.Popen([fm, '-R', os.path.abspath(path)])
         else:
-            subprocess.Popen(['xdg-open', os.path.dirname(os.path.abspath(path))], stdout=subprocess.DEVNULL,
+            subprocess.Popen([fm, os.path.dirname(os.path.abspath(path))], stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
     except OSError as e:
         return 'the folder could not be opened (%s); the file is %s' % (e, path)
@@ -452,7 +471,7 @@ def open_folder(path):
 
 
 def _export_feedback(project, a, opener):
-    """Write the feedback file (Decision 10). For Send feedback, give the address and subject and open the folder.
+    """Write the feedback file. For Send feedback, give the address and subject and open the folder.
     Nothing is sent."""
     from sicopr_assist import feedback
     path = feedback.write(project, os.path.join(project.root, _native(a['path'])))
@@ -470,7 +489,7 @@ def _export_feedback(project, a, opener):
 
 def set_project_setting(project, name, value):
     """Write name = value into the project settings file, replacing any line that sets name; value None removes
-    that line (rows TU06, Decision 4). Returns the file's path."""
+    that line (rows TU06). Returns the file's path."""
     import re
     path = project.settings_path
     try:
@@ -492,8 +511,8 @@ def set_project_setting(project, name, value):
 def start_gui(app, folder, port=None, no_browser=False):
     """SiCoPR's GUI (app, its gui/app.py) with the Assist panel, on the project folder: started from an argument list,
     no shell, with the folder opened (--dir) and made the run directory (--run-dir), and the project named to the
-    panel by SICOPR_ASSIST_PROJECT. Bytecode writing is off, so SiCoPR's folder gets no .pyc (Rule 1). Waits for it
-    and returns its exit code."""
+    panel by SICOPR_ASSIST_PROJECT. Bytecode writing is off, so SiCoPR's folder gets no .pyc: nothing is written
+    there. Waits for it and returns its exit code."""
     env = dict(os.environ, SICOPR_ASSIST_PROJECT=folder, PYTHONDONTWRITEBYTECODE='1')
     if port:
         env['SICOPR_GUI_PORT'] = str(port)
@@ -569,9 +588,13 @@ def _fetch_stage(project, out, rec, progress):
             continue
         if op == 'download':
             t0 = time.time()
+            cap = a.get('max_mb')
             try:
                 got = fetch.download(a['url'], zpath, core.partial_path(project, name), retries=a.get('retries', 1),
-                                     say=lambda t: say(t, 'engine'))
+                                     say=lambda t: say(t, 'engine'), max_bytes=None if cap is None else int(cap * 1e6))
+            except fetch.FetchRefused as e:
+                return stopped('The download of %s was refused: %s. Nothing was kept in the cache, and nothing runs.'
+                               % (name, e))
             except fetch.FetchError as e:
                 return stopped('The download of %s is incomplete: %s (download_retries = %s). Nothing was kept in the '
                                'cache, and nothing runs.' % (name, e, a.get('retries', 1)))
@@ -604,7 +627,7 @@ def _fetch_stage(project, out, rec, progress):
 
 def follow(project, out, show=None, lines=None, **kw):
     """Carry out a PLAN, then follow a channel download (rows F1 to F12) the same way wherever it is asked for
-    (Decision 13): the zip first, then the outcome the core plans from it, shown with show(outcome) and, if it is a
+   : the zip first, then the outcome the core plans from it, shown with show(outcome) and, if it is a
     PLAN, carried out. lines(list) gets the lines of each part as it ends. kw goes to carry_out. Returns the last
     outcome and what carrying it out gave."""
     done = carry_out(project, out, **kw)
@@ -630,7 +653,7 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
               cancel=None):
     """Carry out a PLAN that core.handle returned and recorded. child replaces the command that runs one case
     (a test gives a stand-in that writes a seeded result.json). progress, when given, is called with (kind, text)
-    for every line said while the plan is carried out (Decision 17; see line_text for the form shown).
+    for every line said while the plan is carried out (see line_text for the form shown).
     open_folder opens a folder for Send feedback, rscript replaces the Rscript command of the dashboard (a list;
     default: the Rscript engine.find_rscript finds), and open_page opens the dashboard page (tests give stand-ins).
     Returns {'status', 'run_ids', 'points', 'lines'} and fills in the history record. A channel-download plan whose
@@ -647,7 +670,7 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
     R = _Runner(project, child, progress, cancel)
     ctx = R.ctx
     lines = []
-    for op, a in steps:                          # steps that write a file and run nothing (Decisions 10 and 11)
+    for op, a in steps:                          # steps that write a file and run nothing
         if op == 'export_feedback':
             lines += _export_feedback(project, a, open_folder)
         elif op == 'set_setting':
@@ -655,10 +678,10 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
             done = 'removed the %s line' % a['name'] if a.get('value') is None else \
                 'wrote %s = %s' % (a['name'], a['value'])
             lines.append('%s in %s' % (done, project.relative(path)))
-    tutor_lines = list((out.get('tutor') or {}).get('lines') or [])      # shown after the plan (Decision 11)
+    tutor_lines = list((out.get('tutor') or {}).get('lines') or [])      # shown after the plan
     if not out.get('points') and not any(op in ops for op in ('run_com', 'run_batch', 'build_matrix', 'export_xlsx',
                                                               'export_mat')):
-        return {'status': 'ok', 'run_ids': [], 'points': [], 'lines': lines + tutor_lines}   # shown already (Decision 8)
+        return {'status': 'ok', 'run_ids': [], 'points': [], 'lines': lines + tutor_lines}   # shown already
     said = set()
 
     def say_step(k, more=''):
@@ -674,6 +697,7 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
     channels = plan_channels(ctx, steps)
     base_run = ctx.last_run_id()
     imported = next((a for op, a in steps if op == 'import_config'), None)
+    config_json = (_config_json(steps) or {}).get('path')
     for k, op in enumerate(ops[:first_run]):
         if op in ('import_config', 'clear_overrides'):
             say_step(k)
@@ -687,12 +711,21 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
         overrides = []
         synthetic = imported.get('example_channel') if imported else None
         if synthetic and not os.path.exists(ctx.path(synthetic)):
-            # the example setup in a folder with no channel file (Decision 22): its synthetic THRU is written now
+            # the example setup in a folder with no channel file: its synthetic THRU is written now
             from sicopr_assist import example_channel
             os.makedirs(os.path.dirname(ctx.path(synthetic)), exist_ok=True)
             n, il, _ = example_channel.write(ctx.path(synthetic))
             R.say('status', 'wrote %s: a synthetic %g mm lossy line (%d points, %.1f dB at 53.125 GHz), not a '
                             'measured channel' % (_native(synthetic), example_channel.LENGTH_MM, n, il))
+    elif config_json is not None:                 # a config JSON named in the phrase, used as it is (row CP14)
+        path = ctx.path(config_json)
+        try:
+            with open(path, encoding='utf-8') as f:
+                wc = json.load(f)
+        except (OSError, ValueError) as e:
+            return _failed(project, rec, 'the config %s cannot be read: %s' % (path, e))
+        source = {'path': _native(config_json), 'sha256': _sha(path)}
+        overrides = []
     else:
         wc = ctx.wc
         own_configs = bool(out.get('points')) and all(pt.get('config') for pt in out['points'])
@@ -713,8 +746,8 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
             overrides = [o for o in overrides if o['json_path'] != c['json_path']]
             overrides.append({'json_path': c['json_path'], 'before': c['before'], 'after': c['after'],
                               'kind': c['kind']})
-    # the channels (plan_channels): another channel file with the config of the last run (Decision 18), the files of
-    # an import in their roles (Decision 20), a thru-only run
+    # the channels (plan_channels): another channel file with the config of the last run, the files of
+    # an import in their roles, a thru-only run
     run_com = next((a for op, a in steps if op == 'run_com'), None)
     point_channels = any(pt.get('channels') for pt in out.get('points') or [])     # a fetched batch names its own
     if not channels and not point_channels and any(op in ops for op in ('run_com', 'run_batch', 'export_mat')):
@@ -852,7 +885,7 @@ def carry_out(project, out, child=None, progress=None, open_folder=open_folder, 
                 one = summary.write_results_file(project, rec['seq'], rows, a['results_file'])
                 lines.append('the results of this batch together: %s' % project.relative(one))
         elif op == 'diff_results':
-            if a.get('against') == core.AGAINST_THRU_ONLY:   # the two cases of a THRU (Decision 24): the first is it
+            if a.get('against') == core.AGAINST_THRU_ONLY:   # the two cases of a THRU: the first is it
                 lines += _diff_lines(project, (points[0] if points else {}).get('run_id'), points,
                                      against=core.AGAINST_THRU_ONLY)
             else:
@@ -876,9 +909,9 @@ def _size_text(n):
 
 def _render(R, project, rid, rscript, head):
     """Rscript on SiCoPR's R/com_analysis.R for each .mat export in the folder of run rid (row D1), started from an
-    argument list with that run folder as its working folder, never SiCoPR's (Rule 1): the page
+    argument list with that run folder as its working folder, never SiCoPR's, where nothing is written: the page
     (<run>_caseNN_report.html) and its lib folder land beside the .mat. Every line Rscript prints is passed on as a
-    child line (Decision 17). Returns ([pages written], [problems])."""
+    child line. Returns ([pages written], [problems])."""
     folder = project.run_dir(rid)
     mats = sorted(glob.glob(os.path.join(folder, '*_case[0-9]*.mat')))
     if not mats:

@@ -2,9 +2,9 @@
 routes HTTP to them for SiCoPR's GUI.
 
 Nothing here reaches past the core: a phrase goes to core.handle, a Config-view edit to core.edit, and a PLAN is
-carried out by run.follow in a worker thread, exactly as the command line carries it out (Decision 13). The functions
-take a Project and return plain data, so si-gui can call them without HTTP. Every path the page gives is checked
-against the project folder and the directories the user opened in SiCoPR's GUI (host.roots()).
+carried out by run.follow in a worker thread, exactly as the command line carries it out. The functions
+take a Project and return plain data, so another front end can call them without HTTP. Every path the page gives is
+checked against the project folder and the directories the user opened in SiCoPR's GUI (host.roots()).
 
 Everything the GUI does is in the project's history (GUI_DESIGN.md section 7a): phrases, answers, edits and opens are
 records the core writes; run, stop, view and error are log records written here, each with origin "gui".
@@ -151,7 +151,7 @@ def source_of(project):
 
 def tutor_due(project):
     """Whether the tutor still comes up on its own: the history holds fewer successful commands than
-    tutor_until_commands (tutor.after's rule). The panel shows its examples under the box only then (Decision 25)."""
+    tutor_until_commands (tutor.after's rule). The panel shows its examples under the box only then."""
     from sicopr_assist import tutor
     return tutor.successes(project.read_history()) < read_settings(project)['values']['tutor_until_commands']
 
@@ -332,7 +332,7 @@ def history(project, limit=200):
 
 def result(project, rid):
     """GET result: one run's summary card (summary.run_summary), its folder, whether it has the engine's .mat export
-    (Results, dynamic shows only a run that has it), and the phrase that shows its dynamic results (Decision 23)."""
+    (Results, dynamic shows only a run that has it), and the phrase that shows its dynamic results."""
     if not re.fullmatch(r'run_\d{4,}', str(rid or '')):
         raise ValueError('not a run id: %s' % rid)
     got = summary.run_summary(project, rid)
@@ -345,7 +345,7 @@ def result(project, rid):
 
 
 def headline(got):
-    """The one result line the panel shows after a run (Decision 24): COM of each package case, pass or fail against
+    """The one result line the panel shows after a run: COM of each package case, pass or fail against
     COM Pass threshold. run_0006: COM 8.80571 dB, pass (COM Pass threshold 3 dB)."""
     rid = got.get('run_id')
     if got.get('status') != 'complete':
@@ -374,7 +374,7 @@ def batch(project, seq):
     if rec is None:
         raise ValueError('no history record %s' % seq)
     rows = summary.batch_rows(project, rec['seq'], rec.get('points') or [])
-    # the short table of the panel's reply (Decision 24): one row per point
+    # the short table of the panel's reply: one row per point
     table = [{'point': r['point'], 'values': r['values'], 'status': r['status'], 'run_id': r['run_id'],
               'com': ' '.join(summary.fmt(float(x)) for x in str(r.get(summary.COM_FIELD) or '').split())}
              for r in rows]
@@ -388,16 +388,16 @@ def settings(project):
     return {'lines': core.settings_lines(read_settings(project))}
 
 
-MAX_EXAMPLES = 4                 # example phrases under the command box (Decision 21)
+MAX_EXAMPLES = 4                 # example phrases under the command box
 NO_CHANNEL = 'no channel file (pick a THRU in the Run tab)'
 RUN_SELECTION = core.RUN_SELECTION
 
 
 def clean_selection(project, sel, roots):
     """The selection the page reports (the config of the Config tab from sicopr:config, the THRU, FEXT and NEXT
-    files of the Run tab from sicopr:channels), as the core takes it (Decision 20): absolute paths, and only those
+    files of the Run tab from sicopr:channels), as the core takes it: absolute paths, and only those
     inside the project folder or a directory opened in the GUI, and the Run tab's two options, each on only when the
-    page says true (Decision 23). A path from anywhere else is left out, so it never
+    page says true. A path from anywhere else is left out, so it never
     reaches the core. None when the page reports no selection at all."""
     if not isinstance(sel, dict):
         return None
@@ -416,8 +416,8 @@ OPTION_NAMES = {'export_mat': 'Output dynamic results', 'eye_under_mlse': '--eye
 
 
 def selection_line(sel):
-    """The line above the command box: Selected: <config>; THRU <file>; 3 FEXT, 4 NEXT; and the Run tab's options
-    that are on (Decision 23)."""
+    """The selection as one line, for the API and the history: Selected: <config>; THRU <file>; 3 FEXT, 4 NEXT;
+    and the Run tab's options that are on."""
     sel = sel or {}
     cfg = os.path.basename(sel['config']) if sel.get('config') else 'no config'
     on = [OPTION_NAMES[k] for k in core.RUN_OPTIONS if (sel.get('options') or {}).get(k)]
@@ -437,7 +437,7 @@ def selection(project, sel, roots):
 
 
 def examples(project, sel=None, limit=MAX_EXAMPLES):
-    """POST examples: up to limit phrases to show under the command box (Decision 21), each one checked by the core
+    """POST examples: up to limit phrases to show under the command box, each one checked by the core
     against the project as it is now and kept only when it gives a PLAN with no word left unplaced (the tutor's
     rule, row TU04). With no run yet they start with what runs now: the one config and channel of the folder when
     there is exactly one of each, and the example setup. Once there is a working config (a run, or a workbook
@@ -476,13 +476,13 @@ def _has_runs(out):
 
 # ----------------------------------------------------------------------------- the panel behind SiCoPR's GUI
 _STARTED = re.compile(r'(?:: point (\d+) of (\d+) \([^\n]*\))?: (run_\d{4,}) started$')
-RUNNING = '%s running: output in the Run tab'      # the one line the panel shows while a plan runs (Decision 24)
+RUNNING = '%s running: output in the Run tab'      # the one line the panel shows while a plan runs
 MAX_STATUS = 400                 # status lines a run record keeps (the engine's lines are in each run.log)
 
 
 class Job:
     """A PLAN carried out in a worker thread, its progress lines kept in a bounded buffer polled by since. The page
-    sends those lines to the Run tab's Output (sicopr:output, Decision 24); the panel itself shows only the running
+    sends those lines to the Run tab's Output (sicopr:output); the panel itself shows only the running
     line: the run under way, and for a batch its point."""
 
     def __init__(self, seq, out):
@@ -627,9 +627,9 @@ class Panel:
     # ---- commands
     def phrase(self, p, phrase, host, selection=None):
         """POST handle: core.handle, then a PLAN carried out in the worker. selection: what is selected in the tabs
-        (clean_selection), handed to the core as data with every phrase (Decision 20). A PLAN with one COM run also
+        (clean_selection), handed to the core as data with every phrase. A PLAN with one COM run also
         gives run_tab, the setup it runs as the Run tab shows it (run.run_tab_setup), which the page is sent as
-        sicopr:set-run (Decision 23); it is made before the plan starts, so it names the run id the plan takes."""
+        sicopr:set-run; it is made before the plan starts, so it names the run id the plan takes."""
         if not phrase.strip():
             return {'error': 'type a command'}
         if self.running():
@@ -674,7 +674,7 @@ class Panel:
                 job.finished = time.time()
                 d = job.done or {}
                 if job.runs:
-                    # the status lines of Decision 17 go with the run record (the engine's own are in each run.log)
+                    # the status lines go with the run record (the engine's own are in each run.log)
                     log(p, 'run', {'event': 'end', 'command': seq, 'run_ids': d.get('run_ids') or [],
                                    'status': 'stopped' if job.cancel.is_set() else (d.get('status') or 'failed'),
                                    'elapsed': round(job.finished - job.started, 1),

@@ -144,7 +144,7 @@ def main():
               and h[0]['status'] == 'question' and h[0]['plan'] == o and h[0]['seq'] == 1, h)
         check('at plan time only the history line and the pending question are written',
               sorted(os.listdir(pl.root)) == ['.sicopr'] and sorted(os.listdir(pl.project.dir))
-              == ['history.jsonl', 'pending.json'], os.listdir(pl.project.dir))
+              == ['.gitignore', 'history.jsonl', 'pending.json'], os.listdir(pl.project.dir))
         o2 = core.handle('2', pl.project)
         h = pl.history()
         check('an answer is recorded with the option chosen and the question it answers',

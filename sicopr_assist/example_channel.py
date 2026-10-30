@@ -1,6 +1,6 @@
 """The synthetic THRU of the example setup: two uncoupled lossy lines, built with the same causal line model COM
 uses for boards. It is not a measured channel: it exists so that the example runs end to end from an empty folder
-(Decision 22), and so that the tests can run the engine with no IEEE file. The file is ours to ship.
+, and so that the tests can run the engine with no IEEE file. The file is ours to ship.
 
     python -m sicopr_assist.example_channel out.s4p [length in mm]
 

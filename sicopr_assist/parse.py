@@ -1,6 +1,6 @@
 """Words to a request: action, names, values, units, ranges, files, and the words left over.
 
-Strict mode (Rule 4): a parameter is named by its COM keyword, case and spaces ignored. There is no alias
+Strict mode: a parameter is named by its COM keyword, case and spaces ignored. There is no alias
 table. Two words are built in: "package" means PKG_NAME, and "COM" as a result means the result field
 channel_operating_margin_dB. A word that cannot be placed is reported in "unplaced"; the core asks about
 it and never guesses. A mistyped action or filler word of four or more letters, one letter or one swap of
@@ -20,11 +20,11 @@ read(phrase, names, blocks) returns a plain dictionary:
     corrected   {typed: read as} for the typo rule
     flags       set of plain markers: again, this_config, these_files, example, thru_only, crosstalk,
                 different, instead, all, diff, both, last_config, last_run, and selection with sel_config and
-                sel_channel (the config and the channel files selected in the GUI's tabs, Decision 20); run_tab
-                (the setup in the Run tab: "the command", "what is in the Run tab", "the Run tab", and since Decision 24
+                sel_channel (the config and the channel files selected in the GUI's tabs); run_tab
+                (the setup in the Run tab: "the command", "what is in the Run tab", "the Run tab", and also
                 "the current settings", "settings captured", "what I have set up", "as it is set up"), run_it ("run it"
                 alone, which the core reads as the Run tab only where there is one) and last_channels ("the last
-                config and channel files"), Decision 23
+                config and channel files")
     runs        run ids named (run_0004), for the dashboard of that run; in any other request they are unplaced
     pattern     a short text of how the phrase was read (goes to history)
 
@@ -77,20 +77,20 @@ RANGE_PARTS = {'step': 'step', 'minimum': 'start', 'min': 'start', 'start': 'sta
                'end': 'end'}
 CONFIG_EXT = ('.xlsx', '.xls', '.csv', '.json', '.mat')
 CHANNEL_EXT = re.compile(r'\.s\d+p$', re.I)
-# "the previous config" and its two other wordings mean the config of the last run (Decision 18). Only before
+# "the previous config" and its two other wordings mean the config of the last run. Only before
 # the word config: "previous" alone is not placed.
 LAST_CONFIG_WORDS = ('previous', 'same', 'last')
 # a word right before a channel file that says which channel it is (row CH08)
 CHANNEL_ROLES = {'thru': 'thru', 'fext': 'fext', 'next': 'next'}
-# words for the crosstalk files of the THRU in use (Decision 19), and the verbs taken only together with them
+# words for the crosstalk files of the THRU in use, and the verbs taken only together with them
 # ("include the matching xtalk files in the simulation")
 CROSSTALK_WORDS = ('crosstalk', 'xtalk', 'cross-talk')
 CROSSTALK_VERBS = ('add', 'include')
-# words for the config and the channel files selected in the GUI's tabs (Decision 20). They are read only in the
+# words for the config and the channel files selected in the GUI's tabs. They are read only in the
 # forms _selection lists, and are not known words on their own: "selected" alone is still asked about.
 SELECT_WORDS = ('selected', 'specified', 'chosen')
 SELECT_THINGS = {'config': 'config', 'channel': 'channel', 'channels': 'channel', 'files': 'files'}
-# the dynamic results (Results, dynamic in SiCoPR's GUI) are the dashboard (Decision 23, rows D1 and RT05): "dynamic
+# the dynamic results (Results, dynamic in SiCoPR's GUI) are the dashboard (rows D1 and RT05): "dynamic
 # results", "results, dynamic", "results dynamic"; "dynamic" alone is not placed
 RESULT_WORDS = ('results', 'result')
 RUN_ID = re.compile(r'run_\d{4,}')
@@ -368,7 +368,7 @@ class _Reader:
         return o
 
     def _two_cases(self):
-        """In a request for the thru-only case and the crosstalk case together (Decision 24, row GF03), "[the] two
+        """In a request for the thru-only case and the crosstalk case together (row GF03), "[the] two
         cases" (or runs, points, results) and "both cases" name those two cases and are placed; in any other request
         they are left where they are, and asked about."""
         if not {'thru_only', 'crosstalk'} <= set(self.out['flags']):
@@ -394,12 +394,12 @@ class _Reader:
                 return k + 1
         # yes, ok: an answer to a pending question (the core reads those itself); in a request they place nothing
         # and are left unplaced, so "Add yes files and re-run." asks
-        # the previous config, the same config, the last config: the config of the last run (Decision 18)
+        # the previous config, the same config, the last config: the config of the last run
         low = self.toks[i]['low']
         if low in LAST_CONFIG_WORDS and self.word(i + 1) == 'config':
             self.flag('last_config')
             self.take(i, i + 1)
-            # "the last config and channel(s)": the config and the channel files of the last run (Decision 23)
+            # "the last config and channel(s)": the config and the channel files of the last run
             k = i + 2
             if self._low(k) == 'and':
                 j = k + 1
@@ -431,7 +431,7 @@ class _Reader:
         end = self._run_tab(i)
         if end > i:
             return end
-        # a role word before a channel file: FEXT data\fext1.s4p (Decision 18, row CH08)
+        # a role word before a channel file: FEXT data\fext1.s4p (row CH08)
         if low in CHANNEL_ROLES and self.kind(i + 1) == 'file' and CHANNEL_EXT.search(self.toks[i + 1]['low']):
             self.roles[i + 1] = CHANNEL_ROLES[low]
             self.take(i)
@@ -466,7 +466,7 @@ class _Reader:
             self.take(i)
             return i + 1
         # with and without crosstalk, without and with crosstalk: both, the thru-only case and the crosstalk case
-        # (Decision 24, row GF02)
+        # (row GF02)
         if w in ('crosstalk', 'xtalk') and self.word(i - 2) == 'and' and \
                 {self.word(i - 1), self.word(i - 3)} == {'with', 'without'} and not self.used[i - 3]:
             self.flag('thru_only')
@@ -541,7 +541,7 @@ class _Reader:
 
     def _crosstalk(self, i):
         """[add | include] [the] [matching] crosstalk | xtalk | FEXT and NEXT [files] [in the simulation] [added]:
-        the crosstalk files of the THRU in use (Decision 19). Sets the flag crosstalk; returns the index after it,
+        the crosstalk files of the THRU in use. Sets the flag crosstalk; returns the index after it,
         or i. The words around it are taken only together with it."""
         low = lambda k: self.toks[k]['low'] if 0 <= k < self.n and not self.used[k] else None  # noqa: E731
         if low(i) in CROSSTALK_WORDS:
@@ -575,7 +575,7 @@ class _Reader:
         return None
 
     def _dynamic(self, i):
-        """The dynamic results, which are the dashboard (Decision 23): [the] dynamic results, results[,] dynamic.
+        """The dynamic results, which are the dashboard: [the] dynamic results, results[,] dynamic.
         Adds the action dashboard; returns the index after it, or i."""
         low = self._low
         if low(i) == 'dynamic' and low(i + 1) in RESULT_WORDS:
@@ -593,7 +593,7 @@ class _Reader:
         return end
 
     def _run_tab(self, i):
-        """The setup in the Run tab of the GUI (Decision 23), in these forms:
+        """The setup in the Run tab of the GUI, in these forms:
 
             [the] command [in the Run tab]       run the command, run the command in the Run tab
             what is in the Run tab               what's in the Run tab
@@ -615,7 +615,7 @@ class _Reader:
         k = i + (low(i) in ('the', 'my'))
         end = i
         setup = self._setup_words(i)
-        if setup > i:                            # the GUI's setup in other words (Decision 24, row GF01)
+        if setup > i:                            # the GUI's setup in other words (row GF01)
             end = setup
         elif low(k) == 'command':
             end = tab(k + 1)
@@ -633,7 +633,7 @@ class _Reader:
         return end
 
     def _setup_words(self, i):
-        """The setup in the GUI said in other words (Decision 24, row GF01), the same as "the command":
+        """The setup in the GUI said in other words (row GF01), the same as "the command":
 
             [the] current settings | [the] current setup     run with the current settings
             [the] settings captured                          run with settings captured
@@ -659,7 +659,7 @@ class _Reader:
         return i
 
     def _selection(self, i):
-        """The config and the channel files selected in the GUI's tabs (Decision 20), in these forms, where S is
+        """The config and the channel files selected in the GUI's tabs, in these forms, where S is
         selected, specified or chosen and T is config, channel, channels or files:
 
             [the] S T [and [the] [S] T]         the selected config and channel; the chosen files

@@ -1,4 +1,4 @@
-"""Feedback export (Decision 10): the command history as a plain-text file the user reads and emails.
+"""Feedback export: the command history as a plain-text file the user reads and emails.
 
 Nothing here sends anything, and nothing here touches the network. The address is core.FEEDBACK_ADDRESS.
 
@@ -205,7 +205,7 @@ def _missed_words(rec):
 
 
 def translation_lines(history, m, names):
-    """Translator mode (Decision 26, item 6; the owner, 20 October): for every command made in translator mode, the
+    """Translator mode: for every command made in translator mode, the
     user's wording, whether the strict core had missed it, the rules, synonyms or preset that fired, the phrase handed to
     the core (or the layer's own question or stop), any proposal, and whether the user confirmed, changed or declined
     it; and the translator's name, version and rules SHA-256. Masked like every phrase."""

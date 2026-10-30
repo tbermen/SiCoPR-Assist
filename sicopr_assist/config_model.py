@@ -1,6 +1,6 @@
 """The working config: import, links, applying a change, and writing the run CSV.
 
-The working config is the JSON form of Decision 1:
+The working config is the JSON form of a config:
 
     {"schema": "sicopr-config/1", "source": {"file", "sheet", "sha256"},
      "main": {keyword: value}, "packages": {block: {keyword: value}}, "links": {key: "{f_b}/2.5"}}
@@ -11,7 +11,7 @@ main area, or packages.<block>.<keyword> in a package block; a json_path is /mai
 block, else of the main area, and {packages.<block>.<keyword>} names a block key from anywhere.
 
 Links are evaluated by a small evaluator built on the ast module, never by eval or exec, because link
-text comes from a workbook (Decision 15). Its grammar is what the workbooks hold: a single {keyword}
+text comes from a workbook. Its grammar is what the workbooks hold: a single {keyword}
 reference, which copies the value whatever its type, or arithmetic over number literals and references
 whose values are numbers, with + - * /, unary minus and parentheses. Anything else is refused.
 
@@ -47,7 +47,7 @@ ABSENT = '(absent)'                    # a loaded field that one of two configs 
 
 
 class LinkRefused(ValueError):
-    """A link outside the grammar of Decision 15."""
+    """A link outside the grammar the working config accepts for a formula link."""
 
 
 class LinkError(ValueError):
@@ -111,7 +111,7 @@ def same_value(a, b):
     return text(a) == text(b)
 
 
-# ----------------------------------------------------------------------------- links (Decision 15)
+# ----------------------------------------------------------------------------- links
 _BRACED = re.compile(r'\{([^{}]+)\}')
 _PLACEHOLDER = re.compile(r'_ref[0-9]+')
 _OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
@@ -258,7 +258,7 @@ def _recompute(wc, changed):
     return moved, warnings
 
 
-# ----------------------------------------------------------------------------- applying changes (Decision 1)
+# ----------------------------------------------------------------------------- applying changes
 def _change(json_path, before, after, kind, applied):
     return {'json_path': json_path, 'before': before, 'after': after, 'kind': kind, 'applied': applied}
 
@@ -276,7 +276,7 @@ def _locate(wc, key):
 
 
 def apply_changes(wc, changes, check=False):
-    """Apply {json_path: value} to a copy of wc, following Decision 1.
+    """Apply {json_path: value} to a copy of wc; the source workbook is never touched.
 
     An explicit value removes that key's link; a value equal to the current one is not a change; a key the
     config does not hold is added; links downstream of a change are recomputed. With check set, both
@@ -347,7 +347,7 @@ def no_effect_reason(wc, json_path):
     return None
 
 
-# ----------------------------------------------------------------------------- the run CSV (Decision 2)
+# ----------------------------------------------------------------------------- the run CSV
 def _csv_cell(v):
     if v is None:
         return ''
@@ -457,7 +457,7 @@ def _sha256(path):
 
 
 def import_config(path):
-    """Import a config file into the working config of Decision 1: (working config or None, issues).
+    """Import a config file into a working config: (working config or None, issues).
 
     A workbook (.xlsx, or .xls holding an .xlsx) keeps every stored value exactly and turns each formula
     into a link by keyword name; a .csv is imported to the same form; a working-config .json is accepted

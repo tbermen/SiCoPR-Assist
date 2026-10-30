@@ -10,7 +10,7 @@ the tool runs (engine.py), whether a keyword is read comes from the engine's own
 of values comes from the schema or from the config itself. Checking a config means writing it as the run
 CSV and loading it with the real loader (config_model.loaded_fields).
 
-Every function returns data (Decision 13). A result is a dictionary:
+Every function returns data. A result is a dictionary:
 
     status     'ok', 'ask' or 'stop'; stop wins over ask
     rule       the id of the rule that decided it (None when the loader or the schema alone did)
@@ -305,8 +305,8 @@ def _result(findings, allow=(), **fields):
             f['status'] = 'announce'
             f['text'] = f['text'] + '; run as asked'
         elif f['status'] == 'ask' and f['keyword'] and ('%s:%s' % (rid, f['keyword'])).lower() in scoped:
-            # a pass for one rule on one keyword: a value a preset takes from the standard (owner ruling, 21 October
-            # 2026, rule Q14); the same value typed by hand is still asked about
+            # a pass for one rule on one keyword: a value a preset takes from the standard (rule Q14):
+            # the standard gives it; the same value typed by hand is still asked about
             f['status'] = 'announce'
             f['text'] = f['text'] + '; the preset takes it from the standard, so it is not asked about'
     lead = next((f for f in findings if f['status'] == 'stop'), None) or \
@@ -398,8 +398,8 @@ _VEC_TERM = re.compile(r'^(?:(?P<a>%s)\*)?(?P<f>ones|zeros)\(1,(?P<n>\d+)\)(?:\*
 
 def matlab_vector(text):
     """A MATLAB row vector built with ones(1,n) or zeros(1,n), such as [0.25 0.15*ones(1,3) 0.05*ones(1,7)], written
-    out as the values MATLAB reads from it ('[0.25 0.15 0.15 0.15 0.05 ...]'); None for any other text. Core fix 3
-    (Phase V2-10): the Reference Code evaluates such a cell, SiCoPR's loader does not, so the run CSV holds the values
+    out as the values MATLAB reads from it ('[0.25 0.15 0.15 0.15 0.05 ...]'); None for any other text. The
+    Reference Code evaluates such a cell, SiCoPR's loader does not, so the run CSV holds the values
     written out."""
     if not isinstance(text, str):
         return None
@@ -833,6 +833,11 @@ def _cross(view, touched):
         if holds and _hit(touched, rid, extra.get(rid, ())):
             add('announce', rid, rule(rid)['rule'])
     return F
+
+
+def whole_config_notes(wc):
+    """The texts of what the cross-parameter rules announce for a whole config, as an import announces them."""
+    return {f['text'] for f in _cross(_View(wc), None) if f['status'] == 'announce'}
 
 
 def _follow_announcements(view, touched):

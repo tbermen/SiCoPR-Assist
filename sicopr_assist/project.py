@@ -1,14 +1,15 @@
 """Project state: the .sicopr folder, the history, the working configs, the results, the pending question.
 
-The formats are fixed here in Phase 1 (later phases add behaviour, not formats). Everything lives in
-.sicopr in the folder the tool is run from (Decision 3):
+The formats are fixed here. Everything lives in
+.sicopr in the folder the tool is run from:
 
-    .sicopr\\history.jsonl              one history record per line (Decision 9)
-    .sicopr\\configs\\run_NNNN.json      the working config of a run (Decision 1)
-    .sicopr\\configs\\run_NNNN.csv       what the engine read (Decision 2)
+    .sicopr\\history.jsonl              one history record per line
+    .sicopr\\configs\\run_NNNN.json      the working config of a run
+    .sicopr\\configs\\run_NNNN.csv       what the engine read
     .sicopr\\runs\\run_NNNN\\            the run's own RESULT_DIR; result.json holds every result field
     .sicopr\\pending.json               the open question, if there is one
-    .sicopr\\assist.ini                 project settings (Decision 4)
+    .sicopr\\assist.ini                 project settings
+    .sicopr\\.gitignore                 *, so that git never picks up the project state
 
 The user settings file is <home>\\.sicopr\\assist.ini, where <home> is SICOPR_ASSIST_HOME when that is
 set and the user profile otherwise; user_home() is the only place that decides it.
@@ -59,7 +60,7 @@ HISTORY_KEYS = (
     'origin',          # 'cli' or 'gui': where the record was written (version 2, the GUI); None in older records
     'kind',            # what the record is (KINDS); None in older records, which are all phrases
     'detail',          # what a GUI record holds besides the keys above (GUI_DESIGN.md section 7a), or None
-    'translation',     # translator mode (Phase V2-10): what the rules-and-presets layer did, or None (TRANSLATION_KEYS)
+    'translation',     # translator mode: what the rules-and-presets layer did, or None (TRANSLATION_KEYS)
 )
 STATUSES = ('ok', 'question', 'cancelled', 'stopped', 'failed')
 
@@ -81,7 +82,7 @@ def is_command(rec):
 
 RESULT_KEYS = ('format', 'run_id', 'status', 'release', 'sicopr_sha256', 'config_csv', 'channels',
                'fingerprint', 'cases', 'message', 'export_mat',     # export_mat: the engine's .mat export was on
-               'eye_under_mlse')            # eye_under_mlse: the eye plots were drawn under MLSE (Decision 23)
+               'eye_under_mlse')            # eye_under_mlse: the eye plots were drawn under MLSE
 RESULT_STATUSES = ('complete', 'failed')
 
 
@@ -106,7 +107,7 @@ _ON_OFF = {'on': True, 'yes': True, 'true': True, '1': True, 'off': False, 'no':
 
 
 def setting_defaults():
-    """{name: (default, heading)} read from the settings example shipped in data/ (Decision 4): the names, the
+    """{name: (default, heading)} read from the settings example shipped in data/: the names, the
     defaults and the headings live in that one file."""
     import configparser
     cp = configparser.ConfigParser()
@@ -200,7 +201,7 @@ def run_id(n):
 
 
 def check_working_config(cfg):
-    """Raise ValueError unless cfg has the form of Decision 1."""
+    """Raise ValueError unless cfg has the form of a working config."""
     if not isinstance(cfg, dict):
         raise ValueError('a working config is a JSON object')
     if cfg.get('schema') != CONFIG_SCHEMA:
@@ -271,6 +272,15 @@ class Project:
         self.root = os.path.abspath(root)
         self.dir = os.path.join(self.root, STATE_DIR)
 
+    def make_dir(self):
+        """Create .sicopr, with a .gitignore that holds *, so that a project folder kept in git never commits the
+        state, the cache of downloaded channels or the run folders."""
+        os.makedirs(self.dir, exist_ok=True)
+        ignore = os.path.join(self.dir, '.gitignore')
+        if not os.path.exists(ignore):
+            with open(ignore, 'w', encoding='utf-8', newline='\n') as f:
+                f.write('*\n')
+
     # ---- paths
     @property
     def history_path(self):
@@ -329,7 +339,7 @@ class Project:
         if record.get('seq') is None:
             hist = self.read_history(log=True)
             record = dict(record, seq=(hist[-1]['seq'] + 1) if hist else 1)
-        os.makedirs(self.dir, exist_ok=True)
+        self.make_dir()
         with open(self.history_path, 'a', encoding='utf-8', newline='\n') as f:
             f.write(json.dumps(record) + '\n')
         return record
@@ -377,6 +387,7 @@ class Project:
 
     def write_working_config(self, rid, cfg):
         check_working_config(cfg)
+        self.make_dir()
         _write_json(self.working_config_path(rid), cfg)
         return self.working_config_path(rid)
 
@@ -397,6 +408,7 @@ class Project:
 
     # ---- the open question
     def write_pending(self, phrase, outcome, seq=None):
+        self.make_dir()
         _write_json(self.pending_path, {'format': PENDING_FORMAT, 'seq': seq, 'time': now(),
                                         'phrase': phrase, 'outcome': outcome})
 

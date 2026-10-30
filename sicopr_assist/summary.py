@@ -1,9 +1,9 @@
-"""Run summary, statistics over a set of runs, and a parameter against a result (Decision 8).
+"""Run summary, statistics over a set of runs, and a parameter against a result.
 
 No diagnosis: these functions report numbers and say nothing about why. Every function returns plain data
 (a dictionary with a "lines" list among its keys) and prints nothing, so the command line and a later GUI
-show the same thing (Decision 13). Results are named by their field name in the result file, case ignored;
-"COM" is the built-in name of channel_operating_margin_dB (Rule 4).
+show the same thing. Results are named by their field name in the result file, case ignored;
+"COM" is the built-in name of channel_operating_margin_dB.
 
 A not-a-number result is shown as it is and left out of the statistics, and the number left out is stated
 (finding F10). The standard deviation is the sample one (n - 1), as MATLAB's std and Python's
@@ -22,7 +22,7 @@ COM_FIELD = 'channel_operating_margin_dB'
 # Where a result has a pass threshold in the config (the keyword holds it).
 THRESHOLDS = {COM_FIELD: 'COM Pass threshold', 'ERL': 'ERL Pass threshold'}
 # The order results are listed in: COM first, then these, then the rest by name (row SM07). FOM is not named here:
-# it is also a legal value of FFE_OPT_METHOD, and no legal value is written in the code (gate G3.3).
+# it is also a legal value of FFE_OPT_METHOD, and no legal value is written in the code: it is read from the schema.
 FIRST = (COM_FIELD, 'ERL', 'VEC_dB', 'VEO_mV', 'DER_thresh')
 # What a run summary shows for each package case (row D4), after COM.
 RUN_FIELDS = ('ERL', 'VEC_dB', 'VEO_mV', 'DER_thresh')
@@ -408,7 +408,7 @@ def run_summary(project, rid):
 
 def _eye_values():
     """The PMD_type values that switch the engine to eye height and VEC mode: the schema's legal values other than its
-    loader default (the default is COM mode). Read from the schema, never written here (gate G3.3)."""
+    loader default (the default is COM mode). Read from the schema, never written here."""
     row = validate.schema_row('PMD_type', 'main')
     if row is None:
         return set()

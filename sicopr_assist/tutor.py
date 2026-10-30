@@ -1,4 +1,4 @@
-"""The tutor and trouble detection (Decision 11). Everything here returns data; cli.py prints it.
+"""The tutor and trouble detection. Everything here returns data; cli.py prints it.
 
 The tutor shows phrases that work on the config in front of the tool:
 
@@ -13,6 +13,9 @@ The tutor shows phrases that work on the config in front of the tool:
 The tutor may only teach phrases that work (row TU04): every phrase it would print is first resolved by the
 core, against the config in front of it as if that config had just been run, and a phrase that does not give
 the outcome it should is left out. A phrase that holds <value> is checked with the current value in its place.
+With no run in the project yet, and no run in the plan the tutor follows, it offers only the phrase that runs now
+(the config and channel in the folder, or the example setup): a re-run, a sweep or a dashboard would only ask for a
+run first. A change that is already in effect (DER_0 = 1e-4 once DER_0 is 1e-4) is never offered.
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
@@ -25,10 +28,12 @@ import re
 from sicopr_assist import config_model, parse
 
 VALUE = '<value>'
-# the line about feedback (Decision 10 and row TU14); the address comes from core.FEEDBACK_ADDRESS
+# the line about feedback (row TU14); the address comes from core.FEEDBACK_ADDRESS
 FEEDBACK_LINE = ('Export feedback writes the command history to a text file, names masked, that can be emailed to %s '
                  'to help improve SiCoPR-Assist.')
 NOTHING_MATCHED = 'Not a supported request'      # how the core's STOP for a phrase that matched nothing begins
+EXAMPLE_PHRASE = 'Run the example.'              # runs the example setup that ships with the tool
+RUN_OPS = ('run_com', 'run_batch')               # the steps of a plan that make runs
 
 _CACHE = {}                                       # examples by config, and imports by file, for this process
 
@@ -208,11 +213,21 @@ def _choice_names(wc):
     return sorted(out, key=lambda n: (PREFERRED_CHOICES.index(n.lower()) if n.lower() in PREFERRED_CHOICES else 99))
 
 
+def _in_effect(wc, name, value):
+    """Whether name already has value in wc (as numbers), so that a change to it would change nothing."""
+    from sicopr_assist import core
+    try:
+        return float(core._current(wc, name)) == float(value)
+    except (TypeError, ValueError):
+        return False
+
+
 def _example_candidates(wc):
-    """(kind, [phrases to try, best first]) for each kind of example."""
+    """(kind, [phrases to try, best first]) for each kind of example. A change already in effect is left out."""
     main = {k.strip().lower(): k.strip() for k in wc['main']}
     change = ['Re-run with %s = %s' % (main[n.lower()], v) for n, v in
-              (('DER_0', '1e-4'), ('DER_0', '1e-5'), ('SNR_TX', '32.5'), ('SNR_TX', '30')) if n.lower() in main]
+              (('DER_0', '1e-4'), ('DER_0', '1e-5'), ('SNR_TX', '32.5'), ('SNR_TX', '30'))
+              if n.lower() in main and not _in_effect(wc, main[n.lower()], v)]
     blocks = _blocks(wc)
     package = ['Re-run with package %s' % b for b in blocks[:3]] if len(blocks) > 1 else []
     in_pkg = {k for b in wc['packages'].values() for k in b}
@@ -248,16 +263,40 @@ def examples(ctx):
     return list(_CACHE[key])
 
 
-def first_run(ctx):
-    """The phrase that runs the one config and the one channel file in the project folder, when it resolves to a
-    PLAN; else None."""
+def _runs_now(phrase, ctx):
+    """Whether phrase resolves to a PLAN with no word left unplaced in the project as it is now."""
     from sicopr_assist import core
-    cfgs, chans = ctx.config_files(), ctx.channel_files()
-    if len(cfgs) != 1 or len(chans) != 1:
-        return None
-    phrase = 'Run COM on %s with %s' % (chans[0], cfgs[0])
     out, _ = _resolve(phrase, core.Context(ctx.project))
-    return phrase if out is not None and out['type'] == 'PLAN' and not out.get('unplaced') else None
+    return out is not None and out['type'] == 'PLAN' and not out.get('unplaced')
+
+
+def first_run(ctx):
+    """The phrase that runs now when the project has no run yet: the one config and the one channel file in the
+    project folder, or the example setup when the folder holds no config; None when the phrase does not resolve to a
+    PLAN, or the folder holds several configs or channel files."""
+    cfgs, chans = ctx.config_files(), ctx.channel_files()
+    if not cfgs:
+        phrase = EXAMPLE_PHRASE
+    elif len(cfgs) == 1 and len(chans) == 1:
+        phrase = 'Run COM on %s with %s' % (chans[0], cfgs[0])
+    else:
+        return None
+    return phrase if _runs_now(phrase, ctx) else None
+
+
+def no_run_offer(ctx):
+    """(lines, phrases) when the project has no run yet: only phrases that run now. The re-runs, sweeps and the
+    dashboard would only ask for a run first, so they wait until there is one."""
+    first = first_run(ctx)
+    if first:
+        what = 'the example setup' if first == EXAMPLE_PHRASE else 'the config and the channel file here'
+        return (['There is no run in this project yet. This phrase runs %s:' % what, '  %s' % first,
+                 'After that run, What can I say? lists phrases that work on its config.'], [first])
+    lines = ['There is no run in this project yet. Name the config and the channel file to run: Run COM on <channel '
+             'file> with <config file>.']
+    if _runs_now(EXAMPLE_PHRASE, ctx):
+        return lines + ['Or run the example setup:', '  %s' % EXAMPLE_PHRASE], [EXAMPLE_PHRASE]
+    return lines, []
 
 
 # ----------------------------------------------------------------------------- the nearest form of a phrase
@@ -320,16 +359,14 @@ def after(phrase, out, ctx, asked=False):
     if out['type'] == 'STOP' and (out.get('reason') or '').startswith('Cancelled'):
         current['status'] = 'cancelled'
     if asked:
+        if ctx.last is None:                     # no run yet: only what runs now
+            lines, phrases = no_run_offer(ctx)
+            return {'lines': lines, 'phrases': phrases, 'shown': ['tutor'], 'why': 'asked'}
         found = examples(ctx)
-        first = first_run(ctx) if ctx.last is None else None
-        if not found and not first:
+        if not found:
             return {'lines': ['There is no config here to take examples from. Name one: Run COM on <channel file> '
                               'with <config file>.'], 'phrases': [], 'shown': ['tutor'], 'why': 'asked'}
-        lines = lines_for_examples(found)
-        if first:                                # no run yet: the run comes first, and the rest work after it
-            lines = ['There is no run in this project yet. This phrase runs the config and the channel here:',
-                     '  %s' % first, 'After that run, these phrases work on this config:'] + lines[1:]
-        return {'lines': lines, 'phrases': ([first] if first else []) + [p for _, p in found], 'shown': ['tutor'],
+        return {'lines': lines_for_examples(found), 'phrases': [p for _, p in found], 'shown': ['tutor'],
                 'why': 'asked'}
     missed = trouble(history, current, st)
     if missed:
@@ -354,6 +391,11 @@ def after(phrase, out, ctx, asked=False):
     if successes(history) >= st['tutor_until_commands']:
         return None
     if out['type'] == 'PLAN':
+        if ctx.last is None and not any(s.get('op') in RUN_OPS for s in out.get('steps') or []):
+            lines, phrases = no_run_offer(ctx)   # a plan that makes no run, and no run yet: only what runs now
+            if not phrases:
+                return None
+            return {'lines': lines, 'phrases': phrases, 'shown': ['tutor'], 'why': 'new'}
         found = examples(ctx)
         if not found:
             return None

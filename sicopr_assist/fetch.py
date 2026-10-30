@@ -1,16 +1,19 @@
-"""Channel download (version 2, rows F1 to F12): the IEEE P802.3dj tools page, its zips, and unpacking them.
+"""Channel download: the IEEE P802.3dj tools page, its zips, and unpacking them.
 
-This is the only module that touches the network (Rule 5, relaxed in version 2 for this module alone), and only
-when the user asks for a download. Nothing here plans or runs anything: core.py decides what to download and how
+This is the only module that touches the network, and only when the user asks for a download. It reads only
+https://www.ieee802.org (or the one site named by SICOPR_ASSIST_FETCH_INDEX), for the page, for every zip and after
+every redirect. Nothing here plans or runs anything: core.py decides what to download and how
 the channels are run, and run.py carries the plan out.
 
     read_index(url)                 the tools page as text (the page is Windows-1252, served with no charset)
     parse_index(text, url)          its entries, each with its zips: date, interface, size, superseded, do not use
     head_size(url)                  the server's Content-Length for a zip, or None
-    download(url, dest, part, ...)  the zip, through a partial file outside the cache: complete, or nothing kept
-    unpack(zip, folder)             the zip into folder; every member path is checked before anything is written
+    download(url, dest, part, ...)  the zip, through a partial file outside the cache: complete, or nothing kept;
+                                    stopped once more than max_bytes have arrived
+    unpack(zip, folder)             the zip into folder; every member path, the number of files and their size
+                                    unpacked are checked before anything is written
 
-How the page gives an entry (read on 7 October 2026, Phase V2-0): one table row per entry, whose first cell holds
+How the page gives an entry (read on 7 October 2026): one table row per entry, whose first cell holds
 the zip link (its text is the title), then a line with the date in free text (16-May 2023, 12-Sept 2023,
 25-July 2022 (25.7M), July-2022), then a presentation link. A row whose first cell holds no link continues the
 entry above with more authors and is skipped. The interface is the folder of the link: tools/KR/, tools/CR/, c2c/,
@@ -43,6 +46,12 @@ TIMEOUT = 60
 CHUNK = 1 << 20
 MAX_PATH = 260                                  # Windows: a longer path cannot be written or read by default
 NESTED_DEPTH = 3
+SITE = ('https', 'www.ieee802.org')            # the only site read, unless SICOPR_ASSIST_FETCH_INDEX names another
+ZIP_NAME = re.compile(r'[\w.\-]+\.zip')
+MAX_RATIO = 20                                  # unpacked size at most this many times the size of the zip,
+MIN_UNPACKED = 100 * 10 ** 6                    # or 100 MB for a small zip,
+MAX_UNPACKED = 20 * 10 ** 9                     # and never more than 20 GB
+MAX_MEMBERS = 20000                             # files in a zip, nested zips counted
 
 _MONTHS = ('january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october',
            'november', 'december')
@@ -54,8 +63,62 @@ class FetchError(RuntimeError):
     """The page or a zip could not be read, a download did not complete, or a zip cannot be unpacked safely."""
 
 
+class FetchRefused(FetchError):
+    """A URL that is not on the site the tool reads, a zip name that is not plain, or a download larger than its
+    limit. Trying again would give the same answer, so it is not retried."""
+
+
 def index_url():
     return os.environ.get(INDEX_ENV) or INDEX_URL
+
+
+def _origin(url):
+    p = urllib.parse.urlparse(url)
+    return p.scheme.lower(), p.netloc.lower()
+
+
+def allowed(url):
+    """Whether url is on a site the tool reads: https://www.ieee802.org, or the scheme and host of the index named by
+    SICOPR_ASSIST_FETCH_INDEX (a mirror, or a test's local stand-in)."""
+    sites = {SITE}
+    if os.environ.get(INDEX_ENV):
+        sites.add(_origin(os.environ[INDEX_ENV]))
+    return _origin(url) in sites
+
+
+def check_url(url):
+    """Raise FetchRefused unless url is on a site the tool reads."""
+    if not allowed(url):
+        raise FetchRefused('%s is not on %s://%s, the only site SiCoPR-Assist downloads from' % (url, SITE[0], SITE[1]))
+
+
+def plain_zip_name(name):
+    """Whether name is a plain zip file name: letters, digits, _, . and - only, ending in .zip, not starting with a
+    dot. Only such a name is used for a file in the cache."""
+    return bool(ZIP_NAME.fullmatch(name or '')) and not name.startswith('.')
+
+
+class _Redirects(urllib.request.HTTPRedirectHandler):
+    """Follows a redirect only to a site the tool reads."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        check_url(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_OPENER = urllib.request.build_opener(_Redirects)
+
+
+def _open(url, timeout, method=None):
+    """The response for url, after checking url and, once it is open, the URL it ended at."""
+    check_url(url)
+    r = _OPENER.open(urllib.request.Request(url, headers=_agent(), method=method), timeout=timeout)
+    try:
+        check_url(r.geturl())
+    except FetchRefused:
+        r.close()
+        raise
+    return r
 
 
 def _agent():
@@ -68,7 +131,7 @@ def read_index(url=None, timeout=TIMEOUT):
     """The tools page as text. Raises FetchError when the site cannot be reached or the page is not served."""
     url = url or index_url()
     try:
-        with urllib.request.urlopen(urllib.request.Request(url, headers=_agent()), timeout=timeout) as r:
+        with _open(url, timeout) as r:
             data = r.read()
     except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as e:
         raise FetchError('%s could not be read: %s' % (url, getattr(e, 'reason', None) or e)) from e
@@ -219,12 +282,12 @@ def parse_index(text, url=None):
 
 
 def head_size(url, timeout=TIMEOUT):
-    """The server's Content-Length for url, in bytes, or None when it gives none or cannot be asked."""
+    """The server's Content-Length for url, in bytes, or None when it gives none or cannot be asked (a URL off the
+    site the tool reads is not asked)."""
     try:
-        req = urllib.request.Request(url, method='HEAD', headers=_agent())
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with _open(url, timeout, method='HEAD') as r:
             n = r.headers.get('Content-Length')
-    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError):
+    except (FetchError, urllib.error.URLError, http.client.HTTPException, OSError, ValueError):
         return None
     try:
         return int(n) if n is not None else None
@@ -240,11 +303,18 @@ def _remove(path):
         pass
 
 
-def _get(url, part, say, timeout):
+def _too_big(n, max_bytes):
+    return FetchRefused('the download passed %d MB, more than its limit of %d MB (max_download_mb), so it was stopped'
+                        % (n // 1000000, max_bytes // 1000000))
+
+
+def _get(url, part, say, timeout, max_bytes=None):
     t0 = time.time()
-    with urllib.request.urlopen(urllib.request.Request(url, headers=_agent()), timeout=timeout) as r:
+    with _open(url, timeout) as r:
         total = r.headers.get('Content-Length')
         total = int(total) if total and total.isdigit() else None
+        if max_bytes is not None and total is not None and total > max_bytes:
+            raise _too_big(total, max_bytes)
         got, shown = 0, 0
         with open(part, 'wb') as f:
             while True:
@@ -253,6 +323,8 @@ def _get(url, part, say, timeout):
                     break
                 f.write(block)
                 got += len(block)
+                if max_bytes is not None and got > max_bytes:   # a server that gives no size, or the wrong one
+                    raise _too_big(got, max_bytes)
                 if say and total and got * 10 // total > shown:
                     shown = got * 10 // total
                     say('%d of %d MB (%d %%)' % (got // 1000000, total // 1000000, 100 * got // total))
@@ -263,15 +335,23 @@ def _get(url, part, say, timeout):
     return got, time.time() - t0
 
 
-def download(url, dest, part, retries=1, say=None, timeout=TIMEOUT):
+def download(url, dest, part, retries=1, say=None, timeout=TIMEOUT, max_bytes=None):
     """Download url to dest through the partial file part, which lies outside the cache. The download is tried
-    1 + retries times. A complete zip is moved to dest; anything else is removed, so the cache holds a zip only when
-    it arrived whole. Returns {'bytes', 'seconds', 'tries'}; raises FetchError when every try failed."""
+    1 + retries times, and stopped once more than max_bytes have arrived (None: no limit). A complete zip is moved to
+    dest; anything else is removed, so the cache holds a zip only when it arrived whole. Returns {'bytes', 'seconds',
+    'tries'}; raises FetchError when every try failed, and FetchRefused at once for a URL off the site the tool reads,
+    a redirect away from it, a zip name that is not plain, or a download over max_bytes."""
+    if not plain_zip_name(os.path.basename(dest)):
+        raise FetchRefused('%r is not a plain zip file name, so it is not downloaded' % os.path.basename(dest))
+    check_url(url)
     os.makedirs(os.path.dirname(part), exist_ok=True)
     last = None
     for k in range(1 + max(0, int(retries))):
         try:
-            got, took = _get(url, part, say, timeout)
+            got, took = _get(url, part, say, timeout, max_bytes)
+        except FetchRefused:
+            _remove(part)
+            raise
         except (FetchError, urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as e:
             _remove(part)
             last = getattr(e, 'reason', None) or e
@@ -307,11 +387,15 @@ def _inside(folder, target):
 
 def unpack(zip_path, folder, depth=0):
     """Unpack zip_path into folder. Every member path is checked to stay inside folder before anything is written;
-    one that does not stops the unpacking with nothing written. A zip inside the zip is unpacked in place, into a
-    folder named after it, with the same checks, and then removed. Returns {'files': [paths relative to folder,
-    with /], 'warnings': [...]}; raises FetchError, and on any failure folder is removed."""
+    one that does not stops the unpacking with nothing written. So does a zip that would unpack to more than
+    MAX_MEMBERS files, or to more than MAX_RATIO times its own size (MIN_UNPACKED at least, MAX_UNPACKED at most);
+    the files of a nested zip count against the same limits. A zip inside the zip is unpacked in place, into a folder
+    named after it, with the same checks, and then removed. Returns {'files': [paths relative to folder, with /], 'warnings': [...]}; raises
+    FetchError, and on any failure folder is removed."""
+    size = os.path.getsize(zip_path) if os.path.isfile(zip_path) else 0
+    budget = {'bytes': min(MAX_UNPACKED, max(MIN_UNPACKED, MAX_RATIO * size)), 'members': MAX_MEMBERS}
     try:
-        return _unpack(zip_path, folder, depth)
+        return _unpack(zip_path, folder, depth, budget)
     except FetchError:
         if depth == 0:
             shutil.rmtree(folder, ignore_errors=True)
@@ -331,7 +415,20 @@ def long_path_warning(path):
             'with a shorter path' % (os.path.abspath(path), n, MAX_PATH - 1))
 
 
-def _unpack(zip_path, folder, depth):
+def _spend(zip_path, infos, budget):
+    """Take the files of one zip from the budget left, or raise FetchRefused when they do not fit."""
+    n = sum(1 for i in infos if not i.is_dir())
+    size = sum(i.file_size for i in infos if not i.is_dir())
+    if n > budget['members'] or size > budget['bytes']:
+        raise FetchRefused('%s would unpack to %d files of %d MB in all, more than is left of the limit (%d files '
+                           'and %d MB; the limit is %d times the size of the zip, at most %d GB). Nothing was unpacked'
+                           % (os.path.basename(zip_path), n, size // 1000000, budget['members'],
+                              budget['bytes'] // 1000000, MAX_RATIO, MAX_UNPACKED // 10 ** 9))
+    budget['members'] -= n
+    budget['bytes'] -= size
+
+
+def _unpack(zip_path, folder, depth, budget):
     files = []
     with zipfile.ZipFile(zip_path) as zf:
         infos = zf.infolist()
@@ -341,6 +438,7 @@ def _unpack(zip_path, folder, depth):
             raise FetchError('%s holds %s that would leave the folder it is unpacked into: %s. Nothing was unpacked'
                              % (os.path.basename(zip_path), 'a path' if len(bad) == 1 else '%d paths' % len(bad),
                                 ', '.join(repr(b) for b in bad[:5])))
+        _spend(zip_path, infos, budget)
         warnings = [w for w in (long_path_warning(os.path.join(folder, *member_parts(i.filename)))
                                 for i in infos if member_parts(i.filename)) if w]
         os.makedirs(folder, exist_ok=True)
@@ -362,7 +460,7 @@ def _unpack(zip_path, folder, depth):
             rel = '/'.join(parts)
             if rel.lower().endswith('.zip') and depth < NESTED_DEPTH and zipfile.is_zipfile(target):
                 inner = target[:-len('.zip')]
-                got = _unpack(target, inner, depth + 1)
+                got = _unpack(target, inner, depth + 1, budget)
                 os.remove(target)
                 stem = rel[:-len('.zip')]
                 files += ['%s/%s' % (stem, f) for f in got['files']]

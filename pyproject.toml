@@ -1,15 +1,32 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "sicopr-assist"
-version = "0.12.3"
+version = "0.13.0"
 description = "A rules-based front end that turns phrases into SiCoPR runs"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Todd Bermensolo" }]
+keywords = ["channel operating margin", "COM", "IEEE 802.3", "signal integrity", "SerDes", "SiCoPR"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Environment :: Web Environment",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Telecommunications Industry",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
 # SiCoPR is not on PyPI, so it is not listed here. Install it from its
 # checkout first (pip install -e <SiCoPR folder>); see README.md.
 dependencies = [
@@ -17,6 +34,15 @@ dependencies = [
   "scipy>=1.10",
   "openpyxl>=3.1",
 ]
+
+[project.optional-dependencies]
+# parses the GUI panel's script in tests/test_gui_static.py when node is not installed
+test = ["esprima"]
+
+[project.urls]
+Homepage = "https://github.com/tbermen/SiCoPR-Assist"
+Issues = "https://github.com/tbermen/SiCoPR-Assist/issues"
+Changelog = "https://github.com/tbermen/SiCoPR-Assist/blob/main/CHANGELOG.md"
 
 [project.scripts]
 sicopr-assist = "sicopr_assist.cli:main"
@@ -26,9 +52,10 @@ sicopr-assist = "sicopr_assist.cli:main"
 [project.entry-points."sicopr.gui_panels"]
 assist = "sicopr_assist.panel"
 
-[tool.setuptools]
-packages = ["sicopr_assist", "sicopr_assist.panel"]
+[tool.setuptools.packages.find]
+include = ["sicopr_assist*"]
 
 [tool.setuptools.package-data]
-"sicopr_assist" = ["data/*", "data/templates/*"]
-"sicopr_assist.panel" = ["static/*"]
+"sicopr_assist.data" = ["*"]
+"sicopr_assist.data.templates" = ["*"]
+"sicopr_assist.panel.static" = ["*"]

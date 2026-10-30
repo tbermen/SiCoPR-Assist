@@ -13,6 +13,11 @@ and the checks of Phase 6: what a run leaves behind (rows CP01, CP09, CP10), val
 rule EN09), the run summary (row D4, rule VR02), not-a-number results (finding F10), Decision 13 (the command
 line prints what functions return), and the LLM rule (only a plan the core made and recorded is carried out;
 only run.py writes the run CSV or starts a process).
+
+final  a plan says what its run will use: a config JSON named in the phrase is the config that runs (row CP14),
+       in a new folder and after other runs; an override the plan sets again, or a config imported again, is not
+       announced as kept; a value already in effect is no step and no change line; a note the import made on the
+       config as it was (MLSE = 1 turns COM_CONTRIBUTION off) is dropped when the plan's own change makes it untrue
 """
 # Copyright 2026 Todd Bermensolo
 # SPDX-License-Identifier: BSD-3-Clause
@@ -253,6 +258,60 @@ def what_a_run_leaves(fx):
     check('CP10: the history records the new source hash', rec['source']['sha256'] == sha(src))
 
 
+def plan_from_final_config(fx):
+    """A plan's announcement and its run follow the config the run will use (see final above)."""
+    import prior_states
+    ctx = prior_states.Ctx(fx, 'Case1')
+    p = ctx.project
+    try:
+        wc = fx.working_config('Case1')
+        mlse = next(k for k in wc['main'] if k.strip() == 'MLSE')
+        contrib = next(k for k in wc['main'] if k.strip() == 'COM_CONTRIBUTION')
+        der = next(k for k in wc['main'] if k.strip() == 'DER_0')
+        wc['main'][mlse], wc['main'][contrib], wc['main'][der] = 1, 1, 3.3e-5
+        with open(ctx.data('config.json'), 'w', encoding='utf-8') as f:
+            json.dump(wc, f, indent=1)
+        out, done = do(p, r'Run data\thru.s4p with data\config.json.')
+        rid = (done['run_ids'] or [None])[0]
+        check('CP14 carried out in a new folder: the config JSON named is the config that runs',
+              out['type'] == 'PLAN' and done['status'] == 'ok' and rid
+              and p.read_working_config(rid)['main'][der] == 3.3e-5
+              and p.read_history()[-1]['source']['path'] == os.path.join('data', 'config.json'),
+              (out['type'], done['status'], done.get('lines')))
+        do(p, r'Run COM on data\thru.s4p with data\config.xlsx')
+        out, done = do(p, 'Re-run with DER_0 = 1e-4 and SNR_TX = 31.')
+        out, _ = do(p, 'Re-run with DER_0 = 2e-4 and SNR_TX = 31 and C_b = 2e-5.')
+        said = '\n'.join(out['announce'])
+        check('an override the plan sets again is not announced as kept (DER_0), one it leaves is (SNR_TX)',
+              out['type'] == 'PLAN' and 'kept from earlier runs: DER_0' not in said
+              and 'kept from earlier runs: SNR_TX = 31' in said, out['announce'])
+        ops = [(s['op'], validate_name(s)) for s in out['steps']]
+        check('a value already in effect (SNR_TX = 31) is no step and no change line, and is named once',
+              ('set_param', 'SNR_TX') not in ops and 'SNR_TX: 31 -> 31' not in said
+              and any(a.startswith('already in effect') and 'SNR_TX = 31' in a for a in out['announce']),
+              (ops, out['announce']))
+        out, done = do(p, r'Run COM on data\thru.s4p with data\config.json and MLSE = 0.')
+        said = '\n'.join(out['announce'])
+        rid = (done['run_ids'] or [None])[0]
+        check('a config imported again: the overrides of the last run are not announced as kept, and the run does '
+              'not keep them', out['type'] == 'PLAN' and 'kept from earlier runs' not in said and rid
+              and p.read_working_config(rid)['main'][der] == 3.3e-5 and p.read_working_config(rid)['main'][mlse] == 0,
+              (out['announce'], done.get('lines')))
+        check('the note MLSE = 1 turns COM_CONTRIBUTION off is dropped when the plan sets MLSE = 0',
+              'turns COM_CONTRIBUTION off' not in said, out['announce'])
+        out, _ = do(p, r'Run COM on data\thru.s4p with data\config.json and DER_0 = 5e-5.')
+        check('the note stays when the plan leaves MLSE = 1', 'turns COM_CONTRIBUTION off' in '\n'.join(out['announce']),
+              out['announce'])
+    finally:
+        fx.remove_project(ctx.root)
+
+
+def validate_name(step):
+    from sicopr_assist import validate
+    jp = (step.get('args') or {}).get('json_path')
+    return validate.name_of(jp) if jp else None
+
+
 def inputs(fx):
     """validate_inputs: rows R7 and R8, rule EN09."""
     import prior_states
@@ -343,9 +402,13 @@ def llm_rule(fx):
     sc = ast.parse(open(os.path.join(PKG, 'schema_check.py'), encoding='utf-8').read())
     calls = [n for n in ast.walk(sc) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
              and n.func.attr in ('run', 'Popen', 'call', 'check_output')]
-    check('LLM rule: schema_check.py starts git and nothing else', calls and all(
-        isinstance(c.args[0], ast.List) and isinstance(c.args[0].elts[0], ast.Constant)
-        and c.args[0].elts[0].value == 'git' for c in calls), len(calls))
+    # git is started by its full path: the name git, bound once to engine.program('git')
+    bound = [n for n in ast.walk(sc) if isinstance(n, ast.Assign) and [getattr(t, 'id', None) for t in n.targets]
+             == ['git']]
+    git_found = len(bound) == 1 and ast.unparse(bound[0].value) == "engine.program('git')"
+    check('LLM rule: schema_check.py starts git and nothing else', calls and git_found and all(
+        isinstance(c.args[0], ast.List) and isinstance(c.args[0].elts[0], ast.Name)
+        and c.args[0].elts[0].id == 'git' for c in calls), len(calls))
     core_src = open(os.path.join(PKG, 'core.py'), encoding='utf-8').read()
     check('the core does not import run.py, so it never runs COM', not any(
         isinstance(n, ast.ImportFrom) and any(a.name == 'run' for a in n.names) or
@@ -577,6 +640,7 @@ def main():
         g62_seeded(fx)
         g63(fx)
         what_a_run_leaves(fx)
+        plan_from_final_config(fx)
         inputs(fx)
         llm_rule(fx)
         decision13(fx)

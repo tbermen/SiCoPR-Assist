@@ -4,14 +4,14 @@
                           [--fingerprint HEX] [--note TEXT ...] [--export-mat] [--eye-under-mlse]
 
 Written after the model of SiCoPR's tools/_sicopr_case.py: it calls sicopr._run_com on the run CSV
-(Decision 2) as the command line does, so the engine's own report is written unchanged to the RESULT_DIR
+ as the command line does, so the engine's own report is written unchanged to the RESULT_DIR
 the CSV names, and it writes every attribute of each package case's result at full precision to RESULT.json
 (JSON floats round-trip; not-a-number is kept as NaN). The release is the COM Version keyword when the
 config has one, otherwise SiCoPR's default (rule VR02); the engine reports it in each result. --export-mat turns
 on the engine's .mat export (the command line's --export-mat), which writes <run>_caseNN.mat for each package
 case into the same RESULT_DIR, for the dashboard; it does not change a result. --eye-under-mlse is the command
 line's --eye-under-mlse (sicopr.EYE_PLOT_UNDER_MLSE): the eye plots are drawn under MLSE too, and no reported value
-changes (Decision 23).
+changes.
 
 The parent (run.py) starts this from an argument list, with no shell and unbuffered output, one run at a time.
 A failure is written to RESULT.json too, with status failed and the engine's message, and the exit code is 1.
@@ -27,7 +27,7 @@ import traceback
 
 if __package__ in (None, ''):                    # started as a script: the package is one folder up
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.dont_write_bytecode = True                   # nothing may be written inside SiCoPR (Rule 1)
+sys.dont_write_bytecode = True                   # nothing may be written inside SiCoPR
 
 from sicopr_assist import engine  # noqa: E402
 from sicopr_assist.project import result_record  # noqa: E402

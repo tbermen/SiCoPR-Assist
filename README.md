@@ -75,6 +75,21 @@ SiCoPR; it never writes there.
 The dependencies are numpy, scipy and openpyxl. The only network access in the tool is a channel
 download you ask for (see "Channel download"), from the standard library.
 
+SiCoPR-Assist is developed and tested on Windows, and the examples here are written for PowerShell. It
+also passes its tests in CI on Linux (Python 3.10, 3.12 and 3.14). On Linux or macOS the same steps
+read:
+
+```bash
+git clone --branch v1.1.4 https://github.com/tbermen/SiCoPR
+git clone https://github.com/tbermen/SiCoPR-Assist
+pip install -e ./SiCoPR
+pip install -e ./SiCoPR-Assist
+cd ~/work/my_channel
+sicopr-assist "Run COM on data/thru.s4p with data/config.xlsx"
+```
+
+A path in a phrase may be written with `/` or `\` on either system.
+
 ## Run it
 
 The project is the folder you run the tool from. Put a COM config workbook and your channel files
@@ -98,7 +113,11 @@ instead. The line model is `sicopr_assist\example_channel.py`; the file is ours,
 involved.
 
 `python -m sicopr_assist "..."` does the same if the `sicopr-assist` script is not on your `PATH`.
-`--json` prints the outcome as JSON. `--quiet` is described below. When the answer is a QUESTION, the
+`--json` prints one JSON document on standard output: the outcome, and when a plan was carried out,
+what it gave (`carried_out`: status, run ids and the result lines). Everything meant for a person (the
+plan, the progress lines) then goes to standard error, so the output can be piped to a JSON reader.
+Output into a pipe or a file is written as UTF-8. `--quiet` is described below.
+`sicopr-assist --help` lists the options and the `gui` subcommand. When the answer is a QUESTION, the
 next phrase is read as the answer: an option number, the option's text, or `cancel`.
 
 Some things to know:
@@ -228,7 +247,7 @@ force and where each one came from. The example file
 | `trouble_misses`, `trouble_window` | 3, 5 | that many misses in the last commands bring the tutor up; `trouble_misses = 0` turns this off |
 | `feedback_notice_gap`, `feedback_notice` | 20, on | the line about Export feedback that comes with trouble: at most once in this many commands; off = never |
 | `mask_names`, `mask_numbers` | on, off | what Export feedback masks |
-| `max_download_mb` | 500 | a channel download larger than this many megabytes asks first |
+| `max_download_mb` | 500 | a channel download larger than this many megabytes asks first, and a download stops once it passes it (or the size you agreed to) |
 | `download_retries` | 1 | how many more times an interrupted download is tried before the tool stops |
 | `translator` | on | translator mode: the rules-and-presets layer reads a phrase the strict core misses; off = strict mode only |
 
@@ -289,8 +308,8 @@ SiCoPR's interactive R report on the last run, in three steps:
 `Re-run with DER_0 = 1e-4 and show the dashboard.` runs the change once, with the export on, and builds
 the dashboard of that run. A re-run right after a dashboard builds it again.
 
-Rscript is found as SiCoPR's GUI finds it: on PATH, else the newest R in `C:\Program Files\R` (by
-version number). R needs the packages R.matlab, plotly and htmltools. With no Rscript the dashboard is a
+Rscript is the newest R in `C:\Program Files\R` (by version number), else the first on PATH. A
+program in the current folder is never used, even where Windows would look there first. R needs the packages R.matlab, plotly and htmltools. With no Rscript the dashboard is a
 STOP that names the CSV summary of the last run, so the results can still be read.
 
 ## Channel download
@@ -314,19 +333,24 @@ channel thru-only and with its crosstalk:
 3. **The size** is the page's where it gives one, else the server's (Content-Length). A zip larger
    than `max_download_mb` asks before it is downloaded.
 4. **The download** goes through a partial file in `.sicopr\` and reaches the cache only when it
-   arrived whole. An interrupted download is tried again `download_retries` times; if it still fails,
-   the tool stops and the cache holds nothing of it.
+   arrived whole. It is stopped once more than `max_download_mb` (or the size you agreed to) has
+   arrived, whether or not the server gave a size. An interrupted download is tried again
+   `download_retries` times; if it still fails, the tool stops and the cache holds nothing of it.
+   Only `https://www.ieee802.org` is read, for the page, every zip and after every redirect, and a zip
+   whose file name is not a plain name (letters, digits, `_`, `.` and `-`) is skipped.
 5. **Unpacking.** Every path in the zip is checked to stay inside the cache before anything is
-   written (no `..`, no absolute path); a zip that breaks this is refused and removed. A zip inside
-   the zip is unpacked in place. A path longer than the 260 characters Windows allows is warned about.
+   written (no `..`, no absolute path); a zip that breaks this is refused and removed. So is a zip that
+   would unpack to more than 20 times its own size (at least 100 MB, at most 20 GB) or to more than
+   20000 files, the files of a zip inside it counted. A zip inside the zip is unpacked in place. A path
+   longer than the 260 characters Windows allows is warned about.
 6. **The inventory** (`<zip>.inventory.csv` beside the unpacked folder) lists every file: THRU, FEXT,
-   NEXT or other, the THRU each FEXT and NEXT file belongs to (Decision 19, as for
+   NEXT or other, the THRU each FEXT and NEXT file belongs to (by name, as for
    `Re-run with crosstalk`), whether it reads as Touchstone, its SHA-256, and the role SiCoPR's
    `benchmark\208_case_4p15p0\channels.csv` gives a file with the same SHA-256. When a FEXT or NEXT
    file cannot be paired with confidence, the tool asks: correct the `thru` column and say
    `continue`, or run thru-only only.
 7. **The run matrix** is each THRU thru-only, and with its FEXT and NEXT files. The plan says how
-   many runs, how many are new and how many are reused (Decision 6, and `max_new_runs` applies). A
+   many runs, how many are new and how many are reused (`max_new_runs` applies). A
    file that does not read as Touchstone skips the runs that need it, and `batch_summary.csv` says
    why. A zip with no FEXT or NEXT file runs thru-only and says so.
 
@@ -336,7 +360,8 @@ downloaded or unpacked again. With the site unreachable, the zips already in the
 interface are offered.
 
 Only the download touches the network (`sicopr_assist\fetch.py`), and only when you ask for one.
-`SICOPR_ASSIST_FETCH_INDEX` names another index URL, such as a mirror.
+`SICOPR_ASSIST_FETCH_INDEX` names another index URL, such as a mirror; the site of that URL is then
+read as well.
 
 **The channel files are IEEE public-area files.** They are kept in `.sicopr\cache` of your project
 for your own use. Do not commit them or redistribute them; this repository holds none of them, and
@@ -348,8 +373,10 @@ its tests use small synthetic files written by the tests themselves.
 its own names: a re-run with one change, a re-run with another package block, a sweep over a range, a
 sweep over a choice, the dashboard (when Rscript is found), what changed, and the original config
 again. Every phrase is first resolved by the
-tool itself, as if that config had just been run, and a phrase that would not work is never shown. With
-no run yet, the first phrase is the run of the config and the channel file in the folder.
+tool itself, as if that config had just been run, and a phrase that would not work is never shown, nor
+a change that is already in effect. With no run yet, it offers only the phrase that runs now: the
+config and the channel file in the folder, or `Run the example.` in an empty folder. The re-runs,
+sweeps and the dashboard come once there is a run.
 
 The tutor also comes up on its own:
 
@@ -386,15 +413,12 @@ nothing itself and makes no network connection for feedback. You can also open a
 
 ## How it is tested
 
-The behaviour is specified by a table of 876 use cases (`tests\cases\sicopr_use_cases.csv`), written
-and checked against SiCoPR before any code; rows were added after the maintainer's first use (CH01 to
-CH08, 6 October 2026), his second session (XT01 to XT06 and SM16), the reading of the IEEE tools
-page (F11 and F12, 7 October), his first GUI session (SL01 to SL05 and EX01, 10 October), his second
-(RT01 to RT06, 17 October) and his third (GF01 to GF05, 18 October). Each row gives a phrase, the state of the project before it, and the expected
-outcome; for the SL and RT rows that state holds what is selected in the GUI's tabs and the Run tab's
-options, which the harness hands to the core as data. The harness runs every row on each starting
-workbook it applies to (2480 row and config pairs) and scores
-four levels:
+The behaviour is specified by a table of 1050 use cases (`tests\cases\sicopr_use_cases.csv`), written
+and checked against SiCoPR before the code, and extended after each round of use. Each row gives a
+phrase, the state of the project before it, and the expected outcome; for the rows about the GUI that
+state holds what is selected in the GUI's tabs and the Run tab's options, which the harness hands to the
+core as data. The harness runs every row on each starting workbook it applies to and scores four
+levels:
 
 | level | what is compared |
 |---|---|
@@ -406,12 +430,19 @@ four levels:
 The harness never runs COM. The four starting workbooks are committed in `tests\configs\`, so the
 whole harness runs from a fresh clone.
 
+To run the tests you need SiCoPR (as in *Install*) and, for `tests\test_gui_static.py`, either Node.js
+on PATH or the Python package esprima, which the test extra installs:
+
 ```powershell
+pip install -e ".\SiCoPR-Assist[test]"
 powershell -ExecutionPolicy Bypass -File tests\run_all.ps1
 ```
 
+On Linux, run each script in turn: `for t in tests/test_*.py; do python "$t" || break; done`.
+
 Each `tests\test_*.py` is a standalone script that exits 0 or 1; `run_all.ps1` runs them all and stops
-at the first failure. It takes 15 minutes or more, most of it in `test_use_cases.py`.
+at the first failure. A full run takes about an hour on a current laptop, most of it in
+`test_use_cases.py`; in CI each job takes 30 to 80 minutes.
 
 | variable | effect |
 |---|---|
@@ -423,26 +454,21 @@ at the first failure. It takes 15 minutes or more, most of it in `test_use_cases
 | `SICOPR_ASSIST_LIVE_FETCH=1` | `test_fetch.py` also reads the real IEEE tools page once: the index and the size of the newest KR zip, not the zip |
 | `SICOPR_ASSIST_LIVE_FETCH_ZIP=1` | with the one above, it also downloads that zip into a temporary folder, unpacks it, checks it against SiCoPR's `channels.csv`, and removes it |
 
-No other test touches the network: `tests\test_fetch.py` and the fetch rows of the harness use a
+No other test touches the network: `tests\test_fetch.py` and the download rows of the harness use a
 stand-in of the tools page in its own markup, served from 127.0.0.1 (`tests\cases\standin_ieee.py`),
 with small zips the tests write.
 
-`python tests\test_use_cases.py --gate G7` prints the scoreboard by group and level, `--gate V1.1`
-the tutor and feedback rows, `--gate V2.1` the dashboard rows, `--gate V3.1` the download rows, and `--gate V6.2` the selection and
-example rows. The tutor text and the feedback
-file, which the four levels do not read, are checked by `tests\test_tutor.py` and
+`python tests\test_use_cases.py --gate G7` prints the scoreboard by group and level; the docstring of
+`test_use_cases.py` lists the other checks it can run on one group of rows. The tutor text and the
+feedback file, which the four levels do not read, are checked by `tests\test_tutor.py` and
 `tests\test_feedback.py`. `tests\test_dashboard.py` carries out dashboard plans with a stand-in COM
 child and a stand-in Rscript, so it needs no R. `tests\test_gui_api.py` drives the GUI panel's API as
-SiCoPR's GUI does, with a stand-in child (the frozen L4 rows through the panel give what the core gives,
-the Config-view round trip on the four workbooks, runs, Stop, paths, the history, following another
-workbook, the selection handed to the core), and `tests\test_gui_static.py` parses the panel's script
-and checks its ids, its `[hidden]` rules, its events and the command box; the checks
-of SiCoPR's real server routing to the panel print SKIP when the SiCoPR in use has no panel slot.
-`tests/test_streamline.py` checks what the panel no longer shows and when it shows the rest (Decision 25).
-`tests\test_selection.py` checks how the selection is read and planned, that the engine is given the
-files in the roles they were selected in, and the example in an empty folder (with
-`SICOPR_ASSIST_E2E = 1`, through the real engine). The build scores are in
-`CHANGELOG.md`.
+SiCoPR's GUI does, with a stand-in child, and `tests\test_gui_static.py` parses the panel's script and
+checks its ids, its `[hidden]` rules, its events and the command box; the checks of SiCoPR's real
+server routing to the panel print SKIP when the SiCoPR in use has no panel slot.
+`tests\test_streamline.py` checks what the panel shows and when. `tests\test_selection.py` checks how
+the selection in the GUI's tabs is read and planned, and the example in an empty folder.
+`tests\test_programs.py` checks that the programs the tool starts are started by their full path.
 
 ## The GUI
 
@@ -532,15 +558,9 @@ SiCoPR's GUI directly also shows the panel, which then opens its Settings and as
   `origin: gui` with its kind: phrases, answers, edits, workbooks opened, runs started and ended, Stop,
   what was shown, and errors of the panel and the page. The feedback export lists them, masked.
 
-## What version 2 adds
+## Changes
 
-Version 2 was built in phases: the tutor and feedback export (above) in 0.4.0, the dashboard in 0.5.0,
-channel download in 0.6.0, and the GUI in 0.7.0. Version 0.8.0 follows the first GUI session: the
-selection in the tabs, the command box, and the example that runs from an empty folder. Version 0.9.0
-follows the second: the Run tab and the panel as one. Version 0.10.0 follows the third: GUI first, with a
-run's output in the Run tab, and three phrasings of that session. Version 0.11.0 streamlines the panel: it shows
-only what SiCoPR's GUI does not. Version 0.12.0 adds translator mode: rules and interface presets in front of the
-strict core, and five fixes of the core the presets needed; 0.12.1 applies the checkpoint rulings (the standard's values ship, presets run in one step).
+What changed in each version is in `CHANGELOG.md`.
 
 ## What is known to be incomplete
 
@@ -563,7 +583,6 @@ strict core, and five fixes of the core the presets needed; 0.12.1 applies the c
   `csv` module writes it has not been checked. None of the four workbooks has such a value.
 - Full-precision results come from `sicopr._run_com`, whose name marks it as internal to SiCoPR. A
   change to it in SiCoPR would show up in the tests.
-- The CI workflow (`.github\workflows\ci.yml`) is untested until the first push.
 - The dashboard re-runs COM to get the `.mat` export, because a run made without it has none. Whether
   R has the packages `com_analysis.R` needs is found out only when it runs; a failure is reported and
   the run's results stay.
@@ -573,13 +592,13 @@ The build also found:
 - A control run of a plain 2-port THRU (`TDR_W_TXPKG = 0`), started while checking rule EN09, did not
   finish within 15 minutes. It was not investigated.
 - The channel-download rows of the table were written from a description of the IEEE tools page.
-  The page was read on 7 October 2026, and rows F1 and F5 were rewritten and F11 and F12 added from it.
+  The page was read on 7 October 2026, and the download rows were rewritten from it.
   The page is hand-made HTML: its reader follows the markup of that day (the date line under each
   link, the link folder as the interface, the superseded and do-not-use notes). A change in how the
   page is written may need a change in the reader; the live test (`SICOPR_ASSIST_LIVE_FETCH=1`) shows
   it.
 - Channel download pairs FEXT and NEXT files with their THRU only inside one folder of the zip, by
-  Decision 19. Files that the rule does not pair get a best guess and a question, not a silent run.
+  name. Files that the rule does not pair get a best guess and a question, not a silent run.
 - When a FEXT or NEXT file cannot be paired, the tool asks before anything runs, the thru-only runs
   included; the table says those could go ahead at once.
 - Feedback masking recognises a package block name by the package clause it is typed in, by the

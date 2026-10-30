@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+title: "SiCoPR-Assist"
+message: >-
+  If you refer to this software, please cite it using the metadata below. It is
+  a front end that drives SiCoPR; every COM result it reports comes from SiCoPR,
+  so cite SiCoPR as well when the results are the subject.
+type: software
+authors:
+  - family-names: Bermensolo
+    given-names: Todd
+repository-code: "https://github.com/tbermen/SiCoPR-Assist"
+version: "0.13.0"
+date-released: "2026-10-29"
+abstract: >-
+  A rules-based front end for SiCoPR, the Python port of the IEEE 802.3 Channel
+  Operating Margin (COM) Reference Code. It turns a typed phrase (a re-run with
+  a changed parameter, a sweep, a crosstalk case, a channel download from the
+  IEEE P802.3dj tools page) into one of three outcomes, a plan, a question or a
+  refusal with its reason, validates every change against a parameter schema
+  and the engine's own loader, carries the plan out through SiCoPR, and keeps
+  a history of every run. It runs from the command line or as a panel in
+  SiCoPR's GUI.
+keywords:
+  - channel operating margin
+  - COM
+  - IEEE 802.3
+  - signal integrity
+  - SerDes
+license: BSD-3-Clause
+references:
+  - type: software
+    title: "SiCoPR"
+    authors:
+      - family-names: Bermensolo
+        given-names: Todd
+    repository-code: "https://github.com/tbermen/SiCoPR"
+    license: BSD-3-Clause
+    notes: >-
+      The COM engine SiCoPR-Assist drives: a Python port of the IEEE 802.3
+      COM MATLAB Reference Code.

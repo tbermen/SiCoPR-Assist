@@ -17,7 +17,6 @@ import io
 import json
 import os
 import re
-import shutil
 import sys
 from types import SimpleNamespace
 
@@ -83,7 +82,7 @@ def engine_sha256():
 
 
 def version_info():
-    """VERSION.json of the SiCoPR under test, read when the tool runs (Decision 12)."""
+    """VERSION.json of the SiCoPR under test, read when the tool runs."""
     with open(os.path.join(folder(), 'VERSION.json'), encoding='utf-8') as f:
         return json.load(f)
 
@@ -222,23 +221,44 @@ def r_version(path):
     return ()
 
 
+def program(name):
+    """The full path of a program on PATH, or None. The current folder is never searched, even where Windows would
+    search it first: a PATH entry that is empty, relative, or the current folder is skipped, so a file called
+    Rscript.exe or git.exe in a project folder is never the one run. On Windows the extensions of PATHEXT are tried."""
+    here = os.path.normcase(os.path.abspath(os.getcwd()))
+    exts = ['']
+    if os.name == 'nt':
+        pathext = [e for e in os.environ.get('PATHEXT', '.COM;.EXE;.BAT;.CMD').lower().split(';') if e]
+        if os.path.splitext(name)[1].lower() not in pathext:
+            exts = pathext
+    for d in os.environ.get('PATH', '').split(os.pathsep):
+        d = d.strip().strip('"')
+        if not d or not os.path.isabs(d) or os.path.normcase(os.path.abspath(d)) == here:
+            continue
+        for e in exts:
+            p = os.path.join(d, name + e)
+            if os.path.isfile(p) and os.access(p, os.X_OK):
+                return p
+    return None
+
+
 def find_rscript():
-    """Rscript, found as SiCoPR's gui/app.py (_rscript) finds it: on PATH first, else in a default Windows install,
-    <Program Files>\\R\\R-*\\bin (or bin\\x64), where the newest version wins by number, not by text. Program Files
-    is the folder named by the ProgramFiles environment variable (C:\\Program Files on Windows when it is not set).
-    None when there is no Rscript."""
-    for name in ('Rscript', 'Rscript.exe'):
-        p = shutil.which(name)
-        if p:
-            return p
+    """Rscript: in a default Windows install first, <Program Files>\\R\\R-*\\bin (or bin\\x64), where the newest
+    version wins by number, not by text; else on PATH, never in the current folder (program). Program Files is the
+    folder named by the ProgramFiles environment variable (C:\\Program Files on Windows when it is not set), which
+    only an administrator can write to. None when there is no Rscript."""
     root = os.environ.get('ProgramFiles') or (r'C:\Program Files' if os.name == 'nt' else None)
-    if not root:
-        return None
     hits = []
-    for sub in (('bin',), ('bin', 'x64')):
+    for sub in (('bin',), ('bin', 'x64')) if root else ():
         for p in glob.glob(os.path.join(root, 'R', 'R-*', *sub, 'Rscript.exe')):
             hits.append((r_version(p), len(sub) == 1, p))
-    return max(hits)[2] if hits else None
+    if hits:
+        return max(hits)[2]
+    for name in ('Rscript', 'Rscript.exe'):
+        p = program(name)
+        if p:
+            return p
+    return None
 
 
 def load_fields(path):

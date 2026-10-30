@@ -93,11 +93,29 @@ def finder():
               got == newest, got)
         with Env(PATH=on_path + os.pathsep + keep, ProgramFiles=pf):
             got = engine.find_rscript()
-        check('an Rscript on PATH is taken first, as SiCoPR\'s gui/app.py does',
+        check('an R install under Program Files, which only an administrator can write to, is taken before PATH',
+              got == newest, got)
+        with Env(PATH=on_path + os.pathsep + keep, ProgramFiles=empty):
+            got = engine.find_rscript()
+        check('with no R install under Program Files, the Rscript on PATH is taken',
               got is not None and os.path.dirname(got) == on_path, got)
         with Env(PATH=keep, ProgramFiles=empty):
             got = engine.find_rscript()
         check('hidden from PATH and from Program Files: no Rscript', got is None, got)
+        here = os.getcwd()
+        os.chdir(on_path)
+        try:
+            for extra in ('.', '', on_path):
+                with Env(PATH=keep + os.pathsep + extra, ProgramFiles=empty):
+                    got = engine.find_rscript()
+                check('an Rscript in the current folder is never found, not even with %r on PATH' % extra,
+                      got is None, got)
+            with Env(PATH=keep, ProgramFiles=empty):
+                got = engine.find_rscript()
+            check('an Rscript in the current folder is never found, where Windows would search it first', got is None,
+                  got)
+        finally:
+            os.chdir(here)
     finally:
         shutil.rmtree(base, ignore_errors=True)
     script = engine.com_analysis_script()

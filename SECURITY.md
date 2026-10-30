@@ -13,8 +13,14 @@ Three parts are worth knowing about:
   loaded. SiCoPR 1.1.4 reads every cell with a MATLAB-subset evaluator, and SiCoPR-Assist refuses to run
   with a SiCoPR older than 1.1.4.
 - **Channel download.** The one network access is a download you ask for, from the IEEE 802.3 public
-  tools page (`fetch.py`, standard library, TLS verified). Every path in a downloaded zip is checked to
-  stay inside the cache folder before anything is written.
+  tools page (`fetch.py`, standard library, TLS verified). Only `https://www.ieee802.org` is read, for
+  the page, every zip and after every redirect (or the one site `SICOPR_ASSIST_FETCH_INDEX` names). A
+  zip name must be plain, and a download stops once it passes `max_download_mb`, with or without a
+  Content-Length. Every path in a downloaded zip is checked to stay inside the cache folder, and the
+  number of files and their unpacked size are capped, nested zips counted, before anything is written.
+- **Programs started.** Rscript, git and the file manager are started by their full path; a program in
+  the current folder is never used. `.sicopr\` holds a `.gitignore` of `*`, so a project kept in git does
+  not commit its state or the downloaded channels.
 - **The GUI panel.** It runs inside SiCoPR's GUI, a local HTTP server bound to `127.0.0.1` that refuses
   cross-site and DNS-rebinding requests. It is built for a single local user and should not be exposed to
   a network.

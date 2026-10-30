@@ -1,6 +1,6 @@
 """The core: handle(phrase, project) -> outcome. Nothing here runs COM.
 
-The outcome is one plain dictionary that can be written as JSON (prompt section 5):
+The outcome is one plain dictionary that can be written as JSON:
 
     type       PLAN, QUESTION or STOP
     steps      [{"op": <a name in STEPS>, "args": {...}}, ...]
@@ -10,10 +10,10 @@ The outcome is one plain dictionary that can be written as JSON (prompt section 
     announce   every line shown before anything runs
     points, new_runs, reused_runs             batches only
     pattern, unplaced                         how the phrase was read; goes to history
-    tutor      {"lines", "phrases", "why"}    what the tutor adds, when it comes up (Decision 11; tutor.py)
+    tutor      {"lines", "phrases", "why"}    what the tutor adds, when it comes up (tutor.py)
 
 The principle is resolve exactly, or ask. A phrase is read by parse.py against the names of the config in
-front of the tool; names are resolved by Rule 4 (COM keywords only, case and spaces ignored); every value is
+front of the tool; names are resolved as COM keywords only, case and spaces ignored; every value is
 checked by validate.py, which loads the candidate config with the engine's own loader. A QUESTION is stored
 in the project as the pending question, and the next phrase is first read as its answer.
 
@@ -42,7 +42,7 @@ import re
 from sicopr_assist import config_model, engine, example_channel, fetch, parse, summary, validate, xlsx_io
 from sicopr_assist.project import history_record, is_command, read_settings, setting_text
 
-# The step vocabulary, frozen in Phase 1 from the expected_detail chains of the use-case table
+# The step vocabulary, fixed from the expected_detail chains of the use-case table
 # (tests/cases/l4.py extracts it again and tests/test_l4_normaliser.py checks that the two agree).
 STEPS = (
     'add_param', 'batch_summary', 'build_matrix', 'clear_overrides', 'compare_config', 'diff_results',
@@ -58,33 +58,32 @@ CHANGE_KINDS = ('set', 'add', 'linked', 'revert')
 
 NONE_OF_THESE = 'none of these'
 CANCEL = 'cancel'
-# Decision 7: the one question for a sweep with points that a rule asks about (maintainer, 6 October)
+# the one question for a sweep with points that a rule asks about
 SWEEP_ASK_OPTIONS = ('run all points anyway', 'run only the points that pass', CANCEL)
 EXAMPLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'sicopr_config_example.json')
-# where the example setup writes its synthetic THRU when the project folder holds no channel file (Decision 22)
+# where the example setup writes its synthetic THRU when the project folder holds no channel file
 EXAMPLE_THRU = os.path.join('data', 'example_thru.s4p')
 CONFIG_EXT = ('.xlsx', '.xls', '.csv', '.json')
 
-# Asked for beside a run, the tutor and feedback export are named on their own, as one announced line (Decisions 10
-# and 11). The dashboard follows the run (rows CB17 and C2), and a channel download is planned on its own (rows F1
-# to F12): version 2 builds them all, so Decision 16 no longer stops any phrase.
+# Asked for beside a run, the tutor and feedback export are named on their own, as one announced line. The dashboard
+# follows the run (rows CB17 and C2), and a channel download is planned on its own (rows F1 to F12).
 NOT_IN_V1_PART = {
     'tutor': 'the tutor is asked for on its own: What can I say?',
     'feedback': 'feedback is exported on its own: Export feedback',
 }
 
-# Decision 10: feedback leaves the machine only as an email the user writes. The address is kept here, once.
+# feedback leaves the machine only as an email the user writes. The address is kept here, once.
 FEEDBACK_ADDRESS = 'sicopr_assist.showman405@simplelogin.com'
 FEEDBACK_SUBJECT = 'SiCoPR-Assist feedback'
 
 
 def feedback_contact():
-    """Where feedback goes (Decision 10): the address and the subject. The user emails the file; nothing is sent."""
+    """Where feedback goes: the address and the subject. The user emails the file; nothing is sent."""
     return {'address': FEEDBACK_ADDRESS, 'subject': FEEDBACK_SUBJECT}
 
 
 def settings_lines(settings):
-    """One line per setting in force, with where its value came from (Decision 4; rows SE01, SE02, SE06), then the
+    """One line per setting in force, with where its value came from (rows SE01, SE02, SE06), then the
     warnings. settings is what project.read_settings returns."""
     files = settings.get('files') or {}
 
@@ -295,7 +294,7 @@ class Context:
         out += engine.keyword_names('main') + engine.keyword_names('package block')
         return out
 
-    # ---- runs on disk, for reuse (Decision 6)
+    # ---- runs on disk, for reuse
     def channels(self):
         """[(path, sha256 now)] of the channel files the last run used, in its order."""
         rec = self.last
@@ -366,13 +365,13 @@ def _sha(path):
         return hashlib.sha256(f.read()).hexdigest()
 
 
-RUN_OPTIONS = ('export_mat', 'eye_under_mlse')       # the two check boxes of the Run tab (Decision 23)
+RUN_OPTIONS = ('export_mat', 'eye_under_mlse')       # the two check boxes of the Run tab
 
 
 def selection_of(selection, root):
-    """The selection of a GUI's tabs (Decision 20) in the form the core reads: {'config', 'thru', 'fext', 'next',
+    """The selection of a GUI's tabs in the form the core reads: {'config', 'thru', 'fext', 'next',
     'options'}, each path relative to the project folder when it is inside it, as a phrase would name it, and
-    absolute otherwise. options are the Run tab's two check boxes (Decision 23), {'export_mat': Output dynamic
+    absolute otherwise. options are the Run tab's two check boxes, {'export_mat': Output dynamic
     results, 'eye_under_mlse': --eye-under-mlse}, each off unless the selection says it is on. None stays None:
     there is no selection, and no Run tab (the command line)."""
     if selection is None:
@@ -405,7 +404,7 @@ def inside_folder(path, folder):
 
 def channel_keys(pairs):
     """What a run's channel files are to its fingerprint: [(role, sha256)] as texts role:sha256. The role is part
-    of it since the roles can be given by the selection in the GUI's tabs (Decision 20): the same file as a FEXT
+    of it since the roles can be given by the selection in the GUI's tabs: the same file as a FEXT
     and as a NEXT aggressor is not the same run. A channel with no role recorded is a THRU."""
     return ['%s:%s' % (role or 'thru', sha or '') for role, sha in pairs]
 
@@ -413,7 +412,7 @@ def channel_keys(pairs):
 def _fingerprint(fields, channel_shas, sicopr_sha, export_mat=False, eye_under_mlse=False):
     """What decides reuse: the loaded fields (without where output goes), the channel files each in its role
     (channel_keys), the engine, whether the engine's .mat export was on (the dashboard needs it), and whether the eye
-    plots were drawn under MLSE (--eye-under-mlse, Decision 23)."""
+    plots were drawn under MLSE (--eye-under-mlse)."""
     keep = {k: v for k, v in fields.items() if not k.endswith('RESULT_DIR')}
     return keep, sorted(s or '' for s in channel_shas), sicopr_sha, bool(export_mat), bool(eye_under_mlse)
 
@@ -434,7 +433,7 @@ def _same_fingerprint(have, want):
 def handle(phrase, project, origin='cli', selection=None):
     """Turn one phrase and the project state into a PLAN, a QUESTION or a STOP. Never runs COM. origin says where
     the phrase came from ('cli' or 'gui'), for the history record only; the outcome does not depend on it.
-    selection is what is selected in the tabs of a GUI, handed over as data (Decision 20): {'config': path or None,
+    selection is what is selected in the tabs of a GUI, handed over as data: {'config': path or None,
     'thru': path or None, 'fext': [paths], 'next': [paths]}, or None where there is no such thing (the command
     line). Only a phrase that speaks of the selection ("the selected config and channels") reads it."""
     ctx = Context(project, selection)
@@ -447,7 +446,7 @@ def handle(phrase, project, origin='cli', selection=None):
         if pending:
             got = _answer(phrase, ctx, pending)
         if got is None:
-            # the miss gate (Decision 26, item 5): while a question is pending, the translator does not read the phrase
+            # the miss gate: while a question is pending, the translator does not read the phrase
             out, answers, resume = _resolve_any(phrase, ctx, {}, layer=not pending)
         else:
             out, answers, resume = got
@@ -479,7 +478,7 @@ def handle(phrase, project, origin='cli', selection=None):
 
 
 def _with_tutor(phrase, out, ctx):
-    """Add what the tutor shows to the outcome (Decision 11): its lines under "tutor", and for a PLAN a show_tutor
+    """Add what the tutor shows to the outcome: its lines under "tutor", and for a PLAN a show_tutor
     step at the end. Returns what was shown, for the history ('tutor', 'feedback_notice'). The tutor never stops
     a command: if it fails, the outcome says so and is otherwise unchanged."""
     from sicopr_assist import tutor
@@ -505,7 +504,7 @@ def _with_tutor(phrase, out, ctx):
 
 
 def _record(project, phrase, out, pending, answered, shown=(), origin='cli', kind=None, **more):
-    """Append the history line of Decision 9: the phrase, how it was read, the options offered, the option chosen
+    """Append the history line of a command: the phrase, how it was read, the options offered, the option chosen
     when it answers a question, and the resolved outcome (replay uses it). Returns its seq, or None when the
     history cannot be written (then the outcome says so). kind is 'answer' or 'phrase' unless given (an edit or an
     open from the GUI's Config view); more holds the further keys such a record carries."""
@@ -557,7 +556,7 @@ def _replaced(text, mods):
     return text
 
 
-# ----------------------------------------------------------------------------- translator mode (Decision 26)
+# ----------------------------------------------------------------------------- translator mode
 def translator_on(ctx):
     """Whether translator mode is on for this command: the setting translator, or its environment override."""
     from sicopr_assist import translate
@@ -741,8 +740,8 @@ def _answer(phrase, ctx, pending):
     if what.get('stop'):
         return _stop(what['stop'], pattern='answer: %s' % chosen) + (None,)
     if what.get('phrase'):
-        # an option of a translator's question is a phrase the core resolves (Decision 26, item 4), with the
-        # option's own modifications (a preset's pass on rule Q14 for its keywords, owner ruling 21 October 2026)
+        # an option of a translator's question is a phrase the core resolves, with the option's own modifications
+        # (a preset's pass on rule Q14 for its keywords: a value the standard gives is not asked about)
         out, ans, res = _resolve_any(what['phrase'], ctx, copy.deepcopy(what.get('mods') or {}))
         out['pattern'] = 'answer: %s; %s' % (chosen, out['pattern'])
         return out, ans, res
@@ -767,7 +766,7 @@ def _again(resume, ctx, mods):
     if resume.get('edit') is not None:
         return _edit_resolve(resume['edit'], ctx, mods)
     # in translator mode a question asked on the layer's reading (or one stored without its answers, as a seeded one)
-    # is asked again through the layer, so that its answers are the layer's (Decision 26)
+    # is asked again through the layer, so that its answers are the layer's
     return _resolve_any(resume['phrase'], ctx, mods)
 
 
@@ -790,10 +789,10 @@ def _plan(text, ctx, mods):
     if FOLDER_BATCH.search(low) and 'fetch' not in acts:
         return _folder_batch(req, low, ctx, mods, base)
     # the thru-only case and the crosstalk case of the THRU in use, together: "thru-only and xtalk", "with and without
-    # crosstalk" (Decision 24, rows GF02 to GF05); a channel download that asks for both plans its own matrix
+    # crosstalk" (rows GF02 to GF05); a channel download that asks for both plans its own matrix
     if {'thru_only', 'crosstalk'} <= set(req['flags']) and 'fetch' not in acts:
         return _xtalk_compare(req, ctx, mods, base)
-    # the setup in the Run tab of the GUI (Decision 23, rows RT01 to RT04): "run the command", "run what is in the
+    # the setup in the Run tab of the GUI (rows RT01 to RT04): "run the command", "run what is in the
     # Run tab"; "run it" means it only where there is a Run tab, and keeps its meaning on the command line (row R3)
     if 'run_it' in req['flags']:
         req = dict(req, flags=[f for f in req['flags'] if f != 'run_it'] +
@@ -802,13 +801,13 @@ def _plan(text, ctx, mods):
             base = dict(base, pattern=base['pattern'] + '; run tab')
     if 'run_tab' in req['flags']:
         return _run_tab_request(req, ctx, mods, base)
-    # the config and the channel files selected in the tabs of the GUI (Decision 20, rows SL01 to SL05)
+    # the config and the channel files selected in the tabs of the GUI (rows SL01 to SL05)
     if 'selection' in req['flags']:
         return _selection_request(req, ctx, mods, base)
-    # the tutor on request, and turning it off or on (Decision 11, rows TU03, TU06)
+    # the tutor on request, and turning it off or on (rows TU03, TU06)
     if not _has_v1_action(req) and ('tutor' in acts or re.search(r'\bwhat can i (say|type)\b|\bexample commands\b', low)):
         return _tutor_request(req, low, ctx, base)
-    # feedback export (Decision 10, rows FB04 to FB07, FB15 to FB17)
+    # feedback export (rows FB04 to FB07, FB15 to FB17)
     send = bool(re.search(r'\b(send|e-?mail|mail)\b', low)) and \
         ('feedback' in acts or bool(re.search(r'\bdevelopers?\b', low)))
     if not _has_v1_action(req) and (send or 'feedback' in acts or
@@ -841,8 +840,8 @@ RESULTS_FILE = 'results.csv'
 def _folder_batch(req, low, ctx, mods, base):
     """Run every config on every THRU, thru-only and with crosstalk: a batch over the config files and the THRU files
     of the project folder (and its data folder), each config imported as saved, each THRU thru-only and with the FEXT
-    and NEXT files that belong to it (Decision 19). A THRU with none has no crosstalk point: it is listed as skipped.
-    Points are reused by fingerprint (Decision 6); more new runs than max_new_runs asks first. Every point's result
+    and NEXT files that belong to it. A THRU with none has no crosstalk point: it is listed as skipped.
+    Points are reused by fingerprint; more new runs than max_new_runs asks first. Every point's result
     also goes to one results file, .sicopr\\runs\\command_<seq>\\results.csv."""
     left = [w for w in req['unplaced'] if w.lower() not in ('every', 'config', 'configs', 'thru', 'thrus', 'on', 'into',
                                                              'one', 'results', 'file', 'combined', 'and', 'with')]
@@ -883,7 +882,7 @@ def _folder_batch(req, low, ctx, mods, base):
                 if why:
                     pt['skipped'] = why
                 elif mode == 'xtalk' and not (fext or nxt):
-                    pt['skipped'] = 'no FEXT or NEXT file belongs to %s (Decision 19)' % t
+                    pt['skipped'] = 'no FEXT or NEXT file belongs to %s by its name or its folder' % t
                 else:
                     stops, _ = input_check(wc, [(ctx.path(p), r) for p, r in files], with_notes=False)
                     if stops:
@@ -947,7 +946,7 @@ def _leftover(req, words):
 
 def _tutor_request(req, low, ctx, base):
     """What can I say? shows the tutor (row TU03); Tutor off writes tutor_until_commands = 0 to the project settings
-    file and Tutor on removes that line (row TU06). The tutor's lines are added by handle (Decision 11)."""
+    file and Tutor on removes that line (row TU06). The tutor's lines are added by handle."""
     left = _leftover(req, _TUTOR_WORDS)
     if left:
         return _unplaced_only(dict(req, unplaced=left), dict(base, unplaced=left))
@@ -973,7 +972,7 @@ def feedback_path(project, day=None):
 
 
 def _feedback_request(req, ctx, base, send):
-    """Export feedback writes the history as a plain-text file for the user to read and email (Decision 10). Send
+    """Export feedback writes the history as a plain-text file for the user to read and email. Send
     feedback does the same, then gives the address and subject and opens the folder. Nothing is ever sent."""
     left = _leftover(req, _FEEDBACK_WORDS)
     if left:
@@ -1117,8 +1116,8 @@ def _dashboard_request(req, ctx, base):
 
 
 def dynamic_phrase(project, rid):
-    """The phrase that shows the dynamic results of run rid (the vocabulary of Decision 23): of the last run when rid
-    is the last run, else of rid by its id."""
+    """The phrase that shows the dynamic results of run rid: of the last run when rid is the last run, else of rid by
+    its id."""
     last = Context(project).last_run_id()
     return 'Show the dynamic results of %s.' % ('the last run' if rid == last else rid)
 
@@ -1274,7 +1273,9 @@ def select_zip(entries, interface, pick=None, entry=None):
         for z in e['zips']:
             if z['interface'] != interface:
                 continue
-            if z['date'] is None:
+            if not fetch.plain_zip_name(z['name']):
+                skipped.append((z, 'its file name is not a plain zip name'))
+            elif z['date'] is None:
                 skipped.append((z, 'the page gives no date under its link'))
             elif e['superseded']:
                 skipped.append((z, 'its entry is marked superseded: %s' % e['superseded']))
@@ -1483,8 +1484,11 @@ def _fetch_request(req, low, ctx, mods, base):
         sel['zip'], sel['title'], sel['date_text'] or 'not read', _mb(sel['size']),
         ' (from %s)' % sel['size_from'] if sel['size_from'] else ''))
     if not cached:
+        # the download stops past max_download_mb, or past the size the user agreed to (with room for a page that
+        # rounds it), whether or not the server gives a size
+        cap = limit if not mods.get('size_ok') or sel['size'] is None else max(limit, 1.1 * sel['size'] / 1e6)
         steps.append(_step('download', url=sel['url'], zip=sel['zip'], path=rel(zpath), size=sel['size'],
-                           retries=ctx.setting('download_retries')))
+                           retries=ctx.setting('download_retries'), max_mb=cap))
         announce.append('downloads it to %s, through a partial file that is removed unless the zip arrives whole; an '
                         'interrupted download is tried again %d more time%s' % (
                             rel(zpath), ctx.setting('download_retries'),
@@ -1529,8 +1533,8 @@ def _read_inventory(project, interface, name):
 
 def fetch_inventory(folder, files, known=()):
     """The inventory of an unpacked zip: one row per file (paths relative to folder, with /), as INVENTORY_COLUMNS.
-    A channel file is a THRU, FEXT or NEXT by Decision 19's words; each FEXT and NEXT file is paired with its THRU by
-    Decision 19's rule, in its own folder (rule only_thru or name). A file the rule pairs with no THRU, or with more
+    A channel file is a THRU, FEXT or NEXT by the role words in its name; each FEXT and NEXT file is paired with its
+    THRU by name, in its own folder (rule only_thru or name). A file the rule pairs with no THRU, or with more
     than one, gets the best guess by name (rule guess), or none when the zip has no THRU. touchstone is ok or why
     the file does not read. known_role is the role SiCoPR's benchmark channels.csv gives a file with the same SHA-256."""
     import difflib
@@ -1577,7 +1581,7 @@ def fetch_inventory(folder, files, known=()):
 
 def _fetch_matrix(ctx, mods, base, wc, sel, rows, modes, steps, announce):
     """The run matrix of an unpacked zip: for each THRU, a thru-only point and a point with its FEXT and NEXT files,
-    each reused by fingerprint (Decision 6), or skipped and reported when a file it needs does not read as
+    each reused by fingerprint, or skipped and reported when a file it needs does not read as
     Touchstone (row F7). No Touchstone file asks for another zip (F8); a pairing that is only a guess asks (F6); no
     FEXT or NEXT file runs thru-only and says so (F10)."""
     project = ctx.project
@@ -1609,8 +1613,8 @@ def _fetch_matrix(ctx, mods, base, wc, sel, rows, modes, steps, announce):
         o1, o2 = 'continue', 'run thru-only only'
         listed = '; '.join('%s -> %s' % (r['file'], r['thru'] or 'no THRU') for r in guess[:6]) + \
             ('; and %d more' % (len(guess) - 6) if len(guess) > 6 else '')
-        return _ask('%d FEXT and NEXT file%s of %s cannot be paired with a THRU file with confidence (Decision 19: no '
-                    'name matches, or more than one does). The best guess is in the thru column of %s: %s. The '
+        return _ask('%d FEXT and NEXT file%s of %s cannot be paired with a THRU file with confidence (no THRU name '
+                    'matches, or more than one does). The best guess is in the thru column of %s: %s. The '
                     'thru-only runs need no pairing. Correct that column and say continue to run thru-only and xtalk '
                     'with it, or run thru-only only.' % (len(guess), '' if len(guess) == 1 else 's', sel['zip'], inv,
                                                          listed),
@@ -1685,7 +1689,7 @@ def _fetch_matrix(ctx, mods, base, wc, sel, rows, modes, steps, announce):
         len(thrus), '' if len(thrus) == 1 else 's', ' and '.join(m.replace('_', '-') for m in modes), len(points),
         '' if len(points) == 1 else 's', n_new, n_reused, ', %d skipped' % len(skipped) if skipped else '')
     limit = ctx.setting('max_new_runs')
-    if n_new > limit and not mods.get('confirm_limit'):          # Decision 6: max_new_runs covers a fetched batch too
+    if n_new > limit and not mods.get('confirm_limit'):          # max_new_runs covers a fetched batch too
         o_run = 'run all'
         return _ask('%s. That is more new runs than max_new_runs (%d), so the batch waits for you: run all or cancel.'
                     % (_sentence(summary_line).rstrip('.'), limit), [o_run, CANCEL],
@@ -1750,7 +1754,7 @@ def _plan_v1(text, req, ctx, mods, base):
         return _stop('SiCoPR-Assist does not send anything. Each run leaves its results in its own folder under '
                      '.sicopr\\runs, which you can attach yourself.', **base)
 
-    # questions about results: a summary, statistics, a parameter against a result (Decision 8)
+    # questions about results: a summary, statistics, a parameter against a result
     if _is_results_request(req, text):
         return _results(req, text, ctx, mods, base)
 
@@ -1764,7 +1768,7 @@ def _plan_v1(text, req, ctx, mods, base):
         return _compare(req, ctx, base)
 
     # the crosstalk files of the THRU in use: the config, the overrides and the THRU of the last run are kept
-    # (Decision 19, rows XT01 to XT05)
+    # (rows XT01 to XT05)
     if 'crosstalk' in req['flags']:
         if req['files'] or req['sweeps'] or {'example', 'these_files', 'this_config'} & set(req['flags']):
             return _ask('Crosstalk is added to the THRU of the last run, and this phrase also names files or a sweep, so '
@@ -1774,7 +1778,7 @@ def _plan_v1(text, req, ctx, mods, base):
             return _no_history(ctx, base)
         return _add_crosstalk(req, ctx, mods, base)
 
-    # the config and the channel files of the last run, named as such (vocabulary of Decision 23, row RT06): the
+    # the config and the channel files of the last run, named as such (row RT06): the
     # setup of the last run again, with any change the phrase also asks for
     if 'last_channels' in req['flags']:
         if req['files'] or req['sweeps'] or {'example', 'these_files', 'this_config'} & set(req['flags']):
@@ -1786,7 +1790,7 @@ def _plan_v1(text, req, ctx, mods, base):
         return _setup_swap(req, ctx, mods, base, [(p, r or 'thru') for p, _, r in ctx.channels()], said='last')
 
     # a channel file named without a config: after a run, only that channel changes and the config of the last
-    # run is kept (Decision 18); with no run yet, a re-run of it asks for a config, as row S3 does (row CH05)
+    # run is kept; with no run yet, a re-run of it asks for a config, as row S3 does (row CH05)
     named = [f for f in req['files'] if f['ext'] == 'channel']
     if named and len(named) == len(req['files']) and not req['sweeps'] and not mods.get('config_path') and \
             not {'example', 'these_files', 'this_config'} & set(req['flags']):
@@ -1843,7 +1847,7 @@ def _plan_v1(text, req, ctx, mods, base):
                  'in 5 steps), and shows the config (What can I change?).', **base)
 
 
-# ----------------------------------------------------------------------------- results (Decision 8)
+# ----------------------------------------------------------------------------- results
 _RESULT_LIST = re.compile(r"\b(what|which) results\b|\bresult names\b")
 _RESULT_PAIR = re.compile(r'\bcorrelat\w*|\bversus\b|\bvs\b|\brelates?\b')
 # Words a question about results is made of. Anything else that is not a result or a keyword is asked about.
@@ -1983,7 +1987,7 @@ def _no_history(ctx, base, channel=None):
                 **base)
 
 
-# ----------------------------------------------------------------------------- names (Rule 4)
+# ----------------------------------------------------------------------------- names (COM keywords only)
 def _schema_row(name, scope='main'):
     return validate.schema_row(name, scope) or validate.schema_row(name, 'package block' if scope == 'main' else 'main')
 
@@ -2515,6 +2519,10 @@ def _change_outcome(res, changes, req, ctx, mods, base, wc):
     if stops:
         return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in out_changes], announce=announce,
                      **base)
+    # a value that is already in effect changes nothing: it is no step and no change line, only named once
+    same = {c['json_path'] for c in res['unchanged']}
+    held = [c for c in out_changes if c['json_path'] in same]
+    out_changes = [c for c in out_changes if c['json_path'] not in same]
     steps = []
     for c in out_changes:
         if c['kind'] in ('set', 'add'):
@@ -2526,6 +2534,9 @@ def _change_outcome(res, changes, req, ctx, mods, base, wc):
                                                          'after': c['after']} for c in linked]))
     steps += [_step('validate_config'), _step('run_com', thru_only=bool(mods.get('thru_only') or
                                                                        'thru_only' in req['flags'])), _step('summarize')]
+    if held:
+        announce.append('already in effect, so not changed: %s' % '; '.join(
+            '%s = %s' % (validate.name_of(c['json_path']), show(c['before'])) for c in held))
     announce = _change_lines(out_changes, wc) + announce + _context_lines(ctx, out_changes, wc)
     return outcome('PLAN', steps=steps, changes=out_changes, announce=announce, **base), {}
 
@@ -2575,7 +2586,11 @@ def _change_lines(changes, wc):
 def _context_lines(ctx, changes, wc):
     lines = []
     rec = ctx.last
-    ov = (rec or {}).get('overrides') or []
+    # a plan that imports its config again starts without the overrides of the last run, and an override the plan
+    # sets again is replaced, not kept
+    rebuilt = (ctx._c.get('base') or (None, None))[1] == 'import'
+    replaced = {c['json_path'] for c in changes}
+    ov = [] if rebuilt else [o for o in (rec or {}).get('overrides') or [] if o['json_path'] not in replaced]
     if ov:
         lines.append('active overrides kept from earlier runs: %s'
                      % '; '.join('%s = %s' % (validate.name_of(o['json_path']), show(o['after'])) for o in ov))
@@ -2596,9 +2611,9 @@ def _context_lines(ctx, changes, wc):
     return lines
 
 
-# ----------------------------------------------------------------------------- sweeps (Decisions 5, 6, 7)
+# ----------------------------------------------------------------------------- sweeps
 def _count_or_step(sw):
-    """('count', n) | ('step', size) | ('ask', why, options) from the words of a range (Decision 5)."""
+    """('count', n) | ('step', size) | ('ask', why, options) from the words of a range."""
     if sw.get('how') == 'step' or (sw.get('step') is not None):
         return 'step', float(sw['step'])
     if sw.get('count') is None:
@@ -2909,7 +2924,7 @@ def _sweep(req, ctx, mods, base_fields):
     n_reused = sum(1 for p in points if p['reused_from'])
     skipped = [p for p in points if p['skipped']]
     fields = dict(points=points, new_runs=n_new, reused_runs=n_reused, **base)
-    # Decision 7: points a rule asks about make one question for the whole batch. A point a rule stops is
+    # points a rule asks about make one question for the whole batch. A point a rule stops is
     # skipped above and never run, whatever the answer.
     if asks and mods.get('only') is None:
         bad = [label(p) for p, _ in asks]
@@ -3002,7 +3017,7 @@ def _sweep(req, ctx, mods, base_fields):
 
 # ----------------------------------------------------------------------------- runs from files
 def _option_args(options):
-    """The run_com arguments of the Run tab's options that are on (Decision 23): export_mat, eye_under_mlse."""
+    """The run_com arguments of the Run tab's options that are on: export_mat, eye_under_mlse."""
     return {k: True for k in RUN_OPTIONS if (options or {}).get(k)}
 
 
@@ -3020,11 +3035,11 @@ def _option_lines(options, where='in the Run tab'):
 
 def _first_run(req, ctx, mods, base, roles=None, lead=(), options=None):
     """Run COM on a channel file with a config file (or the files in the folder). roles: the role of each channel
-    file, when the caller knows them (the selection in the GUI's tabs, Decision 20); otherwise they are read from
+    file, when the caller knows them (the selection in the GUI's tabs); otherwise they are read from
     the order and the names (channel_roles). lead: lines that open the announcement.
 
     The example setup with no channel file in the project folder runs on a synthetic THRU that is written when the
-    plan is carried out (Decision 22, row EX01)."""
+    plan is carried out (row EX01)."""
     configs = [f['text'] for f in req['files'] if f['ext'] in CONFIG_EXT + ('.mat',)]
     if mods.get('config_path') and not configs:
         configs = [mods['config_path']]          # a base workbook an interface preset brings (translate.py)
@@ -3059,7 +3074,7 @@ def _first_run(req, ctx, mods, base, roles=None, lead=(), options=None):
         elif found_ch:
             return _ask('There is more than one channel file in this folder: which one?', found_ch + [CANCEL],
                         {c: {'stop': 'Run COM on %s with %s.' % (c, configs[0])} for c in found_ch}, **base)
-        elif example:                           # Decision 22: the example runs from an empty folder
+        elif example:                           # the example runs from an empty folder
             synthetic = EXAMPLE_THRU
             chans = [synthetic]
             announce.append('the channel is a synthetic %g mm lossy line, written to %s when this plan is carried '
@@ -3089,6 +3104,8 @@ def _first_run(req, ctx, mods, base, roles=None, lead=(), options=None):
     if wc is None:
         return announce
     is_json = path.lower().endswith('.json') and not example
+    # a config JSON is accepted directly, with no import step (row CP14); validate_config names it, so the run uses it
+    json_arg = {'path': cfg} if is_json else {}
     steps = [] if is_json else [_step('import_config', path=cfg, example=example,
                                       **({'example_channel': synthetic} if synthetic else {}))]
     changes = []
@@ -3122,21 +3139,24 @@ def _first_run(req, ctx, mods, base, roles=None, lead=(), options=None):
             return sub, sub_answers
         changes = sub['changes']
         steps += [s for s in sub['steps'] if s['op'] in ('set_param', 'add_param', 'recompute_linked')]
-        steps.append(_step('validate_config'))
+        steps.append(_step('validate_config', **json_arg))
         announce += [a for a in sub['announce'] if a not in announce]
     elif is_json:
-        steps.append(_step('validate_config'))
+        steps.append(_step('validate_config', **json_arg))
     elif req['unplaced'] and not mods.get('ignore_unplaced'):
         return _unplaced_only(req, base)
     final = config_model.apply_changes(wc, [(c['json_path'], c['after']) for c in changes
                                             if c['kind'] in ('set', 'add')])['config'] if changes else wc
+    if changes:          # what the loader does with the config as imported may not hold once the plan changes it
+        stale = validate.whole_config_notes(wc) - validate.whole_config_notes(final)
+        announce = [a for a in announce if a not in stale]
     pairs = list(zip(chans, roles)) if roles and len(roles) == len(chans) else channel_roles(chans)
     stops, notes = input_check(final, [(ctx.path(c), r) for c, r in pairs], with_notes=not synthetic)
     if stops:
         return _stop(_sentence(stops[0]), changes=[dict(c, applied=False) for c in changes], announce=announce, **base)
     announce += notes
     given = {'roles': [r for _, r in pairs]} if roles else {}      # the roles as selected, not as the names say
-    given.update(_option_args(options))                           # the Run tab's options (Decision 23)
+    given.update(_option_args(options))                           # the Run tab's options
     steps += [_step('validate_inputs', channels=chans), _step('run_com', channels=chans, thru_only=len(chans) <= 1,
                                                               **given), _step('summarize')]
     return outcome('PLAN', steps=steps, changes=changes, announce=announce, **base), {}
@@ -3181,7 +3201,7 @@ def _last_channels(ctx):
     return [(ctx.path(p), r) for p, sha, r in ctx.channels() if sha is not None]
 
 
-# ----------------------------------------------------------------------------- another channel (Decision 18)
+# ----------------------------------------------------------------------------- another channel
 def _same_file(a, b):
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
@@ -3204,7 +3224,7 @@ def _find_channel(ctx, text, last_paths):
 
 def _channel_swap(req, ctx, mods, base):
     """A re-run with other channel files: the config of the last run is kept with its overrides, and only the
-    channels named change, one set_channel step each (Decision 18, rows CH01 to CH08). A file that does not exist
+    channels named change, one set_channel step each (rows CH01 to CH08). A file that does not exist
     stops and keeps the last setup; the file already in use is a change with no effect. A change of a parameter in
     the same phrase is planned as a re-run would plan it (row CH06)."""
     rec = ctx.last
@@ -3294,20 +3314,20 @@ def _swap_plan(req, ctx, mods, base, wc, swaps, new, lines, run_args=None):
     return outcome('PLAN', steps=steps, changes=changes, announce=lines + more + warn, **base), {}
 
 
-# ----------------------------------------------------------------------------- the selection in the tabs (Decision 20)
+# ----------------------------------------------------------------------------- the selection in the tabs
 SELECT_IN_RUN_TAB = 'select one in the Run tab'
 SELECT_IN_CONFIG_TAB = 'select one in the Config tab'
 NAME_A_FILE = 'name a file'
 PROVIDE_FILES = 'provide files'
-RUN_SELECTION = 'Run the selected config and channels.'       # the phrase of the panel's Run selection button
-RUN_COMMAND = 'Run the command.'      # what the Run tab's Run button is, handed to the panel (Decision 23)
+RUN_SELECTION = 'Run the selected config and channels.'       # the phrase that runs the selection in the tabs
+RUN_COMMAND = 'Run the command.'      # what the Run tab's Run button is, handed to the panel
 RERUN_LAST = 're-run the last run'
 # where the files of a setup were taken from, as the announcement says it
 _WHERE = {'selection': 'selected in the tabs', 'run tab': 'in the Run tab', 'last': 'of the last run'}
 
 
 def _run_tab_request(req, ctx, mods, base):
-    """A run of the setup in the Run tab of the GUI (Decision 23, rows RT01 to RT04): "run the command", "run it",
+    """A run of the setup in the Run tab of the GUI (rows RT01 to RT04): "run the command", "run it",
     "run what is in the Run tab", "run the Run tab". ctx.selection is the Run tab's state, handed over as data: its
     THRU, FEXT and NEXT files and its two options. The working config is kept, with its overrides and what was done
     in the Config view, and it runs on those files with those options; with no working config yet, the workbook in the
@@ -3342,7 +3362,7 @@ def _run_tab_request(req, ctx, mods, base):
 
 
 def _selection_request(req, ctx, mods, base, said='selection'):
-    """A run of what is selected in the tabs of the GUI (Decision 20, rows SL01 to SL05). ctx.selection is the data
+    """A run of what is selected in the tabs of the GUI (rows SL01 to SL05). ctx.selection is the data
     the GUI handed over with the phrase: the config of the Config tab and the THRU, FEXT and NEXT files of the Run
     tab, with the roles the user gave them there.
 
@@ -3351,10 +3371,10 @@ def _selection_request(req, ctx, mods, base, said='selection'):
       source of the working config, the selected config is imported and run on the selected channels, as Run COM on
       <channels> with <config> would be (rows SL01, SL02);
     - otherwise the working config is kept, with its overrides and what was done in the Config view, and only the
-      channel files change to the selected ones: Decision 18's swap with the files from the selection (row SL05).
+      channel files change to the selected ones, as a re-run with another channel file (row SL05).
     Nothing is guessed: a selected file that is not on disk stops, and any other request in the phrase asks.
     The options of the Run tab (Output dynamic results, --eye-under-mlse) come with the selection and are part of the
-    run (Decision 23). said: 'run tab' when the phrase asked for the setup in the Run tab (_run_tab_request)."""
+    run. said: 'run tab' when the phrase asked for the setup in the Run tab (_run_tab_request)."""
     flags = set(req['flags'])
     acts = set(req['actions'])
     sel = ctx.selection
@@ -3506,10 +3526,10 @@ def _selection_lines(chans):
 
 
 def _setup_swap(req, ctx, mods, base, chans, options=None, said='selection'):
-    """The working config is kept and the channel files become chans [(path, role)] (Decision 18's swap): one
-    set_channel step for the THRU when it changes, one for the aggressors when they change. said says where chans
+    """The working config is kept and the channel files become chans [(path, role)], as a re-run with other channel
+    files: one set_channel step for the THRU when it changes, one for the aggressors when they change. said says where chans
     come from: the selection in the tabs (row SL05), the Run tab (rows RT01, RT04), or the last run (row RT06).
-    options are the Run tab's (Decision 23): those that are on go to run_com; None keeps those of the last run. With
+    options are the Run tab's: those that are on go to run_com; None keeps those of the last run. With
     nothing changed since a run, files and options alike, nothing runs (as row CH07; rows RT02, RT06)."""
     rec = ctx.last
     wc = ctx.wc
@@ -3596,7 +3616,7 @@ def _setup_swap(req, ctx, mods, base, chans, options=None, said='selection'):
     return _swap_plan(req, ctx, mods, base, wc, swaps, list(chans), lines, run_args=_option_args(opts))
 
 
-# ----------------------------------------------------------------------------- crosstalk (Decision 19)
+# ----------------------------------------------------------------------------- crosstalk
 # A role word: thru, through, fext, next, xtalk, crosstalk or xt, each with an optional number and an optional
 # letter (FEXT1a). A file is a FEXT when one of its words is fext with those suffixes, a NEXT likewise, else a THRU.
 _ROLE_WORD = re.compile(r'^(?:thru|through|fext|next|xtalk|crosstalk|xt)\d*[a-z]?$', re.I)
@@ -3610,7 +3630,7 @@ def name_words(name):
 
 
 def channel_kind(name):
-    """'fext', 'next' or 'thru', from the words of the file name (Decision 19)."""
+    """'fext', 'next' or 'thru', from the words of the file name."""
     words = name_words(name)
     if any(_FEXT_WORD.match(w) for w in words):
         return 'fext'
@@ -3625,7 +3645,7 @@ def _name_stem(name):
 
 def match_crosstalk(thru, names):
     """The FEXT and NEXT files that belong to the THRU file thru, among the channel file names of its folder
-    (Decision 19). Returns {'fext': [...], 'next': [...], 'rule': 'only_thru' | 'name', 'thrus': [...]}:
+   . Returns {'fext': [...], 'next': [...], 'rule': 'only_thru' | 'name', 'thrus': [...]}:
 
     1. when thru is the only THRU among names, every FEXT and NEXT file there (rule only_thru);
     2. otherwise the FEXT and NEXT files whose names equal the THRU's once the role words are removed (rule name).
@@ -3705,11 +3725,11 @@ AGAINST_THRU_ONLY = 'the thru-only case'
 
 
 def _xtalk_compare(req, ctx, mods, base):
-    """The thru-only case and the crosstalk case of one THRU, as a batch of two points (Decision 24, rows GF02 to
+    """The thru-only case and the crosstalk case of one THRU, as a batch of two points (rows GF02 to
     GF05): "thru-only and xtalk", "with and without crosstalk", "compare thru-only with xtalk". The working config is
     kept with its overrides. The THRU is the one in the Run tab when the phrase names the setup in the GUI ("with
     settings captured") and the GUI handed one over, else the THRU of the last run; its crosstalk files are the ones
-    that belong to it by Decision 19. Each point is reused when an earlier run had the same inputs (Decision 6), so a
+    that belong to it by name. Each point is reused when an earlier run had the same inputs, so a
     last run with crosstalk is one of the two points and does not stop the request. "compare" (or a summary) adds
     diff_results, which gives each case against the thru-only one. No crosstalk to be found asks (row GF05)."""
     flags = set(req['flags'])
@@ -3975,7 +3995,7 @@ def _replay(req, ctx, base, thru_only=False):
             steps = [_step('validate_config'), _step('run_com'), _step('summarize')]
         rec = dict(rec, phrase=(cmd or {}).get('phrase') or rec.get('phrase'))
     else:
-        # the tutor's step is what was shown then, not part of the command (Decision 11)
+        # the tutor's step is what was shown then, not part of the command
         steps = [_step(s['op'], **(s.get('args') or {})) for s in ((rec.get('plan') or {}).get('steps') or [])
                  if s.get('op') in STEPS and s.get('op') != 'show_tutor'] or \
             [_step('validate_config'), _step('run_com'), _step('summarize')]
@@ -4160,7 +4180,7 @@ VIEW_OPEN = 'config view: open'
 
 
 def edit(project, changes=(), source=None, origin='gui'):
-    """The structured-change path (GUI_DESIGN.md section 6, and the version 1 prompt, section 1): changes against the
+    """The structured-change path (GUI_DESIGN.md section 6): changes against the
     working config, [(json_path, value)], validated exactly as the same values typed in a phrase are, links followed,
     and the outcome recorded as one history record. Nothing runs.
 

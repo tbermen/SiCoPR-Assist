@@ -1,12 +1,15 @@
-"""The tutor and trouble detection (Decision 11; rows TU01 to TU19; gate V1.3).
+"""The tutor and trouble detection (rows TU01 to TU19; check V1.3).
 
-V1.3: every phrase the tutor can print, for each of the four starting configs and the twelve variants, resolves
-through the core to a PLAN or a QUESTION, never a STOP and never with a word left unplaced. The phrases are the
-ones the outcome itself lists (outcome["tutor"]["phrases"]), and each is checked to be printed. Two states per
-config: no run yet, and after a run. The nearest forms of five missed phrases are taken on the four starting
-configs. After a run every example resolves to a PLAN (row TU04); with no run yet
-the first example is the run itself, and it resolves to a PLAN. A phrase holding <value> is checked with half
-the current value, twice it, or the value itself, and passes when one of them resolves.
+V1.3: every phrase the tutor offers, for each of the four starting configs and the twelve variants, works in the
+state it is offered in: it resolves through the core to a PLAN, never a QUESTION or a STOP and never with a word
+left unplaced (row TU04). The phrases are the ones the outcome itself lists (outcome["tutor"]["phrases"]), and each
+is checked to be printed. Three states per config: no run yet (the one phrase offered is the run itself), after a
+run, and after a run that set DER_0 = 1e-4 (that change is not offered again). Two more states on the first
+starting config: an empty folder, where the one phrase is Run the example., and a plan that makes no run in a
+folder with no run (Show settings.), after which no re-run is offered. The nearest forms of five missed phrases are
+taken on the four starting configs; a nearest form corrects the user's own phrase, so it may resolve to a QUESTION.
+A phrase holding <value> is checked with half the current value, twice it, or the value itself, and passes when one
+of them resolves.
 
 Then the behaviour of rows TU01 to TU19 that L4 does not look at: whether the tutor text is shown, the nearest
 form of a missed phrase, the feedback line and its gap, and what the history records as shown.
@@ -34,6 +37,7 @@ import fixtures  # noqa: E402
 MISSES = ('halve the baud rate and rerun', 'Re-run with DER_0 = 1e-4 pronto.', 'Re-run with zp select 2',
           'rerun with fb = 53.125', 'rn it agian with DER_0 1e-4')
 KINDS = 7                 # the six examples of row TU01 (the dashboard among them) and the package of TU07
+STATES = ('no run', 'after a run', 'after DER_0 = 1e-4')
 
 
 def fills(phrase, wc):
@@ -51,18 +55,23 @@ def fills(phrase, wc):
 
 
 def state(fx, label, ran):
+    """A project in one of STATES (ran is its index): no run yet, a run, or a run and then DER_0 = 1e-4."""
     import prior_states
     ctx = prior_states.Ctx(fx, label)
     if ran:
         prior_states.seed_run(ctx)
+    if ran == 2:
+        prior_states.seed_override_run(ctx, {'DER_0': 1e-4})
     return ctx
 
 
 def resolves(fx, label, ran, phrase, plan_only):
     """(ok, what) for one printed phrase, handled on a fresh copy of the state it was printed in."""
     from sicopr_assist import core
-    wc = fx.working_config(label)
     got = []
+    ctx = state(fx, label, ran)
+    wc = ctx.prior_wc
+    fx.remove_project(ctx.root)
     for text in fills(phrase, wc):
         ctx = state(fx, label, ran)
         try:
@@ -88,20 +97,28 @@ def gate_v13(fx):
     n_phrases = 0
     bad = []
     for label in labels:
-        for ran in (False, True):
+        for ran in range(len(STATES)):
             ctx = state(fx, label, ran)
             try:
                 o = core.handle('What can I say?', ctx.project)
             finally:
                 fx.remove_project(ctx.root)
             phrases, shown = printed(o)
-            where = '%s %s' % (label, 'after a run' if ran else 'no run')
+            where = '%s %s' % (label, STATES[ran])
             if not shown:
                 bad.append('%s: a phrase is not in the printed lines' % where)
-            if label in fixtures.CASES:
-                want = KINDS + (0 if ran else 1)
-                if len(phrases) != want:
-                    bad.append('%s: %d example phrases, expected %d: %s' % (where, len(phrases), want, phrases))
+            text = '\n'.join((o.get('tutor') or {}).get('lines') or [])
+            # with no run the one phrase offered is the run itself, or the example setup when this folder's own
+            # config does not run (a variant the loader refuses), and never a re-run
+            if not ran and (len(phrases) != 1 or not (phrases[0].startswith('Run COM on ') or
+                                                      phrases[0] == 'Run the example.') or 'Re-run' in text
+                            or (label in fixtures.CASES and phrases[0] == 'Run the example.')):
+                bad.append('%s: with no run the one phrase offered is the run itself, and no re-run: %s'
+                           % (where, phrases))
+            if ran == 2 and any(re.match(r'Re-run with DER_0 = 1e-4$', p) for p in phrases):
+                bad.append('%s: a change already in effect is offered: %s' % (where, phrases))
+            if label in fixtures.CASES and ran == 1 and len(phrases) != KINDS:
+                bad.append('%s: %d example phrases, expected %d: %s' % (where, len(phrases), KINDS, phrases))
             forms = []
             if label in fixtures.CASES:
                 for miss in MISSES:
@@ -115,8 +132,7 @@ def gate_v13(fx):
                         bad.append('%s: a nearest form of %r is not printed' % (where, miss))
                     forms += ph2
             for p in phrases:
-                # TU04: after a run every example is a PLAN; with no run yet the run itself is
-                ok, what = resolves(fx, label, ran, p, plan_only=ran or p.startswith('Run COM on '))
+                ok, what = resolves(fx, label, ran, p, plan_only=True)      # TU04: every phrase offered is a PLAN
                 n_phrases += 1
                 if not ok:
                     bad.append('%s: %s' % (where, what))
@@ -125,9 +141,50 @@ def gate_v13(fx):
                 n_phrases += 1
                 if not ok:
                     bad.append('%s nearest form: %s' % (where, what))
-    check('V1.3: every phrase the tutor prints resolves to a PLAN or a QUESTION with no unplaced word, on %d configs in '
-          'two states (%d phrases)' % (len(labels), n_phrases), not bad and n_phrases > 0, bad[:20])
+    n_phrases += no_run_states(fx, bad)
+    check('V1.3: every phrase the tutor offers resolves to a PLAN with no unplaced word in the state it is offered in, '
+          'on %d configs in %d states, an empty folder and a plan with no run (%d phrases)'
+          % (len(labels), len(STATES), n_phrases), not bad and n_phrases > 0, bad[:20])
     return n_phrases
+
+
+def no_run_states(fx, bad):
+    """An empty folder, and a plan that makes no run in a folder with no run yet: only what runs now is offered."""
+    import shutil
+    import tempfile
+    from sicopr_assist import core
+    from sicopr_assist.project import Project
+    n = 0
+    empty = tempfile.mkdtemp(prefix='sicopr_assist_tu_')
+    try:
+        o = core.handle('What can I say?', Project(empty))
+        phrases, shown = printed(o)
+        text = '\n'.join((o.get('tutor') or {}).get('lines') or [])
+        if phrases != ['Run the example.'] or not shown or 'Re-run' in text:
+            bad.append('empty folder: the one phrase offered is Run the example.: %s %r' % (phrases, text[:200]))
+        for p in phrases:
+            n += 1
+            got = core.handle(p, Project(tempfile.mkdtemp(dir=empty)))
+            if got['type'] != 'PLAN' or got.get('unplaced'):
+                bad.append('empty folder: %s -> %s' % (p, got['type']))
+    finally:
+        shutil.rmtree(empty, ignore_errors=True)
+    ctx = state(fx, fixtures.CASES[0], 0)
+    try:
+        o = core.handle('Show settings.', ctx.project)
+    finally:
+        fx.remove_project(ctx.root)
+    phrases, shown = printed(o)
+    text = '\n'.join((o.get('tutor') or {}).get('lines') or [])
+    if not phrases or 'Re-run' in text or any(not p.startswith('Run COM on ') for p in phrases):
+        bad.append('a plan that makes no run, with no run yet: only the run itself is offered: %s %r'
+                   % (phrases, text[:200]))
+    for p in phrases:
+        n += 1
+        ok, what = resolves(fx, fixtures.CASES[0], 0, p, plan_only=True)
+        if not ok:
+            bad.append('a plan with no run: %s' % what)
+    return n
 
 
 def row_checks(fx):
@@ -164,8 +221,9 @@ def row_checks(fx):
               and hist[-1]['shown'] == [], o.get('tutor'))
         fx.remove_project(ctx.root)
     o, ctx, _ = handle('TU12', 'What can I say?')
-    check('TU12: What can I say? still works with tutor_until_commands = 0', o['type'] == 'PLAN' and
-          'Re-run with DER_0 = 1e-4' in lines(o), lines(o)[:200])
+    check('TU12: What can I say? still works with tutor_until_commands = 0 (no run yet: it offers the run)',
+          o['type'] == 'PLAN' and (o.get('tutor') or {}).get('phrases') == [r'Run COM on data\thru.s4p with '
+                                                                            r'data\config.xlsx'], lines(o)[:200])
     import io
     from sicopr_assist import cli
     buf = io.StringIO()
@@ -197,7 +255,9 @@ def row_checks(fx):
           o['type'] == 'QUESTION' and 'Re-run with f_b = <value>' in lines(o) and
           (o.get('tutor') or {}).get('phrases') == ['Re-run with f_b = <value>'], (o['type'], lines(o)))
     fx.remove_project(ctx.root)
-    o, ctx, _ = handle('TU01', 'What can I say?')
+    o, ctx, _ = handle('TU01')                       # the run of TU01, then What can I say? on its config
+    prior_states.seed_run(ctx)
+    o = core.handle('What can I say?', ctx.project)
     from sicopr_assist import tutor
     kinds = [k for k, _ in tutor.examples(core.Context(ctx.project))]
     check('TU01: the six kinds of example, the dashboard among them, and the package example of TU07',
@@ -219,7 +279,11 @@ def row_checks(fx):
           hidden == [k for k in kinds if k != 'show the dashboard'] and core.DASHBOARD_PHRASE not in lines(o2),
           (hidden, lines(o2)))
     fx.remove_project(ctx.root)
-    o, ctx, _ = handle('TU07', label='V07')
+    row = by['TU07'][0]
+    ctx = prior_states.Ctx(fx, 'V07', row, by)
+    prior_states.build(row['prior_state'], ctx)
+    prior_states.seed_run(ctx)                       # examples are offered once there is a run
+    o = core.handle(row['phrase'], ctx.project)
     check('TU07: the package example uses this sheet\'s names (Re-run with package PkgB)',
           'Re-run with package PkgB' in lines(o) and 'PKG_HiR_CLASSB' not in lines(o), lines(o))
     fx.remove_project(ctx.root)

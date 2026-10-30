@@ -1,5 +1,4 @@
-"""Channel download (version 2, Phase V2-3: rows F1 to F12). No test here touches the network: the IEEE tools
-page is a stand-in written by the test in the markup recorded on 7 October 2026 and served from 127.0.0.1
+"""Channel download (rows F1 to F12). No test here touches the network: the IEEE tools page is a stand-in written by the test in the markup recorded on 7 October 2026 and served from 127.0.0.1
 (tests\\cases\\standin_ieee.py), with small zips written by the test.
 
     python tests\\test_fetch.py
@@ -12,6 +11,10 @@ V3.2    a download larger than max_download_mb asks first, and nothing is downlo
 V3.3    every member path of a zip is checked to stay inside the cache before anything is written: ..\\, ../, an
         absolute path (/, \\, C:\\, C:) and a nested zip that tries the same are refused with nothing written; a
         nested zip is unpacked in place; a path past the Windows limit is warned about
+guards  only https://www.ieee802.org is read (or the site SICOPR_ASSIST_FETCH_INDEX names), also after a redirect;
+        a zip name that is not plain is never used; a download stops once it passes its limit, with or without a
+        Content-Length; a zip that would unpack to too many files or too many bytes, nested zips counted, is
+        refused with nothing written
 pair    the inventory pairs FEXT and NEXT files with their THRU by Decision 19 (the akinwale style, one THRU per
         folder, files that match no THRU); a download that is one of SiCoPR's known contributions is checked
         against benchmark\\208_case_4p15p0\\channels.csv
@@ -102,7 +105,8 @@ def page_checks():
     data = standin_ieee.page(sections)
     site.add('3/dj/public/tools/index.html', data, ctype='text/html')
     check('the stand-in page is Windows-1252, as the real one is (not valid UTF-8)', b'\x93' in data and _not_utf8(data))
-    entries = fetch.parse_index(fetch.read_index(url), url)
+    with _Env(**{fetch.INDEX_ENV: url}):           # the stand-in is the site read, as for a mirror
+        entries = fetch.parse_index(fetch.read_index(url), url)
     zips = {z['name']: (e, z) for e in entries for z in e['zips']}
     check('every entry with a zip link is read and the row with no link is skipped (7 entries, 10 zips)',
           len(entries) == 7 and len(zips) == 10, [e['name'] for e in entries])
@@ -219,6 +223,148 @@ def unpack_checks():
         except fetch.FetchError:
             ok = not os.path.exists(os.path.join(cache, 'bad'))
         check('a zip that cannot be read stops with a FetchError and leaves no folder', ok)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+
+
+# ----------------------------------------------------------------------------- the guards on what is read and unpacked
+class _Env:
+    def __init__(self, **values):
+        self.values = values
+
+    def __enter__(self):
+        self.old = {k: os.environ.get(k) for k in self.values}
+        for k, v in self.values.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+        return self
+
+    def __exit__(self, *exc):
+        for k, v in self.old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def _refused(fn):
+    """(refused, message): whether fn raised FetchRefused."""
+    try:
+        fn()
+    except fetch.FetchError as e:
+        return isinstance(e, getattr(fetch, 'FetchRefused', ())), str(e)
+    return False, 'nothing was raised'
+
+
+def _bomb_zip(path, name, mb):
+    """A zip holding one file of mb MB of zeros: a few hundred kB on disk."""
+    import zipfile
+    with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED) as z:
+        with z.open(name, 'w') as f:
+            block = bytes(1 << 20)
+            for _ in range(mb):
+                f.write(block)
+    return path
+
+
+def guard_checks():
+    with _Env(**{fetch.INDEX_ENV: None}):
+        check('only https://www.ieee802.org is read: http, another host, a look-alike host and a user part are not',
+              fetch.allowed('https://www.ieee802.org/3/dj/public/tools/KR/a.zip')
+              and not any(fetch.allowed(u) for u in ('http://www.ieee802.org/3/dj/public/tools/KR/a.zip',
+                                                     'https://example.org/a.zip', 'https://www.ieee802.org.example.org/a.zip',
+                                                     'https://x@www.ieee802.org/a.zip', 'file:///C:/a.zip')))
+        base = tempfile.mkdtemp(prefix='fg_')
+        try:
+            ok, said = _refused(lambda: fetch.download('http://www.ieee802.org/3/dj/public/tools/KR/a.zip',
+                                                       os.path.join(base, 'c', 'a.zip'), os.path.join(base, 'a.zip.part')))
+            check('a zip URL on http is refused before anything is asked, and nothing is written',
+                  ok and tree(base) == [], (said, tree(base)))
+        finally:
+            shutil.rmtree(base, ignore_errors=True)
+    site = standin_ieee.Site()
+    index = site.add('3/dj/public/tools/index.html', b'<html></html>', ctype='text/html')
+    zbytes = standin_ieee.zip_bytes({'a_thru.s4p': b'! a channel\n' * 50})
+    good = site.add('3/dj/public/tools/KR/good.zip', zbytes)
+    other = good.replace('127.0.0.1', 'localhost')            # the same server, under another host name
+    base = tempfile.mkdtemp(prefix='fg_')
+    try:
+        with _Env(**{fetch.INDEX_ENV: index}):
+            cache = os.path.join(base, 'c')
+            got = fetch.download(good, os.path.join(cache, 'good.zip'), os.path.join(base, 'good.zip.part'))
+            check('the site SICOPR_ASSIST_FETCH_INDEX names is read: a zip there downloads',
+                  got['bytes'] == len(zbytes) and os.path.isfile(os.path.join(cache, 'good.zip')))
+            shutil.rmtree(cache)
+            n0 = site.hits('3/dj/public/tools/KR/good.zip')[0]
+            ok, said = _refused(lambda: fetch.download(other, os.path.join(cache, 'good.zip'),
+                                                       os.path.join(base, 'good.zip.part'), retries=2))
+            check('a zip on another site is refused, at once and not retried, and is never asked for',
+                  ok and site.hits('3/dj/public/tools/KR/good.zip')[0] == n0 and tree(base) == [], (said, tree(base)))
+            hop = site.redirect('3/dj/public/tools/KR/hop.zip', other)
+            ok, said = _refused(lambda: fetch.download(hop, os.path.join(cache, 'hop.zip'),
+                                                       os.path.join(base, 'hop.zip.part')))
+            check('a redirect to another site is refused, the target is never asked for, and nothing is kept',
+                  ok and site.hits('3/dj/public/tools/KR/good.zip')[0] == n0 and tree(base) == [], (said, tree(base)))
+            page_hop = site.redirect('3/dj/public/tools/moved.html', other)
+            try:
+                fetch.read_index(page_hop)
+                ok = False
+            except fetch.FetchError:
+                ok = True
+            check('the tools page is not read through a redirect to another site either',
+                  ok and site.hits('3/dj/public/tools/KR/good.zip')[0] == n0)
+            check('the size of a zip on another site is not asked for (HEAD)',
+                  fetch.head_size(other) is None and site.hits('3/dj/public/tools/KR/good.zip')[1] == 0)
+            for name in ('a b.zip', '.hidden.zip', 'x.zip.exe', 'evil%2f.zip'):
+                ok, said = _refused(lambda: fetch.download(good, os.path.join(cache, name),
+                                                           os.path.join(base, 'n.part')))
+                check('a zip name that is not plain (%r) is not used for a file in the cache' % name,
+                      ok and tree(base) == [], (said, tree(base)))
+            z = {'url': good, 'name': 'a%20b.zip', 'text': 'odd', 'interface': 'KR', 'date': '2026-10-01',
+                 'day_given': True, 'date_text': '01-Oct 2026', 'size_mb': None, 'size_text': None,
+                 'do_not_use': False}
+            sel = core.select_zip([{'name': 'odd', 'title': 'odd', 'superseded': None, 'zips': [z]}], 'KR')
+            check('the core does not select a zip whose name is not plain, and says why',
+                  sel['zip'] is None and sel['skipped'] and 'plain zip name' in sel['skipped'][0][1], sel)
+            big = os.urandom(1500000)
+            for length in (True, False):
+                path = '3/dj/public/tools/KR/big_%d.zip' % length
+                url = site.add(path, standin_ieee.zip_bytes({'a_thru.s4p': big}), length=length)
+                ok, said = _refused(lambda: fetch.download(url, os.path.join(cache, 'big.zip'),
+                                                           os.path.join(base, 'big.zip.part'), retries=2,
+                                                           max_bytes=1000000))
+                check('a download that passes max_bytes is stopped, not retried, and nothing is kept (%s)'
+                      % ('the server gives its size' if length else 'the server gives no size'),
+                      ok and 'max_download_mb' in said and site.hits(path)[0] == 1 and tree(base) == [],
+                      (said, site.hits(path), tree(base)))
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+    base = tempfile.mkdtemp(prefix='fb_')
+    try:
+        bomb = _bomb_zip(os.path.join(base, 'bomb.zip'), 'zeros_thru.s4p', 200)
+        ok, said = _refused(lambda: fetch.unpack(bomb, os.path.join(base, 'u')))
+        check('a zip that would unpack to far more than 20 times its size (200 MB from %d kB) is refused with nothing '
+              'written' % (os.path.getsize(bomb) // 1000), ok and not os.path.exists(os.path.join(base, 'u')), said)
+        with open(bomb, 'rb') as f:
+            inner = f.read()
+        outer = zip_file(os.path.join(base, 'outer.zip'), {'a_thru.s4p': b'! a channel\n', 'set/inner.zip': inner})
+        ok, said = _refused(lambda: fetch.unpack(outer, os.path.join(base, 'n')))
+        check('a nested zip counts against the same limit: refused, and the folder is removed',
+              ok and not os.path.exists(os.path.join(base, 'n')), said)
+        few = standin_ieee.zip_bytes({'b_thru.s4p': b'x', 'b_fext.s4p': b'y'})
+        many = zip_file(os.path.join(base, 'many.zip'), {'a_thru.s4p': b'x', 'a_fext.s4p': b'y', 'set/few.zip': few})
+        keep = fetch.MAX_MEMBERS
+        fetch.MAX_MEMBERS = 3
+        try:
+            ok, said = _refused(lambda: fetch.unpack(many, os.path.join(base, 'm')))
+        finally:
+            fetch.MAX_MEMBERS = keep
+        check('the files of a nested zip count towards the number of files (3 at the top, 2 inside, the limit 3)',
+              ok and not os.path.exists(os.path.join(base, 'm')), said)
+        got = fetch.unpack(many, os.path.join(base, 'm2'))
+        check('the same zip unpacks under the usual limit', len(got['files']) == 4, got)
     finally:
         shutil.rmtree(base, ignore_errors=True)
 
@@ -456,16 +602,33 @@ def v32_checks(fx):
               and 'max_download_mb' in q['question']['text'] and e.newest()[0] == 0 and e.cache() == [],
               (q.get('question'), e.newest()))
         a = e.say('download it')
+        dl = next((s['args'] for s in a['steps'] if s['op'] == 'download'), {})
+        check('V3.2: once the size is agreed to, the download limit is that size, not max_download_mb',
+              dl.get('max_mb') is not None and dl['max_mb'] * 1e6 >= dl.get('size', 0) > 0, dl)
         nxt = run.carry_out(e.p, a)['next'] if a['type'] == 'PLAN' else a
         check('V3.2: after the answer the zip is downloaded and the matrix planned',
               a['type'] == 'PLAN' and 'download' in ops(a) and nxt['type'] == 'PLAN' and e.newest()[0] == 1,
               (a['type'], nxt['type']))
+    with Env(fx) as e:
+        o = e.say(F1)
+        dl = next((s['args'] for s in o['steps'] if s['op'] == 'download'), {})
+        check('the download step carries its limit, max_download_mb (500 by default)', dl.get('max_mb') == 500, dl)
+    with Env(fx) as e:
+        e.settings('max_download_mb = 1')
+        e.site.add(prior_states.TOOLS + 'KR/' + prior_states.NEWEST,
+                   standin_ieee.zip_bytes({'chans/ch1_thru.s4p': os.urandom(1500000)}), length=False)
+        o, nxt = e.through(F1)
+        check('a server that gives no size: the plan does not ask, and the download stops once it passes '
+              'max_download_mb, with nothing in the cache and no partial file',
+              o['type'] == 'PLAN' and nxt['type'] == 'STOP' and 'refused' in nxt['reason']
+              and 'max_download_mb' in nxt['reason'] and e.cache() == []
+              and not [p for p in tree(e.p.dir) if p.endswith('.part')], (nxt.get('reason'), e.cache()))
     for retries in (1, 2, 0):
         with Env(fx, interrupted=True) as e:
             if retries != 1:
                 e.settings('download_retries = %d' % retries)
             o, nxt = e.through(F1)
-            left = [p for p in tree(e.p.dir) if not p.endswith(('history.jsonl', 'pending.json', 'assist.ini'))]
+            left = [p for p in tree(e.p.dir) if not p.endswith(('history.jsonl', 'pending.json', 'assist.ini', '.gitignore'))]
             check('V3.2, F9: an interrupted download is tried 1 + download_retries times (download_retries = %d), stops '
                   'with download incomplete, and leaves nothing in the cache and no partial file' % retries,
                   nxt['type'] == 'STOP' and 'incomplete' in nxt['reason'] and e.newest()[0] == 1 + retries
@@ -474,8 +637,9 @@ def v32_checks(fx):
             check('F9: the plan is recorded as failed, and the STOP after it', h[-2]['status'] == 'failed'
                   and h[-1]['outcome'] == 'STOP', [(r['outcome'], r['status']) for r in h])
     base = tempfile.mkdtemp(prefix='fd_')
+    site = standin_ieee.Site()
     try:
-        site = standin_ieee.Site()
+        os.environ[fetch.INDEX_ENV] = site.url('index.html')
         url = site.add('z.zip', standin_ieee.zip_bytes({'a_thru.s4p': b'x' * 5000}), interrupt=True)
         try:
             fetch.download(url, os.path.join(base, 'cache', 'z.zip'), os.path.join(base, 'z.zip.part'), retries=0)
@@ -492,6 +656,7 @@ def v32_checks(fx):
             ok = 'not a zip' in str(e)
         check('what arrives whole but is not a zip is not kept either', ok and tree(base) == [], tree(base))
     finally:
+        os.environ.pop(fetch.INDEX_ENV, None)
         shutil.rmtree(base, ignore_errors=True)
 
 
@@ -595,6 +760,7 @@ def live_checks():
 def main():
     page_checks()
     unpack_checks()
+    guard_checks()
     pairing_checks()
     if not fixtures.find_starting_configs():
         print('SKIP: the four starting workbooks (by SHA-256, in tests\\configs or SICOPR_ASSIST_CONFIGS) are absent '

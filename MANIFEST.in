@@ -1,0 +1,9 @@
+# The source distribution carries the whole test suite (its starting workbooks, the use-case table and the
+# stand-ins) and the project documents, so that it can be tested as it is shipped.
+include CHANGELOG.md CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md CITATION.cff NOTICE LICENSE SICOPR_REF
+recursive-include docs *
+recursive-include tests *
+recursive-include sicopr_assist/data *
+recursive-include sicopr_assist/panel/static *
+prune tests/__pycache__
+prune tests/cases/__pycache__

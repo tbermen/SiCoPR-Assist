@@ -8,10 +8,10 @@
   Copyright 2026 Todd Bermensolo
   SPDX-License-Identifier: BSD-3-Clause
 
-  Static mock-up for docs/GUI_DESIGN.md (Phase V2-4). Opens from the file system: no server, no network,
+  Static mock-up of the panel as first designed, for docs/GUI_DESIGN.md. Opens from the file system: no server, no network,
   no external scripts or fonts. The SiCoPR look is copied from SiCoPR's gui/static/style.css (same licence and
   author); nothing is linked from a SiCoPR checkout. Values in the Config view are those of the Case1 starting
-  workbook; phrases, plans and questions are rows PA010, RS02 and S1 of the use-case table; every COM value,
+  workbook; phrases, plans and questions are taken from the use-case table; every COM value,
   engine line and run time is SAMPLE DATA, not a computed result.
 -->
 <style>
@@ -105,7 +105,7 @@ button.ghost { background: transparent; color: var(--accent); border: 1px solid 
   font-size: 11px; background: var(--bg); }
 .figs figcaption { font-size: 11px; color: var(--muted); padding: 5px 8px; font-family: ui-monospace, monospace; }
 
-/* ---- the panel slot (the SiCoPR change of GUI_DESIGN.md section 4) ---- */
+/* ---- the panel slot in SiCoPR's GUI (GUI_DESIGN.md section 4) ---- */
 .shell { display: grid; grid-template-columns: minmax(0, 1fr) 400px; align-items: start; padding-bottom: 46px; }
 .panelslot { position: sticky; top: 53px; height: calc(100vh - 53px - 46px); border-left: 1px solid var(--line);
   background: var(--panel); display: flex; flex-direction: column; min-width: 0; }
@@ -397,15 +397,15 @@ const FEED = [
 const STEPS = [
   { cap: 'The SiCoPR GUI with the Assist panel on the right. The Config view shows the working config of the last run (the Case1 workbook as imported).',
     tab: 'config', sel: 'detect', ov: {}, feed: 1, cmd: '', wc: 'working config run_0001, no overrides' },
-  { cap: 'A phrase is typed in the panel (row PA010). Nothing has run yet.',
+  { cap: 'A phrase is typed in the panel. Nothing has run yet.',
     tab: 'config', sel: 'detect', ov: {}, feed: 1, cmd: 'Now try DER_0 = 1e-4.', typing: true, wc: 'working config run_0001, no overrides' },
   { cap: 'Its plan, announced before anything runs. The changed keyword is highlighted in SiCoPR\'s Config view, with its origin (command 2) and the workbook value.',
     tab: 'config', sel: 'detect', ov: OV_DER, feed: 3, cmd: '', wc: 'working config run_0002, 1 override' },
-  { cap: 'Live progress (Decision 17): a status line as each step starts, the engine\'s own lines indented, as the command line shows them.',
+  { cap: 'Live progress: a status line as each step starts, the engine\'s own lines indented, as the command line shows them.',
     tab: 'config', sel: 'detect', ov: OV_DER, feed: 4, prog: 'run', cmd: '', wc: 'working config run_0002, 1 override' },
   { cap: 'The result. Its run folder is an ordinary SiCoPR run directory, so it lands in Results, static (and Results, dynamic for a dashboard).',
     tab: 'results', sel: 'detect', ov: OV_DER, feed: 5, prog: 'done', cmd: '', wc: 'working config run_0002, 1 override' },
-  { cap: 'A question (row RS02): one button per option. The two candidate keywords are marked in the Config view so they can be read before choosing.',
+  { cap: 'A question: one button per option. The two candidate keywords are marked in the Config view so they can be read before choosing.',
     tab: 'config', sel: 'run', ov: Object.assign({}, OV_DER, OPTS), feed: 7, prog: 'done', cmd: '', question: true,
     wc: 'working config run_0002, 1 override' },
   { cap: 'A button sends the option as the answer. The new value shows in the Config view, tagged with the command that set it.',
@@ -414,7 +414,7 @@ const STEPS = [
   { cap: 'The other way: sigma_RJ is edited in SiCoPR\'s Config view. The edit is checked by the core and taken into the working config (record 5); no run.',
     tab: 'config', sel: 'detect', ov: Object.assign({}, OV_DER, OV_THR, OV_RJ), feed: 11, prog: 'done', cmd: '', chose: 1,
     wc: 'working config edit_0005, 2 overrides, 1 edit from the Config view' },
-  { cap: 'The next command builds on the edit (Re-run., row S1): the run uses the working config, view edit included.',
+  { cap: 'The next command builds on the edit (Re-run.): the run uses the working config, view edit included.',
     tab: 'config', sel: 'detect', ov: Object.assign({}, OV_DER, OV_THR, OV_RJ), feed: 13, prog: 'done', cmd: '', chose: 1, busy: true,
     wc: 'working config edit_0005, 2 overrides, 1 edit from the Config view' },
 ];

@@ -1,14 +1,15 @@
 """A local stand-in for the IEEE P802.3dj tools page and its zips, so tests never touch the network.
 
-The page is written by the test in the markup recorded from the real page on 7 October 2026 (Phase V2-0): a
-reduced copy of its structure, not the saved page. One table row per entry; the first cell holds the zip link
+The page is written by the test in the markup recorded from the real page on 7 October 2026: a reduced copy of its structure, not the saved page. One table row per entry; the first cell holds the zip link
 (its text is the title), a line with the date in free text, then a presentation link; a superseded note in the
 cell, before or after the links; "do not use" inside one link's text; a row with an empty first cell that only
 continues the authors of the entry above; one relative link; Windows-1252 bytes; sections for MTF data (not an
 interface), CR and KR together, C2C and C2M. The zips hold small Touchstone files written by the test.
 
     site = Site()                          files served at http://127.0.0.1:<port>/s<k>/ by one local server
-    site.add(path, data, interrupt=False)  a file; interrupt: the body stops halfway, as a dropped download
+    site.add(path, data, interrupt=False)  a file; interrupt: the body stops halfway, as a dropped download;
+                                           length=False: no Content-Length, the body ends when the connection closes
+    site.redirect(path, url)               a 302 to url
     site.url(path), site.hits(path)        its URL, and how many GET and HEAD requests it had
     page(sections, base)                   the page as bytes, in the recorded markup
     zip_bytes(files)                       a zip of {member path: bytes}
@@ -33,9 +34,18 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         return _FILES.get(self.path.split('?')[0])
 
     def _head(self, f):
+        if f.get('to'):
+            self.send_response(302)
+            self.send_header('Location', f['to'])
+            self.send_header('Content-Length', '0')
+            self.end_headers()
+            return
         self.send_response(200)
         self.send_header('Content-Type', f['type'])
-        self.send_header('Content-Length', str(len(f['data'])))
+        if f['length']:
+            self.send_header('Content-Length', str(len(f['data'])))
+        else:
+            self.close_connection = True
         self.end_headers()
 
     def do_HEAD(self):
@@ -53,6 +63,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             return
         f['gets'] += 1
         self._head(f)
+        if f.get('to'):
+            return
         if f['interrupt']:
             self.wfile.write(f['data'][:len(f['data']) // 2])
             self.wfile.flush()
@@ -82,9 +94,13 @@ class Site:
             self.prefix = '/s%d' % Site._k[0]
         self.base = 'http://127.0.0.1:%d%s' % (srv.server_address[1], self.prefix)
 
-    def add(self, path, data, interrupt=False, ctype='application/zip'):
+    def add(self, path, data, interrupt=False, ctype='application/zip', length=True):
         _FILES[self.prefix + '/' + path.lstrip('/')] = {'data': data, 'interrupt': interrupt, 'type': ctype,
-                                                        'gets': 0, 'heads': 0}
+                                                        'length': length, 'gets': 0, 'heads': 0}
+        return self.url(path)
+
+    def redirect(self, path, to):
+        _FILES[self.prefix + '/' + path.lstrip('/')] = {'to': to, 'gets': 0, 'heads': 0}
         return self.url(path)
 
     def url(self, path):
