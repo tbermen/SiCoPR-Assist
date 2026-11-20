@@ -589,7 +589,7 @@ def check_g25(fx, rows, tmp):
     close = all(isinstance(w['main'][k], (int, float)) and abs(w['main'][k] - wc['main'][k]) <= 1e-9 * abs(wc['main'][k])
                 for k in LINKED_BY_F_B)
     check('G2.5 V12 (ST16): the 18 linked values with no stored result are recomputed and announced, and the import loads',
-          [i['level'] for i in iss] == ['announce'] and len(rec[0]['linked']) == 18 and close and f12 and len(f12) == 315,
+          [i['level'] for i in iss] == ['announce'] and len(rec[0]['linked']) == 18 and close and f12 and len(f12) == 318,
           (iss, e12))
     w, iss = issues_of('V06')
     check('G2.5 V06 (ST08, ST09): no package blocks is noted, the package parameters are main parameters, and A_fe '
@@ -717,8 +717,10 @@ def main(argv=None):
                     used(p)
                 if 'g21' in parts:
                     counts, bad = check_g21_starting(fx, tmp)
+                    # 318 since SiCoPR 1.3.0: under its default release, 4p18p0, the loader also sets
+                    # OP.itick_box_size, param.Defer_Floating_RxFFE and param.restore_N_bg (315 before).
                     check('G2.1 the four starting workbooks: no field differs, no import issue (%s fields)' % counts,
-                          not bad and counts == [315] * 4, bad)
+                          not bad and counts == [318] * 4, bad)
                 if 'g22' in parts:
                     check_g22(fx, rows, tmp)
                 if 'g23' in parts:

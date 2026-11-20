@@ -89,7 +89,7 @@ def bare():
 def check_tables():
     rows = V.schema_rows()
     rules = V.rules()
-    check('the schema is read once from the package data: 269 rows', len(rows) == 269 and V.schema_rows() is rows, len(rows))
+    check('the schema is read once from the package data: 271 rows', len(rows) == 271 and V.schema_rows() is rows, len(rows))
     with open(V.RULES_FILE, newline='', encoding='utf-8') as f:
         ids = [r['id'] for r in csv.DictReader(f)]
     check('the rules are read once: 84 rules with distinct ids', len(rules) == 84 == len(set(ids)) and V.rules() is rules,
@@ -232,7 +232,7 @@ def check_rules(fx, tmp):
     rcheck('Q17', 'SAVE_FIGURES = yes is written as 1 and announced (IV13)', r['status'] == 'ok' and has(r, 'Q17', 'announce')
            and r['values'] == {'/main/SAVE_FIGURES': 1}, brief(r))
     ask('Q17', 'SAVE_FIGURES = maybe asks with 0 and 1 (IV14)', {'/main/SAVE_FIGURES': 'maybe'}, options=['0', '1'])
-    ask('Q18', 'Clip Method = Medium asks with the listed values (IV09)', {'/main/Clip Method': 'Medium'}, options=['Slow', 'Fast'])
+    ask('Q18', 'Clip Method = Medium asks with the listed values (IV09)', {'/main/Clip Method': 'Medium'}, options=['Slow', 'Fast', 'Fast_1'])
     ask('Q18', 'L = 3 asks with the listed values and keep 3, since the schema stops only below 2 (IV17)', {'/main/L': 3},
         options=['2', '4', '6', '8', '16', 'keep 3'])
     r = run({'/main/Clip Method': 'fast'})
@@ -336,7 +336,12 @@ def check_rules(fx, tmp):
     # EN: engine checks
     announce('EN01', 'Clip Method with N_qb = 0 runs, and the results will not change (SX26)',
              {'/main/Clip Method': 'Fast', '/main/N_qb': 0})
-    ask('EN02', 'TS_SRCH_MODE = box asks with the list (IV08)', {'/main/TS_SRCH_MODE': 'box'}, options=['full-sweep', 'middle'])
+    ask('EN02', 'TS_SRCH_MODE = spiral asks with the list (IV08)', {'/main/TS_SRCH_MODE': 'spiral'},
+        options=['full-sweep', 'middle', 'box'])
+    ask('EN02', 'TS_SRCH_MODE = box under COM Version 4p17p0 asks: the engine reads box under 4p18p0 only',
+        {'/main/TS_SRCH_MODE': 'box', '/main/COM Version': '4p17p0'}, options=['full-sweep', 'middle', 'cancel'])
+    r = run({'/main/TS_SRCH_MODE': 'box', '/main/COM Version': '4p18p0'})
+    rcheck('EN02', 'TS_SRCH_MODE = box under COM Version 4p18p0 is a plan', r['status'] == 'ok', brief(r))
     ask('EN03', 'ts_anchor = 5 asks with the list', {'/main/ts_anchor': 5}, options=['0', '1', '2'])
     ask('EN04', 'Include PCB = 3 asks with 0, 1, 2 (SC05)', {'/main/Include PCB': 3}, options=['0', '1', '2'])
     r = run({'/main/Include PCB': 2})

@@ -2,6 +2,31 @@
 
 Each version starts with a short summary of what a user sees. The details below it say how.
 
+## 0.14.0 (19 November 2026)
+
+Up to date with SiCoPR 1.3.0, which emulates COM 4p18p0 by default. The parameter schema knows the
+two keywords 4p18p0 added and the values it now accepts, and the run takes less time.
+
+- **COM 4p18p0 is a release SiCoPR-Assist knows.** `COM Version = 4p18p0` is offered with the other
+  releases (the list is still read from SiCoPR's `VERSION.json` when the tool runs), and the schema
+  cites the 4p18p0 reference: every `matlab Lnnnn` line is a line of `com_ieee8023_4p18p0.m`, with the
+  4p17p0 lines kept beside the older ones.
+- **Two new keywords.** `Defer_Floating_RxFFE` (a switch: search without the floating Rx FFE taps,
+  then re-run at the best equalizer with them) and `Itick Box Size` (a whole number, the box of the
+  `box` sampling-phase search). SiCoPR reads both under COM Version 4p18p0 only, and their schema
+  notes say so; with a config that names an earlier release, a change to either is planned but has
+  no effect on the run.
+- **New values.** `Clip Method` takes `Fast_1` (the fast top-K clip solver of 4p18p0) and
+  `TS_SRCH_MODE` takes `box`. Their notes say what each does under the earlier releases.
+- **`TS_SRCH_MODE = box` under an earlier release asks first** (rule EN02): SiCoPR accepts `box`
+  under COM Version 4p18p0 only and stops on it under 4p15p0 to 4p17p0, so the change is offered
+  as `full-sweep` or `middle` instead. Use cases IV08 and IV09 list the values these releases accept:
+  IV08 now tries `spiral`, since `box` is no longer an invalid value under the default release.
+- **`Local Search` says what it now does**: under 4p18p0 it also limits the sampling phases searched
+  in `full-sweep` mode.
+- The "port Lnnnn" citations are remapped to SiCoPR 1.3.0's `sicopr.py`; CI tests against SiCoPR
+  v1.3.0 (`SICOPR_REF`), and the install steps clone v1.3.0.
+
 ## 0.13.0 (29 October 2026)
 
 Safer channel downloads, a `--json` that a program can read, a tutor that offers only what works now,

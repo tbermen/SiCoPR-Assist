@@ -90,7 +90,7 @@ def rule(rid):
 
 @functools.lru_cache(maxsize=None)
 def rule_keywords(rid):
-    """The schema keywords a rule's applies_to names, in its order and spelling ('73 switches' names none)."""
+    """The schema keywords a rule's applies_to names, in its order and spelling ('74 switches' names none)."""
     known = {r['keyword'].strip().lower(): r['keyword'] for r in schema_rows()}
     out = []
     for item in re.split(r',\s*|\s+and\s+', rule(rid)['applies_to'].split(';')[0]):
@@ -796,6 +796,17 @@ def _cross(view, touched):
             opts = ['also set RX_CALIBRATION = 0', 'cancel']
             add('ask', 'EN07', 'CTLE_type %s cannot be used with RX_CALIBRATION = 1: the engine stops' % m.group(1),
                 'CTLE_type', None, opts, {opts[0]: {'set': {'/main/' + view.key('RX_CALIBRATION'): 0}}, 'cancel': None})
+    # EN02: a search mode the rule names only for a later release stops the engine under an earlier one
+    m = re.search(r'\(or (\S+), under COM Version (\S+)\)', rule('EN02')['rule'])
+    mode = view.text('TS_SRCH_MODE').lower()
+    if _hit(touched, 'EN02', ('COM Version',)) and m and mode == m.group(1).lower():
+        rel = view.text('COM Version') or engine.default_release()
+        if rel < m.group(2):
+            opts = [x for x in legal_values(schema_row('TS_SRCH_MODE', 'main')) if x.lower() != mode] + ['cancel']
+            path = '/main/' + view.key('TS_SRCH_MODE')
+            add('ask', 'EN02', 'TS_SRCH_MODE = %s is read under COM Version %s only: under %s the engine stops once the '
+                'search starts' % (m.group(1), m.group(2), rel), 'TS_SRCH_MODE', path, opts,
+                dict({o: {'set': {path: o}} for o in opts[:-1]}, cancel=None))
     # EN08: the RIT references that need f_hp
     rit_kw = rule_keywords('EN08')[0]
     m = re.match(r'(.+?) also need f_hp above 0', schema_row(rit_kw)['note'])

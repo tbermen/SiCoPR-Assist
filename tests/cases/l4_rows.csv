@@ -508,8 +508,8 @@ IV02,Case1,invalid,must,QUESTION,options,1 | 2 | 3 | 4
 IV03,Case1; Case2,invalid,must,QUESTION,options,pkg_lowr_classa | pkg_hir_classb | pkg_module | pkg_null
 IV04,Case1; Case2,invalid,must,PLAN,chain,set_param > validate_config > run_com > summarize
 IV05,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,also set mlse = 0 | cancel
-IV08,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,full-sweep | middle
-IV09,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,slow | fast
+IV08,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,full-sweep | middle | box
+IV09,Case1; Case2; Case3; Case4,invalid,must,QUESTION,options,slow | fast | fast_1
 IV13,Case1; Case2,invalid,stretch,PLAN,chain,set_param > validate_config > run_com > summarize
 IV14,Case1; Case2; Case3; Case4,invalid,stretch,QUESTION,options,0 | 1
 IV15,Case1,invalid,must,QUESTION,options,apply the same matrix to all four | cancel

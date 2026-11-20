@@ -57,14 +57,15 @@ panel needs SiCoPR 1.2.0 or later. Install SiCoPR from a checkout of `github.com
 then this package:
 
 ```powershell
-git clone --branch v1.2.1 https://github.com/tbermen/SiCoPR
+git clone --branch v1.3.0 https://github.com/tbermen/SiCoPR
 git clone https://github.com/tbermen/SiCoPR-Assist
 pip install -e .\SiCoPR
 pip install -e .\SiCoPR-Assist
 ```
 
-A COM run takes a few minutes: about 5 to 10 minutes for an 802.3dj configuration and 1 to 2 minutes for
-an 802.3ck one on a current laptop. `sicopr-assist "Run the example."` in an empty folder is a good first
+A COM run takes a minute or two on a current laptop: SiCoPR 1.3.0 emulates COM 4p18p0 by default, whose
+sampling-phase search is quicker, and the 802.3dj example runs in about a minute (5 to 10 minutes under
+4p17p0, the default of SiCoPR 1.2). `sicopr-assist "Run the example."` in an empty folder is a good first
 test.
 
 SiCoPR has to be installed from a checkout, because SiCoPR-Assist reads `VERSION.json`, the
@@ -81,7 +82,7 @@ also passes its tests in CI on Linux (Python 3.10, 3.12 and 3.14). On Linux or m
 read:
 
 ```bash
-git clone --branch v1.2.1 https://github.com/tbermen/SiCoPR
+git clone --branch v1.3.0 https://github.com/tbermen/SiCoPR
 git clone https://github.com/tbermen/SiCoPR-Assist
 pip install -e ./SiCoPR
 pip install -e ./SiCoPR-Assist

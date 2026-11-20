@@ -9,8 +9,8 @@ authors:
   - family-names: Bermensolo
     given-names: Todd
 repository-code: "https://github.com/tbermen/SiCoPR-Assist"
-version: "0.13.0"
-date-released: "2026-10-29"
+version: "0.14.0"
+date-released: "2026-11-19"
 abstract: >-
   A rules-based front end for SiCoPR, the Python port of the IEEE 802.3 Channel
   Operating Margin (COM) Reference Code. It turns a typed phrase (a re-run with
